@@ -136,6 +136,33 @@ TOOLS = [
 ]
 
 
+def _active_actor_name(state) -> str | None:
+    """Return the name of the current active combatant, or None when not in combat."""
+    if not state.combat_order or state.combat_round == 0:
+        return None
+    active_key = state.combat_order[state.combat_index]
+    all_actors = {**state.party, **state.npcs}
+    actor = all_actors.get(active_key)
+    return actor.name if actor else None
+
+
+def _turn_guard(actor_name: str, state) -> dict | None:
+    """Return an ok=False error if actor_name is not the active combatant, else None."""
+    active = _active_actor_name(state)
+    if active is None:
+        return None  # not in combat — no restriction
+    if actor_name.strip().lower() != active.lower():
+        return {
+            "ok": False,
+            "error": (
+                f"It is not {actor_name}'s turn. "
+                f"The active combatant is {active}. "
+                "Wait for their turn before acting."
+            ),
+        }
+    return None
+
+
 def dispatch(name: str, args: dict, state) -> dict:
     """Execute one tool call against the live state. Returns a JSON-able dict."""
     if name == "roll_dice":
@@ -150,6 +177,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         defender = state.find_actor(args["defender"])
         if not attacker or not defender:
             return {"ok": False, "error": "Unknown attacker or defender; call get_state to see valid names."}
+        err = _turn_guard(attacker.name, state)
+        if err:
+            return err
         res = rules.attack(attacker, defender, args.get("damage_dice", "1d6"))
         state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
         return res
@@ -158,6 +188,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         caster = state.find_actor(args["caster"])
         if not caster:
             return {"ok": False, "error": "Unknown caster; call get_state."}
+        err = _turn_guard(caster.name, state)
+        if err:
+            return err
         res = rules.cast_spell(caster, int(args["spell_level"]))
         state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
         return res
@@ -225,6 +258,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         character = state.find_actor(args["character"])
         if not character:
             return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        err = _turn_guard(character.name, state)
+        if err:
+            return err
         res = rules.skill_check(character, args["ability"], int(args["dc"]))
         state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
         return res

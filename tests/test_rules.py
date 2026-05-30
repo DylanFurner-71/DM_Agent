@@ -195,6 +195,50 @@ def test_next_turn_without_combat_errors():
     assert res["ok"] is False
 
 
+def test_turn_guard_blocks_non_active_attacker():
+    rules.seed(0)
+    gs = _make_combat_state()
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    active_key = res["active"]
+    # Pick a party member who is NOT active to try attacking.
+    non_active = next(k for k in ("aldric", "wisp") if k != active_key)
+    non_active_name = gs.party[non_active].name
+    result = tools.dispatch("attack", {"attacker": non_active_name, "defender": "Snik"}, gs)
+    assert result["ok"] is False
+    assert non_active_name in result["error"]
+
+
+def test_turn_guard_allows_active_attacker():
+    rules.seed(0)
+    gs = _make_combat_state()
+    # Give Aldric a guaranteed-high initiative so he's first.
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+    result = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert result["ok"] is True
+
+
+def test_turn_guard_inactive_outside_combat():
+    gs = _make_combat_state()
+    # No combat started — turn guard must not block anything.
+    result = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert result["ok"] is True
+
+
+def test_turn_guard_blocks_cast_spell_out_of_turn():
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["wisp"].spell_slots = {1: 2}
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    active_key = res["active"]
+    # If Wisp is not active, casting should be rejected.
+    if active_key != "wisp":
+        result = tools.dispatch("cast_spell", {"caster": "Wisp", "spell_level": 1}, gs)
+        assert result["ok"] is False
+        assert "Wisp" in result["error"]
+
+
 def test_end_combat_clears_state():
     rules.seed(0)
     gs = _make_combat_state()
