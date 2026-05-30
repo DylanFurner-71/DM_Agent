@@ -158,6 +158,62 @@ def roll_initiative(combatants: dict) -> list[str]:
     return [key for key, _, _ in entries]
 
 
+# Canonical damage expression for each known damaging spell, keyed by slot level.
+# Always a complete NdX+M expression so the engine rolls exactly one expression
+# and that total is the HP delta — no manual modifier is ever added by the model.
+SPELL_DAMAGE: dict[str, dict[int, str]] = {
+    "magic_missile": {
+        1: "3d4+3",   # 3 missiles × (1d4+1)
+        2: "4d4+4",
+        3: "5d4+5",
+        4: "6d4+6",
+        5: "7d4+7",
+    },
+}
+
+
+def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> dict:
+    """Consume a spell slot and apply spell damage atomically.
+
+    The engine owns both the roll and the HP change — the model supplies only the
+    spell name, caster, target, and slot level. rolled == applied is the invariant.
+    """
+    slot_res = cast_spell(caster, spell_level)
+    if not slot_res["ok"]:
+        return slot_res
+
+    spell_key = spell_name.strip().lower().replace(" ", "_")
+    level_map = SPELL_DAMAGE.get(spell_key)
+    if level_map is None:
+        return {
+            **slot_res,
+            "damage_applied": False,
+            "note": (
+                f"No damage table for {spell_name!r}. "
+                "Slot consumed; describe the effect narratively or add it to SPELL_DAMAGE."
+            ),
+        }
+
+    # Clamp to the highest known level if the slot exceeds the table.
+    dice_expr = level_map.get(spell_level, level_map[max(level_map)])
+    dmg = roll(dice_expr)
+    dealt = apply_damage(target, dmg.total)
+
+    return {
+        "ok": True,
+        "caster": caster.name,
+        "spell": spell_name,
+        "spell_level": spell_level,
+        "slots_remaining": slot_res["slots_remaining"],
+        "auto_hit": True,
+        "damage": dmg.total,
+        "damage_detail": dmg.describe(),
+        "target": target.name,
+        "target_hp": dealt["hp"],
+        "downed": dealt["downed"],
+    }
+
+
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------
 SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",
@@ -165,6 +221,7 @@ SRD_RULES = {
     "death_saves": "At 0 HP a character is unconscious and makes death saves (DC 10). Three successes stabilize; three failures kill.",
     "spell_slots": "Casting a leveled spell consumes one slot of that level or higher. Cantrips are free. Slots refresh on a long rest.",
     "armor_class": "An attack hits if the d20 roll plus attack bonus meets or exceeds the target's AC.",
+    "magic_missile": "1st-level force evocation, auto-hit, no attack roll. Damage: 3d4+3 (L1); each slot level above 1st adds one missile (+1d4+1). Use cast_spell with spell_name='magic_missile' and a target.",
 }
 
 

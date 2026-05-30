@@ -35,19 +35,31 @@ TOOLS = [
     },
     {
         "name": "cast_spell",
-        "description": "Attempt to cast a leveled spell. Returns ok=false if the caster has no slot of that level — you MUST respect that and narrate the failure.",
+        "description": (
+            "Cast a spell. For damaging spells (e.g. 'magic_missile'), supply spell_name "
+            "and target — the engine rolls the full damage expression and applies it "
+            "atomically; do NOT call roll_dice or modify_hp for the damage afterward. "
+            "For utility or buff spells, omit spell_name/target; only the slot is consumed. "
+            "Returns ok=false if no slot of that level remains."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "caster": {"type": "string", "description": "Name of the casting character"},
-                "spell_level": {"type": "integer", "description": "Spell level (0 for a cantrip)"},
+                "spell_level": {"type": "integer", "description": "Slot level (0 for a cantrip)"},
+                "spell_name": {"type": "string", "description": "Spell name, e.g. 'magic_missile'. Required for damaging spells."},
+                "target": {"type": "string", "description": "Target name. Required for damaging spells."},
             },
             "required": ["caster", "spell_level"],
         },
     },
     {
         "name": "modify_hp",
-        "description": "Apply damage (negative) or healing (positive) to an actor outside of a normal attack.",
+        "description": (
+            "Apply damage (negative) or healing (positive) for non-spell effects: "
+            "traps, potions, environmental hazards. "
+            "Do NOT use this for spell damage — use cast_spell with spell_name and target instead."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -191,8 +203,20 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(caster.name, state)
         if err:
             return err
-        res = rules.cast_spell(caster, int(args["spell_level"]))
-        state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
+        spell_name = args.get("spell_name", "").strip()
+        target_name = args.get("target", "").strip()
+        if spell_name and target_name:
+            target = state.find_actor(target_name)
+            if not target:
+                return {"ok": False, "error": f"Unknown target {target_name!r}; call get_state."}
+            res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]))
+            if res["ok"]:
+                state.record(f"{caster.name} casts {spell_name} at {target.name}: {res.get('damage_detail', 'no damage table')}")
+            else:
+                state.record(f"{caster.name} tried to cast {spell_name}: {res.get('reason', res.get('error'))}")
+        else:
+            res = rules.cast_spell(caster, int(args["spell_level"]))
+            state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
         return res
 
     if name == "modify_hp":

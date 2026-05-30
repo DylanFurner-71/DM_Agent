@@ -195,6 +195,45 @@ def test_next_turn_without_combat_errors():
     assert res["ok"] is False
 
 
+def test_damaging_spell_rolled_equals_applied():
+    """Invariant: the engine's rolled damage total must exactly equal the HP removed.
+    The model must never add a modifier by hand — rolled == applied, always."""
+    rules.seed(7)
+    gs = _make_combat_state()
+    gs.party["wisp"].spell_slots = {1: 2}
+    # Give Snik enough HP that no 3d4+3 roll (max 15) causes overkill clamping,
+    # keeping the rolled == applied invariant clean.
+    gs.npcs["snik"].hp = gs.npcs["snik"].max_hp = 30
+    snik_hp_before = gs.npcs["snik"].hp
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "target": "Snik",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is True
+    hp_removed = snik_hp_before - gs.npcs["snik"].hp
+    assert hp_removed == res["damage"]          # rolled == applied
+    assert "3d4+3" in res["damage_detail"]      # full expression in trace
+    assert res["slots_remaining"] == 1          # slot was consumed
+
+
+def test_damaging_spell_no_slot_fails():
+    gs = _make_combat_state()
+    gs.party["wisp"].spell_slots = {1: 0}
+    snik_hp_before = gs.npcs["snik"].hp
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "target": "Snik",
+        "spell_level": 1,
+    }, gs)
+    assert res["ok"] is False
+    assert gs.npcs["snik"].hp == snik_hp_before  # no HP change on failed cast
+
+
 def test_turn_guard_blocks_non_active_attacker():
     rules.seed(0)
     gs = _make_combat_state()
