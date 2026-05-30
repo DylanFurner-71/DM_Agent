@@ -87,6 +87,19 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "skill_check",
+        "description": "Roll d20 + a character's ability modifier against a Difficulty Class (DC). Use for any non-attack check — perception, persuasion, athletics, stealth, arcana, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the character making the check"},
+                "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha"},
+                "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
+            },
+            "required": ["character", "ability", "dc"],
+        },
+    },
+    {
         "name": "lookup_rule",
         "description": "Look up a rules topic (e.g. 'advantage', 'death_saves', 'spell_slots') in the SRD reference.",
         "input_schema": {
@@ -146,6 +159,14 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "get_state":
         return {"ok": True, "state": state.to_dict()}
+
+    if name == "skill_check":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        res = rules.skill_check(character, args["ability"], int(args["dc"]))
+        state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
+        return res
 
     if name == "lookup_rule":
         return rules.lookup_rule(args["topic"])

@@ -78,6 +78,33 @@ def test_state_round_trips_through_json(tmp_path=None):
     assert restored.quest_flags["door_open"] is True
 
 
+def test_skill_check_uses_ability_modifier():
+    rules.seed(5)  # first roll will be deterministic
+    c = Character(name="Wisp", ability_modifiers={"int": 4})
+    # Seed 5 produces a roll of 6 on 1d20 → total 10 with +4 modifier
+    res = rules.skill_check(c, "int", dc=10)
+    assert res["ok"] is True
+    assert res["modifier"] == 4
+    assert res["total"] == res["roll"] + 4
+    assert res["success"] == (res["total"] >= 10)
+    assert res["ability"] == "int"
+
+
+def test_skill_check_missing_ability_defaults_to_zero():
+    c = Character(name="Hero", ability_modifiers={})
+    rules.seed(15)
+    res = rules.skill_check(c, "cha", dc=5)
+    assert res["modifier"] == 0
+    assert res["total"] == res["roll"]
+
+
+def test_skill_check_case_insensitive():
+    c = Character(name="Hero", ability_modifiers={"wis": 3})
+    rules.seed(1)
+    res = rules.skill_check(c, "WIS", dc=1)
+    assert res["modifier"] == 3
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -10,6 +10,7 @@
       "ac": 16,
       "attack_bonus": 5,
       "spell_slots": {"1": 2},
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
       "inventory": ["mace", "holy symbol", "torch"],
       "conditions": []
     },
@@ -21,6 +22,7 @@
       "ac": 12,
       "attack_bonus": 4,
       "spell_slots": {"1": 1, "2": 0},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
       "inventory": ["dagger", "spellbook", "50ft rope"],
       "conditions": []
     }

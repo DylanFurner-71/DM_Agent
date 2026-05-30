@@ -25,6 +25,8 @@ class Character:
     attack_bonus: int = 4
     # Spell slots by spell level, e.g. {1: 2, 2: 0}. Decremented on cast.
     spell_slots: dict[int, int] = field(default_factory=dict)
+    # Ability modifiers (not scores), e.g. {"str": 1, "dex": 2, "con": 0, "int": 3, "wis": 1, "cha": 0}
+    ability_modifiers: dict[str, int] = field(default_factory=dict)
     inventory: list[str] = field(default_factory=list)
     conditions: list[str] = field(default_factory=list)  # e.g. "unconscious", "prone"
 

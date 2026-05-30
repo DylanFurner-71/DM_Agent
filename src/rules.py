@@ -113,6 +113,27 @@ def attack(attacker, defender, damage_dice: str = "1d6") -> dict:
     return result
 
 
+def skill_check(character, ability: str, dc: int) -> dict:
+    """Roll d20 + the character's ability modifier against DC. Always resolves."""
+    ability = ability.strip().lower()
+    modifier = character.ability_modifiers.get(ability, 0)
+    r = roll("1d20")
+    nat = r.rolls[0]
+    total = nat + modifier
+    sign = "+" if modifier >= 0 else ""
+    return {
+        "ok": True,
+        "character": character.name,
+        "ability": ability,
+        "modifier": modifier,
+        "roll": nat,
+        "total": total,
+        "dc": dc,
+        "success": total >= dc,
+        "detail": f"d20({nat}) {sign}{modifier} = {total} vs DC {dc}",
+    }
+
+
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------
 SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",
