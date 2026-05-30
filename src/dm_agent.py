@@ -44,6 +44,7 @@ class DMAgent:
         self.client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.model = model
         self.messages: list[dict] = []
+        self.tool_trace: list[dict] = []  # populated each turn; read by debug mode
 
     def _scene_preamble(self) -> str:
         party = ", ".join(
@@ -57,6 +58,7 @@ class DMAgent:
 
     def take_turn(self, player_input: str) -> str:
         """Run one full player turn and return the DM's narration."""
+        self.tool_trace = []
         user_content = f"{self._scene_preamble()}\n\nPlayer: {player_input}"
         self.messages.append({"role": "user", "content": user_content})
         self.state.turn += 1
@@ -80,6 +82,7 @@ class DMAgent:
             for block in resp.content:
                 if block.type == "tool_use":
                     result = tools.dispatch(block.name, block.input, self.state)
+                    self.tool_trace.append({"name": block.name, "input": block.input, "result": result})
                     tool_results.append(
                         {
                             "type": "tool_result",

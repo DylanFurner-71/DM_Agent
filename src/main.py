@@ -28,8 +28,21 @@ def print_state(state: GameState) -> None:
     print()
 
 
+def print_tool_trace(trace: list) -> None:
+    if not trace:
+        return
+    print("  [tools]")
+    for call in trace:
+        result_summary = {k: v for k, v in call["result"].items() if k != "state"}
+        print(f"    {call['name']}({call['input']}) -> {result_summary}")
+    print()
+
+
 def main() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SCENARIO
+    argv = sys.argv[1:]
+    debug = "--debug" in argv
+    argv = [a for a in argv if a != "--debug"]
+    path = argv[0] if argv else DEFAULT_SCENARIO
     state = GameState.load(path)
     agent = DMAgent(state)
 
@@ -62,6 +75,9 @@ def main() -> None:
 
         narration = agent.take_turn(player)
         print(f"\n{narration}\n")
+        if debug:
+            print_tool_trace(agent.tool_trace)
+            print_state(state)
 
 
 if __name__ == "__main__":
