@@ -25,6 +25,17 @@ def print_state(state: GameState) -> None:
         print(f"  {c.name}: HP {c.hp}/{c.max_hp} | slots {slots} | {', '.join(c.conditions) or 'ok'}")
     for n in state.npcs.values():
         print(f"  {n.name} (NPC): HP {n.hp}/{n.max_hp}{' [down]' if n.is_down else ''}")
+    if state.combat_round > 0:
+        all_actors = {**state.party, **state.npcs}
+        order = " → ".join(
+            all_actors[k].name if k in all_actors else k
+            for k in state.combat_order
+        )
+        active_key = state.combat_order[state.combat_index]
+        active_name = all_actors[active_key].name if active_key in all_actors else active_key
+        print(f"  Combat: round {state.combat_round} | {order} | up: {active_name}")
+    else:
+        print("  Combat: not in combat")
     print()
 
 
