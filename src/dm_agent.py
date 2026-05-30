@@ -44,7 +44,8 @@ class DMAgent:
         self.client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.model = model
         self.messages: list[dict] = []
-        self.tool_trace: list[dict] = []  # populated each turn; read by debug mode
+        self.tool_trace: list[dict] = []  # tool calls from the last turn; read by debug mode
+        self.full_trace: list[dict] = []  # cumulative [{turn, calls}] across all turns; read by /trace
 
     def _scene_preamble(self) -> str:
         party = ", ".join(
@@ -75,7 +76,9 @@ class DMAgent:
 
             if resp.stop_reason != "tool_use":
                 # Final narration: collect any text blocks.
-                return "".join(b.text for b in resp.content if b.type == "text").strip()
+                narration = "".join(b.text for b in resp.content if b.type == "text").strip()
+                self.full_trace.append({"turn": self.state.turn, "calls": list(self.tool_trace)})
+                return narration
 
             # Execute every tool the model requested this hop.
             tool_results = []
@@ -92,6 +95,7 @@ class DMAgent:
                     )
             self.messages.append({"role": "user", "content": tool_results})
 
+        self.full_trace.append({"turn": self.state.turn, "calls": list(self.tool_trace)})
         return "(The DM pauses, overwhelmed by the threads of fate — too many actions in one turn.)"
 
 
