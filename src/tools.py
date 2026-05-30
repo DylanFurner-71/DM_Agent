@@ -87,6 +87,31 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "start_combat",
+        "description": "Roll initiative for the listed combatants, set turn order in state, and begin round 1. Pass the state dict-keys of every participant (party members and NPCs). Returns the turn order so you know who acts first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "combatants": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "State dict-keys of every combatant, e.g. ['aldric', 'wisp', 'snik']. Call get_state to see valid keys.",
+                },
+            },
+            "required": ["combatants"],
+        },
+    },
+    {
+        "name": "next_turn",
+        "description": "Advance to the next combatant in initiative order. Automatically increments the round counter when the order wraps. The engine calls this between turns — do NOT call it yourself during narration.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "end_combat",
+        "description": "Clear all combat state (turn order, pointer, round counter). Call when the fight is over — enemies defeated, fled, or parley reached.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "skill_check",
         "description": "Roll d20 + a character's ability modifier against a Difficulty Class (DC). Use for any non-attack check — perception, persuasion, athletics, stealth, arcana, etc.",
         "input_schema": {
@@ -159,6 +184,42 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "get_state":
         return {"ok": True, "state": state.to_dict()}
+
+    if name == "start_combat":
+        all_actors = {**state.party, **state.npcs}
+        combatant_keys = args.get("combatants", [])
+        if not combatant_keys:
+            return {"ok": False, "error": "combatants list is empty."}
+        unknown = [k for k in combatant_keys if k not in all_actors]
+        if unknown:
+            return {"ok": False, "error": f"Unknown combatant key(s) {unknown}; call get_state to see valid keys."}
+        ordered = rules.roll_initiative({k: all_actors[k] for k in combatant_keys})
+        state.combat_order = ordered
+        state.combat_index = 0
+        state.combat_round = 1
+        active_key = ordered[0]
+        state.record(f"combat started round 1, order: {ordered}, first: {active_key}")
+        return {"ok": True, "combat_order": ordered, "active": active_key, "active_name": all_actors[active_key].name, "round": 1}
+
+    if name == "next_turn":
+        if not state.combat_order:
+            return {"ok": False, "error": "No combat in progress; call start_combat first."}
+        state.combat_index += 1
+        if state.combat_index >= len(state.combat_order):
+            state.combat_index = 0
+            state.combat_round += 1
+        active_key = state.combat_order[state.combat_index]
+        all_actors = {**state.party, **state.npcs}
+        active_name = all_actors[active_key].name if active_key in all_actors else active_key
+        state.record(f"round {state.combat_round}, turn -> {active_key} ({active_name})")
+        return {"ok": True, "active": active_key, "active_name": active_name, "round": state.combat_round, "combat_index": state.combat_index}
+
+    if name == "end_combat":
+        state.combat_order = []
+        state.combat_index = 0
+        state.combat_round = 0
+        state.record("combat ended")
+        return {"ok": True}
 
     if name == "skill_check":
         character = state.find_actor(args["character"])

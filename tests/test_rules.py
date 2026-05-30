@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src import rules
+from src import rules, tools
 from src.game_state import Character, NPC, GameState
 
 
@@ -128,6 +128,79 @@ def test_roll_initiative_dex_breaks_total_tie():
 
 def test_combat_defaults_to_not_in_combat():
     gs = GameState.from_dict({"location": "Town"})  # old save without combat fields
+    assert gs.combat_order == []
+    assert gs.combat_index == 0
+    assert gs.combat_round == 0
+
+
+# --- combat dispatch tests (no API) ----------------------------------------
+
+def _make_combat_state():
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.party["wisp"] = Character(name="Wisp", ability_modifiers={"dex": 2})
+    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 1})
+    return gs
+
+
+def test_start_combat_sets_order_and_round():
+    rules.seed(0)
+    gs = _make_combat_state()
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    assert res["ok"] is True
+    assert set(res["combat_order"]) == {"aldric", "wisp", "snik"}
+    assert len(res["combat_order"]) == 3
+    assert gs.combat_round == 1
+    assert gs.combat_index == 0
+    assert gs.combat_order == res["combat_order"]
+    assert res["active"] == gs.combat_order[0]
+
+
+def test_start_combat_rejects_unknown_key():
+    gs = _make_combat_state()
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "nobody"]}, gs)
+    assert res["ok"] is False
+    assert "nobody" in res["error"]
+
+
+def test_next_turn_advances_pointer():
+    rules.seed(0)
+    gs = _make_combat_state()
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+    second = gs.combat_order[1]
+    res = tools.dispatch("next_turn", {}, gs)
+    assert res["ok"] is True
+    assert res["active"] == second
+    assert gs.combat_index == 1
+    assert res["round"] == 1
+
+
+def test_next_turn_wraps_and_increments_round():
+    rules.seed(0)
+    gs = _make_combat_state()
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+    first = gs.combat_order[0]
+    tools.dispatch("next_turn", {}, gs)       # index 0 → 1
+    res = tools.dispatch("next_turn", {}, gs)  # index 1 → wraps to 0, round 2
+    assert res["ok"] is True
+    assert res["active"] == first
+    assert gs.combat_index == 0
+    assert res["round"] == 2
+    assert gs.combat_round == 2
+
+
+def test_next_turn_without_combat_errors():
+    gs = _make_combat_state()
+    res = tools.dispatch("next_turn", {}, gs)
+    assert res["ok"] is False
+
+
+def test_end_combat_clears_state():
+    rules.seed(0)
+    gs = _make_combat_state()
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    res = tools.dispatch("end_combat", {}, gs)
+    assert res["ok"] is True
     assert gs.combat_order == []
     assert gs.combat_index == 0
     assert gs.combat_round == 0
