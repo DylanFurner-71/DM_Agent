@@ -78,6 +78,61 @@ def test_state_round_trips_through_json(tmp_path=None):
     assert restored.quest_flags["door_open"] is True
 
 
+def test_combat_state_round_trips_through_json():
+    gs = GameState(location="Arena")
+    gs.party["w"] = Character(name="Wisp")
+    gs.npcs["g"] = NPC(name="Goblin")
+    gs.combat_order = ["w", "g"]
+    gs.combat_index = 1
+    gs.combat_round = 3
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.combat_order == ["w", "g"]
+    assert restored.combat_index == 1
+    assert restored.combat_round == 3
+
+
+def test_roll_initiative_returns_all_keys_including_npcs():
+    rules.seed(0)
+    a = Character(name="Aldric", ability_modifiers={"dex": 0})
+    b = NPC(name="Snik")  # no ability_modifiers → dex treated as 0
+    result = rules.roll_initiative({"aldric": a, "snik": b})
+    assert sorted(result) == ["aldric", "snik"]
+    assert len(result) == 2
+
+
+def test_roll_initiative_highest_total_first():
+    rules.seed(0)
+    # +100 dex → total ≥ 101; -100 dex → total ≤ -80. No overlap possible.
+    fast = Character(name="Fast", ability_modifiers={"dex": 100})
+    slow = Character(name="Slow", ability_modifiers={"dex": -100})
+    result = rules.roll_initiative({"fast": fast, "slow": slow})
+    assert result == ["fast", "slow"]
+
+
+def test_roll_initiative_dex_breaks_total_tie():
+    import random as _stdlib
+    # Preview what seed=77 produces for two sequential 1d20 rolls, then assign
+    # Dex modifiers that force equal totals so the tie-breaker (higher Dex) decides.
+    preview = _stdlib.Random(77)
+    roll_a, roll_b = preview.randint(1, 20), preview.randint(1, 20)
+    # dex_a=5; set dex_b so that roll_a+dex_a == roll_b+dex_b (equal totals).
+    dex_a, dex_b = 5, 5 + (roll_a - roll_b)
+    # Whichever combatant has the higher Dex modifier should come first.
+    expected_first = "a" if dex_a >= dex_b else "b"
+    rules.seed(77)
+    ca = Character(name="A", ability_modifiers={"dex": dex_a})
+    cb = Character(name="B", ability_modifiers={"dex": dex_b})
+    result = rules.roll_initiative({"a": ca, "b": cb})
+    assert result[0] == expected_first
+
+
+def test_combat_defaults_to_not_in_combat():
+    gs = GameState.from_dict({"location": "Town"})  # old save without combat fields
+    assert gs.combat_order == []
+    assert gs.combat_index == 0
+    assert gs.combat_round == 0
+
+
 def test_skill_check_uses_ability_modifier():
     rules.seed(5)  # first roll will be deterministic
     c = Character(name="Wisp", ability_modifiers={"int": 4})

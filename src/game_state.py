@@ -43,6 +43,7 @@ class NPC:
     ac: int = 12
     attack_bonus: int = 3
     hostile: bool = True
+    ability_modifiers: dict[str, int] = field(default_factory=dict)
 
     @property
     def is_down(self) -> bool:
@@ -58,6 +59,10 @@ class GameState:
     quest_flags: dict[str, bool] = field(default_factory=dict)
     turn: int = 0
     log: list[str] = field(default_factory=list)
+    # Combat state — all three default to "not in combat" (empty order, round 0).
+    combat_order: list[str] = field(default_factory=list)  # party/NPC dict keys in initiative order
+    combat_index: int = 0   # index into combat_order for the active combatant
+    combat_round: int = 0   # increments each time the order wraps; 0 = not in combat
 
     # --- lookup helpers -------------------------------------------------
     def find_actor(self, name: str):
@@ -84,6 +89,9 @@ class GameState:
             "quest_flags": self.quest_flags,
             "turn": self.turn,
             "log": self.log,
+            "combat_order": self.combat_order,
+            "combat_index": self.combat_index,
+            "combat_round": self.combat_round,
         }
 
     def save(self, path: str) -> None:
@@ -98,6 +106,9 @@ class GameState:
             quest_flags=d.get("quest_flags", {}),
             turn=d.get("turn", 0),
             log=d.get("log", []),
+            combat_order=d.get("combat_order", []),
+            combat_index=d.get("combat_index", 0),
+            combat_round=d.get("combat_round", 0),
         )
         for k, v in d.get("party", {}).items():
             # JSON keys are strings; spell_slots keys must be ints.

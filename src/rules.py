@@ -134,6 +134,30 @@ def skill_check(character, ability: str, dc: int) -> dict:
     }
 
 
+def roll_initiative(combatants: dict) -> list[str]:
+    """Return combatant keys sorted by initiative (d20 + Dex modifier), highest first.
+
+    The model must never decide turn order — this function is the sole authority.
+
+    Tie-breaking (fully deterministic):
+      1. Higher Dex modifier wins (quicker reflexes edge out the slower combatant).
+      2. If Dex modifiers are also equal, the insertion order of *combatants* is
+         preserved (Python's sort is stable), giving a consistent result across
+         repeated calls with the same input mapping.
+
+    Missing "dex" in ability_modifiers is treated as 0.
+    """
+    entries = []
+    for key, c in combatants.items():
+        dex = c.ability_modifiers.get("dex", 0)
+        total = roll("1d20").total + dex
+        entries.append((key, total, dex))
+    # Negate both keys so the highest values sort first; stable sort preserves
+    # insertion order when both keys are equal.
+    entries.sort(key=lambda e: (-e[1], -e[2]))
+    return [key for key, _, _ in entries]
+
+
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------
 SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",
