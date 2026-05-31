@@ -153,6 +153,24 @@ def _active_actor_name(state) -> str | None:
     return actor.name if actor else None
 
 
+def _action_guard(state) -> dict | None:
+    """Return ok=False if the active combatant has already used their action this turn.
+
+    When the action is available, sets state.action_used = True and returns None so
+    the caller can proceed. No-ops outside of combat.
+    """
+    if not state.combat_order or state.combat_round == 0:
+        return None  # not in combat — no restriction
+    if state.action_used:
+        active_key = state.combat_order[state.combat_index]
+        all_actors = {**state.party, **state.npcs}
+        actor = all_actors.get(active_key)
+        name = actor.name if actor else active_key
+        return {"ok": False, "error": f"{name} has already acted this turn."}
+    state.action_used = True
+    return None
+
+
 def _turn_guard(actor_name: str, state) -> dict | None:
     """Return an ok=False error if actor_name is not the active combatant, else None."""
     active = _active_actor_name(state)
@@ -184,7 +202,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         defender = state.find_actor(args["defender"])
         if not attacker or not defender:
             return {"ok": False, "error": "Unknown attacker or defender; call get_state to see valid names."}
-        err = _turn_guard(attacker.name, state)
+        err = _turn_guard(attacker.name, state) or _action_guard(state)
         if err:
             return err
         res = rules.attack(attacker, defender, args.get("damage_dice", "1d6"))
@@ -195,7 +213,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         caster = state.find_actor(args["caster"])
         if not caster:
             return {"ok": False, "error": "Unknown caster; call get_state."}
-        err = _turn_guard(caster.name, state)
+        err = _turn_guard(caster.name, state) or _action_guard(state)
         if err:
             return err
         spell_name = args.get("spell_name", "").strip()
@@ -249,6 +267,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.combat_order = ordered
         state.combat_index = 0
         state.combat_round = 1
+        state.action_used = False
         active_key = ordered[0]
         state.record(f"combat started round 1, order: {ordered}, first: {active_key}")
         return {"ok": True, "combat_order": ordered, "active": active_key, "active_name": all_actors[active_key].name, "round": 1}
@@ -263,6 +282,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         active_key = state.combat_order[state.combat_index]
         all_actors = {**state.party, **state.npcs}
         active_name = all_actors[active_key].name if active_key in all_actors else active_key
+        state.action_used = False
         state.record(f"round {state.combat_round}, turn -> {active_key} ({active_name})")
         return {"ok": True, "active": active_key, "active_name": active_name, "round": state.combat_round, "combat_index": state.combat_index}
 

@@ -278,6 +278,78 @@ def test_turn_guard_blocks_cast_spell_out_of_turn():
         assert "Wisp" in result["error"]
 
 
+def test_action_guard_blocks_second_attack():
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100  # guaranteed first
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    res1 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert res1["ok"] is True
+    assert gs.action_used is True
+
+    res2 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert res2["ok"] is False
+    assert "already acted" in res2["error"]
+    assert "Aldric" in res2["error"]
+
+
+def test_action_guard_blocks_second_cast():
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["wisp"].spell_slots = {1: 2}
+    gs.party["wisp"].ability_modifiers["dex"] = 100  # Wisp first
+    tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
+    assert gs.combat_order[0] == "wisp"
+
+    res1 = tools.dispatch("cast_spell", {
+        "caster": "Wisp", "spell_name": "magic_missile", "target": "Snik", "spell_level": 1,
+    }, gs)
+    assert res1["ok"] is True
+
+    res2 = tools.dispatch("cast_spell", {
+        "caster": "Wisp", "spell_name": "magic_missile", "target": "Snik", "spell_level": 1,
+    }, gs)
+    assert res2["ok"] is False
+    assert "already acted" in res2["error"]
+    assert "Wisp" in res2["error"]
+
+
+def test_next_turn_resets_action_flag():
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert gs.action_used is True
+
+    tools.dispatch("next_turn", {}, gs)  # advance to Snik
+    assert gs.action_used is False
+
+    res = tools.dispatch("attack", {"attacker": "Snik", "defender": "Aldric"}, gs)
+    assert res["ok"] is True
+
+
+def test_action_guard_inactive_outside_combat():
+    gs = _make_combat_state()
+    # No combat — action_used is never set; same combatant may act freely.
+    res1 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    res2 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert res1["ok"] is True
+    assert res2["ok"] is True
+    assert gs.action_used is False
+
+
+def test_start_combat_clears_action_flag():
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.action_used = True  # simulate leftover state
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.action_used is False
+
+
 def test_combat_loop_halts_at_player_no_skip():
     """No-API round-loop test.
 
