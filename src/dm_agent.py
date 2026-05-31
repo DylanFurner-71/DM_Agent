@@ -110,7 +110,10 @@ difficulty and applies the result. Never decide a negotiation's outcome yourself
 disposition in narration — only influence_npc (or an attack) changes it. A success makes the NPC \
 non-hostile: it stands down, and if it was the last hostile the engine ends combat. A non-hostile \
 NPC takes no hostile action on its turn — narrate it standing aside. Each NPC can be swayed once; \
-a failed or refused attempt cannot be retried — narrate the refusal and move on. \
+a failed attempt cannot be retried. Out of combat, a FAILED parley triggers an automatic fight — \
+the engine rolls initiative for all present fighters and merges the result into influence_npc: \
+announce the order from combat_order and stop, exactly as you would after start_combat. Do NOT \
+call start_combat yourself. In combat a failed attempt simply ends the character's turn. \
 Attacking a non-hostile NPC makes it hostile again.
 
 STEALTH — getting the drop. Before a fight starts, when the party tries to sneak up on, \

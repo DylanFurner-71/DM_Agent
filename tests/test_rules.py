@@ -4374,11 +4374,13 @@ def test_influence_npc_failure():
 
 def test_influence_npc_one_attempt_only():
     """A second influence_npc on the same NPC -> ok=False 'already_attempted', no roll made.
-    Uses a failed first attempt so the NPC stays hostile (reaching already_attempted, not not_hostile)."""
+    Uses a failed first attempt so the NPC stays hostile (reaching already_attempted, not not_hostile).
+    combat_starting is cleared between the two calls to simulate take_turn's barrier reset."""
     gs = _influence_state()
     rules.force_rolls([3])  # fail: total 5 < DC 12, NPC stays hostile
     tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
     assert gs.npcs["snik"].social_attempted is True
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before the next turn
     res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
     assert res["ok"] is False
     assert res["reason"] == "already_attempted"
@@ -4465,6 +4467,88 @@ def test_influence_npc_out_of_combat_no_turn_guard():
     res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
     assert res["ok"] is True
     assert gs.action_used is False
+
+
+# --- failed parley auto-starts combat ----------------------------------------
+
+def test_failed_parley_out_of_combat_starts_combat():
+    """Out of combat, failed influence_npc auto-initiates combat and returns combat info."""
+    gs = _influence_state()  # no combat
+    rules.force_rolls([3])   # cha +2, DC 12: total 5 — fail
+    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
+    assert res["ok"] is True
+    assert res["success"] is False
+    assert res["combat_started"] is True
+    assert gs.combat_round == 1
+    assert gs.combat_order != []
+    assert "aldric" in gs.combat_order
+    assert "snik" in gs.combat_order
+    assert res["combat_order"] == gs.combat_order
+    assert res["active"] == gs.combat_order[0]
+    assert res["active_name"] is not None
+    assert res["round"] == 1
+
+
+def test_successful_parley_does_not_start_combat():
+    """Successful influence_npc must NOT auto-start combat."""
+    gs = _influence_state()
+    rules.force_rolls([15])   # total 17 >= 12 — success
+    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
+    assert res["ok"] is True
+    assert res["success"] is True
+    assert "combat_started" not in res
+    assert gs.combat_round == 0
+
+
+def test_failed_parley_in_combat_does_not_restart():
+    """In combat, a failed parley costs the action but does not touch combat state."""
+    gs = _influence_state(combat=True)
+    round_before = gs.combat_round
+    order_before = list(gs.combat_order)
+    rules.force_rolls([3])
+    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "intimidate"}, gs)
+    assert res["ok"] is True
+    assert res["success"] is False
+    assert "combat_started" not in res
+    assert gs.combat_round == round_before
+    assert gs.combat_order == order_before
+
+
+def test_failed_parley_combat_includes_all_conscious_fighters():
+    """All conscious party members and all hostile living NPCs enter the auto-started combat."""
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"cha": 0, "dex": 0})
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=20, hp=20, ability_modifiers={"cha": 0, "dex": 0})
+    gs.party["dead"]   = Character(name="Dead",   max_hp=20, hp=0,  ability_modifiers={})   # downed — excluded
+    gs.npcs["snik"] = NPC(name="Snik",  max_hp=10, hp=10, hostile=True,  disposition_dc=10)
+    gs.npcs["narl"] = NPC(name="Narl",  max_hp=10, hp=10, hostile=True)   # no disposition_dc
+    gs.npcs["ally"] = NPC(name="Ally",  max_hp=10, hp=10, hostile=False)  # non-hostile — excluded
+    rules.force_rolls([1])   # total 1 < DC 10 — fail
+    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
+    assert res["ok"] is True
+    assert res["combat_started"] is True
+    order = gs.combat_order
+    assert "aldric" in order
+    assert "wisp"   in order
+    assert "snik"   in order
+    assert "narl"   in order
+    assert "dead"   not in order    # downed PC excluded
+    assert "ally"   not in order    # non-hostile NPC excluded
+
+
+def test_failed_parley_combat_starting_blocks_attack():
+    """After failed parley auto-starts combat, combat_starting=True blocks an attack
+    in the same _execute hop (same safety barrier as explicit start_combat)."""
+    gs = _influence_state()
+    gs.npcs["snik"].hp = gs.npcs["snik"].max_hp = 20  # enough HP to survive
+    rules.force_rolls([3])   # fail → auto-combat
+    tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
+    assert gs.combat_starting is True  # barrier set
+
+    # Attack in the same hop must be refused with reason "combat_starting"
+    atk = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert atk["ok"] is False
+    assert atk["reason"] == "combat_starting"
 
 
 # ---------------------------------------------------------------------------

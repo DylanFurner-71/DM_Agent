@@ -349,7 +349,10 @@ TOOLS = [
             "In combat this costs the character's action and is turn-guarded. "
             "Out of combat the guards no-op. "
             "On a validation failure the action guard is undone so the character keeps their turn. "
-            "The engine rolls and applies the result atomically — never call skill_check separately."
+            "The engine rolls and applies the result atomically — never call skill_check separately. "
+            "OUT-OF-COMBAT FAILURE: the engine automatically initiates combat for all present fighters "
+            "and merges the result — the response contains combat_started=true, combat_order, active, "
+            "and active_name. Announce the order and stop; do NOT call start_combat yourself."
         ),
         "input_schema": {
             "type": "object",
@@ -1093,7 +1096,7 @@ def dispatch(name: str, args: dict, state) -> dict:
             f"{character.name} {approach}s {npc.name} (DC {npc.disposition_dc}): "
             f"{'success' if res['success'] else 'failure'} — now_hostile={npc.hostile}"
         )
-        return {
+        result = {
             "ok": True,
             "character": character.name,
             "npc": npc.name,
@@ -1104,6 +1107,20 @@ def dispatch(name: str, args: dict, state) -> dict:
             "success": res["success"],
             "now_hostile": npc.hostile,
         }
+        # Failed parley out of combat: auto-initiate a fight with everyone present.
+        if not res["success"] and state.combat_round == 0:
+            combatant_keys = (
+                [k for k, c in state.party.items() if not c.is_down] +
+                [k for k, n in state.npcs.items() if n.hostile and not n.is_down]
+            )
+            if combatant_keys:
+                combat_res = dispatch("start_combat", {"combatants": combatant_keys}, state)
+                result["combat_started"] = True
+                result["combat_order"] = combat_res.get("combat_order")
+                result["active"] = combat_res.get("active")
+                result["active_name"] = combat_res.get("active_name")
+                result["round"] = combat_res.get("round")
+        return result
 
     if name == "take_item":
         item_arg = args.get("item", "").strip().lower()
