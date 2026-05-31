@@ -218,6 +218,21 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "attempt_ambush",
+        "description": (
+            "Before combat, attempt a group stealth ambush: the whole conscious party sneaks together "
+            "against the most alert hostile in the scene. The engine rolls each member's Dex check vs "
+            "the highest alertness DC and records the outcome. "
+            "Success: pending surprise is queued — call start_combat and the hostiles will lose round 1. "
+            "Failure: the approach is blown — no surprise. "
+            "Rejected (ok=false) when: combat is already in progress ('in_combat'); an attempt was "
+            "already made this scene ('already_attempted'); no living hostiles present ('no_target'); "
+            "any hostile is always-alert ('cannot_ambush'). "
+            "Only valid out of combat. No arguments needed."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "start_combat",
         "description": "Roll initiative for the listed combatants, set turn order in state, and begin round 1. Pass the state dict-keys of every participant (party members and NPCs). Returns the turn order so you know who acts first.",
         "input_schema": {
@@ -739,6 +754,8 @@ def dispatch(name: str, args: dict, state) -> dict:
             state.location = scene_data.get("location", "")
             state.scene = scene_data.get("scene", "")
             state.npcs = {k: expand_npc_entry(v) for k, v in scene_data.get("npcs", {}).items()}
+            state.pending_ambush = False
+            state.ambush_attempted = False
             state.record(f"scene -> {scene_key} ({state.location})")
             return {
                 "ok": True,
@@ -752,6 +769,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.location = args["location"]
         if "scene" in args:
             state.scene = args["scene"]
+        state.pending_ambush = False
+        state.ambush_attempted = False
         state.record(f"scene -> {state.location}")
         return {"ok": True, "location": state.location}
 
@@ -771,6 +790,42 @@ def dispatch(name: str, args: dict, state) -> dict:
             if exit_req:
                 d["exit_requires"] = exit_req
         return {"ok": True, "state": d}
+
+    if name == "attempt_ambush":
+        if state.combat_round > 0:
+            return {"ok": False, "reason": "in_combat", "error": "Cannot attempt ambush during combat."}
+        if state.ambush_attempted:
+            return {"ok": False, "reason": "already_attempted", "error": "Ambush already attempted in this scene."}
+        hostiles = [n for n in state.npcs.values() if n.hostile and not n.is_down]
+        if not hostiles:
+            return {"ok": False, "reason": "no_target", "error": "No living hostiles to ambush."}
+        if any(h.alertness_dc is None for h in hostiles):
+            return {"ok": False, "reason": "cannot_ambush", "error": "One or more foes are always alert — cannot get the drop on them."}
+        bar = max(h.alertness_dc for h in hostiles)
+        participants = [c for c in state.party.values() if not c.is_down]
+        rolls = []
+        for member in participants:
+            res = rules.skill_check(member, "dex", bar)
+            rolls.append({
+                "character": member.name,
+                "roll": res["roll"],
+                "modifier": res["modifier"],
+                "total": res["total"],
+                "success": res["success"],
+            })
+        success = all(r["success"] for r in rolls)
+        state.ambush_attempted = True
+        if success:
+            state.pending_ambush = True
+        hostile_names = [h.name for h in hostiles]
+        state.record(f"attempt_ambush bar={bar} success={success}")
+        return {
+            "ok": True,
+            "success": success,
+            "bar": bar,
+            "rolls": rolls,
+            "hostiles": hostile_names,
+        }
 
     if name == "start_combat":
         all_actors = {**state.party, **state.npcs}
@@ -797,9 +852,20 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.combat_round = 1
         state.action_used = False
         state.combat_starting = True   # barrier: deny action tools for rest of this player _execute
+        # Consume any pending ambush: mark hostile NPCs as surprised.
+        surprised_names: list[str] = []
+        if state.pending_ambush:
+            for key in ordered:
+                if key in state.npcs and state.npcs[key].hostile:
+                    state.npcs[key].surprised = True
+                    surprised_names.append(state.npcs[key].name)
+            state.pending_ambush = False
         active_key = ordered[0]
         state.record(f"combat started round 1, order: {ordered}, first: {active_key}")
-        return {"ok": True, "combat_order": ordered, "active": active_key, "active_name": all_actors[active_key].name, "round": 1}
+        result: dict = {"ok": True, "combat_order": ordered, "active": active_key, "active_name": all_actors[active_key].name, "round": 1}
+        if surprised_names:
+            result["surprised"] = surprised_names
+        return result
 
     if name == "next_turn":
         if not state.combat_order:
@@ -829,6 +895,11 @@ def dispatch(name: str, args: dict, state) -> dict:
                     skipped.append(active_key)
                     state.record(f"skipping downed {active_key} ({actor.name})")
                     continue
+                if state.combat_round == 1 and actor.surprised:
+                    skipped.append(active_key)
+                    state.record(f"surprised, skipping {active_key} ({actor.name})")
+                    actor.surprised = False
+                    continue
                 break
         else:
             return {"ok": False, "error": "All combatants are at 0 HP; call end_combat."}
@@ -845,6 +916,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.combat_initiatives = {}
         state.combat_index = 0
         state.combat_round = 0
+        for npc in state.npcs.values():
+            npc.surprised = False
         state.record("combat ended")
         return {"ok": True}
 

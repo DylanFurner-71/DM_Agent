@@ -113,6 +113,18 @@ NPC takes no hostile action on its turn — narrate it standing aside. Each NPC 
 a failed or refused attempt cannot be retried — narrate the refusal and move on. \
 Attacking a non-hostile NPC makes it hostile again.
 
+STEALTH — getting the drop. Before a fight starts, when the party tries to sneak up on, \
+ambush, or get the jump on the present enemies, call attempt_ambush; the engine rolls the \
+party's group stealth against how alert the foes are and records the result. Never decide the \
+outcome yourself. On SUCCESS the party has surprise: when you then call start_combat those \
+enemies are caught off guard and lose their first turn — narrate the party striking from cover \
+before the enemy reacts. On FAILURE the enemies notice the approach (no surprise) — narrate the \
+blown sneak; the party can still fight or withdraw. Ambush is only possible before combat. Some \
+foes can't be caught off guard at all (the engine refuses) — narrate them as already watching. \
+A surprised enemy takes no action on its first turn; the engine enforces this — never have a \
+surprised enemy act in round 1. If the party would rather avoid the enemies entirely, you may \
+narrate them slipping past and move on without combat — that needs no tool.
+
 TWO-PHASE PROTOCOL — every action uses two separate prompts:
 TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
 Write no prose — your only output in this phase is tool calls. \
@@ -250,6 +262,8 @@ class DMAgent:
                 entry = {"hp": f"{n.hp}/{n.max_hp}", "hostile": n.hostile}
                 if n.social_attempted:
                     entry["social_attempted"] = True
+                if n.surprised:
+                    entry["surprised"] = True
                 return entry
             snap["npcs"] = {n.name: _npc_entry(n) for n in s.npcs.values()}
         if s.current_scene:
@@ -632,6 +646,12 @@ class DMAgent:
 
                 # --- NPC turn ---
                 npc = self.state.npcs.get(active_key)
+                # Round-1 surprise: skip NPCs that weren't reached via next_turn
+                # (i.e. the leading actor inspected directly after start_combat).
+                if npc and npc.surprised and self.state.combat_round == 1:
+                    self.state.record(f"surprised, skipping {active_key} ({npc.name})")
+                    npc.surprised = False
+                    continue
                 resolution = tools.resolve_npc_action(npc, self.state) if npc else None
 
                 if resolution is not None:

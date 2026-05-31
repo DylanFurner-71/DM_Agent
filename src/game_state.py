@@ -84,6 +84,8 @@ class NPC:
     inventory: list[str] = field(default_factory=list)
     disposition_dc: int | None = None   # None = cannot be reasoned with
     social_attempted: bool = False      # one persuasion attempt allowed per NPC
+    alertness_dc: int | None = None     # None = always alert (cannot be ambushed); numeric = stealth DC
+    surprised: bool = False             # True during the surprise round; cleared when the NPC's slot is skipped
 
     @property
     def is_down(self) -> bool:
@@ -111,9 +113,10 @@ class GameState:
     combat_initiatives: dict[str, int] = field(default_factory=dict)  # {key: initiative_total}
     game_over: bool = False
     game_outcome: str = ""  # "" | "victory" | "defeat"
-    # Transient runtime flag — set when start_combat fires this turn so action tools
-    # cannot also resolve in the same player _execute phase.  Not serialized.
-    combat_starting: bool = False
+    # Transient runtime flags — NOT serialized (defaults restore on load).
+    combat_starting: bool = False   # set when start_combat fires; blocks action tools for rest of _execute
+    pending_ambush: bool = False    # a won, unconsumed ambush is queued
+    ambush_attempted: bool = False  # an attempt was made in the current scene (one shot)
 
     # --- lookup helpers -------------------------------------------------
     def find_actor(self, name: str):
