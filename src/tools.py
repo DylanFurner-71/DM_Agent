@@ -470,6 +470,49 @@ def _resolve_offensive_target(target_arg: str, state, exclude_name: str = "") ->
     }, False
 
 
+def _select_npc_attack_target(state):
+    """Select the best PC target for a simple NPC attack.
+
+    Policy: lowest-HP conscious PC wins. Ties broken by position in
+    combat_order (earlier = higher priority). Edit only this function
+    to swap targeting strategy.
+    """
+    order_pos = {k: i for i, k in enumerate(state.combat_order)}
+    candidates = [
+        (pc, order_pos.get(key, len(state.combat_order)))
+        for key, pc in state.party.items()
+        if not pc.is_down
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0].hp, item[1]))
+    return candidates[0][0]
+
+
+def resolve_npc_action(npc, state) -> tuple[dict, dict] | None:
+    """Engine-resolve a simple hostile NPC's turn without an LLM call.
+
+    Returns (input_args, dispatch_result) to append to tool_trace,
+    or None to signal the model should decide instead.
+
+    Falls back to None when:
+      - NPC is non-hostile (stands aside — no action)
+      - No conscious PC target exists
+      - NPC has capabilities the engine doesn't model (e.g. spells)
+    """
+    if not npc.hostile:
+        return None
+    if getattr(npc, "spells", None):
+        return None
+    target = _select_npc_attack_target(state)
+    if target is None:
+        return None
+    # Pass defender explicitly — _resolve_offensive_target auto-pick only
+    # scans hostile NPCs (PC→NPC direction) and won't auto-target a PC.
+    args = {"attacker": npc.name, "defender": target.name}
+    return args, dispatch("attack", args, state)
+
+
 def dispatch(name: str, args: dict, state) -> dict:
     """Execute one tool call against the live state. Returns a JSON-able dict."""
     if name == "roll_dice":

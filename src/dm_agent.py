@@ -115,7 +115,10 @@ Attacking a non-hostile NPC makes it hostile again.
 
 TWO-PHASE PROTOCOL — every action uses two separate prompts:
 TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
-Write no prose — your only output in this phase is tool calls.
+Write no prose — your only output in this phase is tool calls. \
+When a single action implies multiple INDEPENDENT tool calls (e.g. taking several items plus \
+setting a quest flag), emit them as parallel tool_use blocks in one response instead of one \
+tool per hop. Keep dependent/sequential calls (start_combat before attack, etc.) sequential.
 NARRATION PHASE ("Narrate what just happened..."): write 1-3 sentences of in-world prose \
 describing what the most recent action achieved — damage dealt, spell effect, hit or miss, \
 movement, etc. No tool calls. No prompts. No "what do you do". No turn banners. \
@@ -565,6 +568,23 @@ class DMAgent:
             # pointer stays where the engine left it; do NOT call next_turn.
             advance_first = self.state.action_used and current_key in self.state.party
 
+            # Prompts for NPC turns the engine can't resolve; flushed as one _execute call.
+            fallback_queue: list[str] = []
+
+            def _flush_fallbacks() -> bool:
+                """Batch-execute queued fallback prompts. Returns True if combat ended."""
+                nonlocal combat_ended_in_npc_phase
+                if not fallback_queue or self.state.game_over or self.state.combat_round == 0:
+                    fallback_queue.clear()
+                    return False
+                self._execute("\n\n".join(fallback_queue))
+                fallback_queue.clear()
+                self._maybe_end_combat()
+                if self.state.game_over or self.state.combat_round == 0:
+                    combat_ended_in_npc_phase = True
+                    return True
+                return False
+
             for i in range(len(self.state.combat_order)):
                 if advance_first or i > 0:
                     adv = tools.dispatch("next_turn", {}, self.state)
@@ -581,6 +601,10 @@ class DMAgent:
                     active_round = self.state.combat_round
 
                 if active_key in self.state.party:
+                    # Flush any queued fallback NPC turns before stopping at this PC slot
+                    # so those NPCs act before the PC's turn prompt is surfaced.
+                    if _flush_fallbacks():
+                        break
                     pc = self.state.party[active_key]
                     decision = tools._pc_turn_decision(pc)
                     if decision == "roll":
@@ -606,22 +630,42 @@ class DMAgent:
                     else:  # "skip" — stable/dead; next_turn should have caught this
                         continue
 
-                npc_exec_prompt = (
-                    f"[Combat — Round {active_round}, {active_name}'s turn — Tool-use phase] "
-                    f"Decide {active_name}'s action and execute it with the appropriate tool(s). "
-                    f"Write no prose — narration is requested separately."
-                )
-                self._execute(npc_exec_prompt)
-                self._maybe_end_combat()
-                combat_beats.append({"kind": "npc_action", "name": active_name, "round": active_round})
+                # --- NPC turn ---
+                npc = self.state.npcs.get(active_key)
+                resolution = tools.resolve_npc_action(npc, self.state) if npc else None
 
-                if self.state.game_over:  # defeat during NPC phase
-                    combat_ended_in_npc_phase = True
-                    break
+                if resolution is not None:
+                    # Engine-resolved: no API call.
+                    npc_args, npc_result = resolution
+                    self.tool_trace.append({"name": "attack", "input": npc_args, "result": npc_result})
+                    # Inject a brief context message so _narrate_combat_batch has
+                    # the same hit/miss/damage facts it would see from a tool_result.
+                    _hit = npc_result.get("hit", False)
+                    _detail = (
+                        f"hit, {npc_result.get('damage', 0)} dmg → {npc_args['defender']} HP {npc_result.get('target_hp')}"
+                        if _hit else "miss"
+                    )
+                    self.messages.append({"role": "user", "content": f"[Engine: {active_name} attacked {npc_args['defender']}: {_detail}]"})
+                    combat_beats.append({"kind": "npc_action", "name": active_name, "round": active_round})
+                    self._maybe_end_combat()
+                    if self.state.game_over:
+                        combat_ended_in_npc_phase = True
+                        break
+                    if self.state.combat_round == 0:
+                        combat_ended_in_npc_phase = True
+                        break
+                else:
+                    # Fallback: queue prompt; will be batched into one _execute call.
+                    npc_exec_prompt = (
+                        f"[Combat — Round {active_round}, {active_name}'s turn — Tool-use phase] "
+                        f"Decide {active_name}'s action and execute it with the appropriate tool(s). "
+                        f"Write no prose — narration is requested separately."
+                    )
+                    fallback_queue.append(npc_exec_prompt)
+                    combat_beats.append({"kind": "npc_action", "name": active_name, "round": active_round})
 
-                if self.state.combat_round == 0:  # end_combat fired; don't advance
-                    combat_ended_in_npc_phase = True
-                    break
+            # Flush any remaining fallbacks after the loop completes.
+            _flush_fallbacks()
 
         # Check point 2: game_over from NPC phase (defeat). Include player beat + epilogue.
         if self.state.game_over:

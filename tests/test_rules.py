@@ -874,6 +874,10 @@ def test_npc_turns_batched_into_single_narration_call():
     two narration API calls — one for the player action, one batched call carrying
     both NPC actions in resolution order — followed by one closing player prompt.
 
+    With engine-resolved NPC turns (Change 1+2), the two NPC turns generate ZERO
+    additional execute (tool-use) API calls. Only the player's action needs the LLM
+    for tool use. Both NPC attack results are injected into messages as context.
+
     Narration calls are identified as client.messages.create invocations that have
     no 'tools' kwarg; tool-use executions always pass tools=TOOLS.
     """
@@ -908,12 +912,15 @@ def test_npc_turns_batched_into_single_narration_call():
     narration_calls = [c for c in all_calls if "tools" not in c[1]]
     execute_calls   = [c for c in all_calls if "tools"     in c[1]]
 
+    # Engine-resolved NPCs add zero execute calls. Only the player's action uses the LLM.
+    assert len(execute_calls) == 1, (
+        f"expected 1 execute call (player action only; NPC turns engine-resolved), "
+        f"got {len(execute_calls)}"
+    )
+
     assert len(narration_calls) == 2, (
         f"expected 2 narration calls, got {len(narration_calls)} "
         f"(total API calls: {len(all_calls)})"
-    )
-    assert len(execute_calls) == 3, (
-        f"expected 3 execute calls (player + snik + narl), got {len(execute_calls)}"
     )
 
     # The batched narration prompt (second narration call) must name both NPCs.
@@ -927,6 +934,14 @@ def test_npc_turns_batched_into_single_narration_call():
 
     # Engine-sourced closing prompt must address the next active player.
     assert "Wisp, what do you do?" in narration
+
+    # api_stats must contain exactly ONE "thinking" entry (the player's action).
+    # Without engine resolution the old code would have 3 (player + Snik + Narl).
+    thinking_stats = [s for s in agent.api_stats if s["phase"] == "thinking"]
+    assert len(thinking_stats) == 1, (
+        f"expected 1 thinking call (player action only); "
+        f"engine-resolved NPC turns must not add thinking entries. got {len(thinking_stats)}"
+    )
 
 
 def test_end_combat_triggers_post_combat_narration():
@@ -4237,6 +4252,80 @@ def test_npc_disposition_fields_round_trip():
     brute = restored.npcs["brute"]
     assert brute.disposition_dc is None
     assert brute.social_attempted is False
+
+
+# ---------------------------------------------------------------------------
+# resolve_npc_action
+# ---------------------------------------------------------------------------
+
+def test_resolve_npc_action_attacks_lowest_hp_pc():
+    """Engine resolves a hostile NPC's attack targeting the lowest-HP conscious PC."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=10)
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=20, hp=5)   # lowest HP → target
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
+    gs.combat_order = ["aldric", "wisp", "snik"]
+    gs.combat_index = 2
+    gs.combat_round = 1
+    gs.action_used = False
+
+    rules.force_rolls([15, 4])  # to-hit 15 (hits AC 12), damage 4
+    result = tools.resolve_npc_action(gs.npcs["snik"], gs)
+
+    assert result is not None
+    args, res = result
+    assert args["attacker"] == "Snik"
+    assert args["defender"] == "Wisp"
+    assert res["ok"] is True
+
+
+def test_resolve_npc_action_breaks_hp_tie_by_combat_order():
+    """When two PCs share HP, the one earlier in combat_order is targeted."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=10)
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=20, hp=10)  # same HP
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
+    # Aldric is earlier in the order → tiebreak selects Aldric
+    gs.combat_order = ["aldric", "wisp", "snik"]
+    gs.combat_index = 2
+    gs.combat_round = 1
+    gs.action_used = False
+
+    rules.force_rolls([15, 4])
+    result = tools.resolve_npc_action(gs.npcs["snik"], gs)
+
+    assert result is not None
+    args, _ = result
+    assert args["defender"] == "Aldric"
+
+
+def test_resolve_npc_action_returns_none_non_hostile():
+    """Non-hostile NPC → None (stands aside)."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    gs.npcs["guard"] = NPC(name="Guard", hostile=False)
+    assert tools.resolve_npc_action(gs.npcs["guard"], gs) is None
+
+
+def test_resolve_npc_action_returns_none_no_conscious_pc():
+    """All PCs are down → None (no valid target)."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=0)   # is_down
+    gs.npcs["snik"] = NPC(name="Snik", hostile=True)
+    gs.combat_order = ["aldric", "snik"]
+    gs.combat_round = 1
+    assert tools.resolve_npc_action(gs.npcs["snik"], gs) is None
+
+
+def test_resolve_npc_action_returns_none_with_spells():
+    """NPC with a spells attribute falls back to the model."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    gs.npcs["mage"] = NPC(name="Mage", hostile=True)
+    gs.npcs["mage"].spells = ["magic_missile"]   # type: ignore
+    gs.combat_order = ["aldric", "mage"]
+    gs.combat_round = 1
+    assert tools.resolve_npc_action(gs.npcs["mage"], gs) is None
 
 
 # ---------------------------------------------------------------------------
