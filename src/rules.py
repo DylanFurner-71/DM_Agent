@@ -82,9 +82,12 @@ def apply_damage(target, amount: int, from_crit: bool = False) -> dict:
             # Damage while already at 0 HP: add failure(s), possibly kill.
             if target.stable:
                 target.stable = False  # re-enters dying
-            target.death_save_failures = min(3, target.death_save_failures + (2 if from_crit else 1))
-            if target.death_save_failures >= 3:
-                target.dead = True
+            if amount >= target.max_hp:
+                target.dead = True  # massive damage: instant death
+            else:
+                target.death_save_failures = min(3, target.death_save_failures + (2 if from_crit else 1))
+                if target.death_save_failures >= 3:
+                    target.dead = True
             result.update({
                 "death_save_failure": True,
                 "death_save_failures": target.death_save_failures,

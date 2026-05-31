@@ -76,6 +76,11 @@ what they say. quest_flags is for narrative and progress facts ONLY — never me
 values (HP, slots, AC, damage), which go through their real tools. Prefer a dedicated \
 home when one exists: real items belong in inventory, NPC hostility belongs in its hostile \
 field. Use quest_flags only for facts with no dedicated home so it never becomes a junk drawer.
+- A PC at 0 HP is unconscious and dying; they cannot act. The engine rolls their death \
+saves automatically at their turn — never roll one yourself, never have a dying PC \
+attack/cast/move, never prompt them. Healing a dying or stable PC brings them back and \
+the engine resets their saves; narrate the revival. When the engine reports a death save, \
+narrate its given outcome — do not change it.
 
 TWO-PHASE PROTOCOL — every action uses two separate prompts:
 TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
@@ -297,28 +302,36 @@ class DMAgent:
             return self._narrate_combat_over()
         return self._narrate()
 
-    def _narrate_npc_batch(self, npc_beats: list[tuple[str, int]]) -> str:
-        """Single narration call covering all NPC actions this cycle, in resolution order.
+    def _narrate_combat_batch(self, combat_beats: list[dict]) -> str:
+        """Single narration call covering all NPC actions and death saves this cycle.
 
-        Collapses N individual narration calls into 1. Each beat in npc_beats is
-        (actor_name, round_number); the model already has every tool result in its
-        conversation history, so the prompt only needs to name the actors and enforce
-        ordering and coverage constraints.
+        Collapses N beats into 1 API call. NPC-action beats: model already has the
+        tool results in context so only name + round are needed. Death-save beats:
+        engine outcome is injected as ground truth so the model dramatizes without
+        inventing the roll.
         """
-        action_list = "\n".join(
-            f"{i + 1}. {name} (Round {rnd})" for i, (name, rnd) in enumerate(npc_beats)
-        )
+        lines = []
+        for i, beat in enumerate(combat_beats):
+            if beat["kind"] == "npc_action":
+                lines.append(f"{i + 1}. {beat['name']} (Round {beat['round']})")
+            else:  # death_save
+                lines.append(
+                    f"{i + 1}. {beat['name']} death save (Round {beat['round']}): {beat['outcome']}"
+                )
+        action_list = "\n".join(lines)
+        n = len(combat_beats)
         prompt = (
-            f"Narrate each of the following {len(npc_beats)} NPC action(s) in order. "
-            f"Write 1–3 sentences of in-world prose per beat — exactly one beat per action, "
+            f"Narrate each of the following {n} combat beat(s) in order. "
+            f"Write 1–3 sentences of in-world prose per beat — exactly one beat per entry, "
             f"none skipped, none merged, no reordering. "
+            f"For death save beats, dramatize the given outcome — do not change or invent the roll. "
             f"No tool calls. No prompts. No meta-commentary.\n\n"
             f"{action_list}"
         )
         self.messages.append({"role": "user", "content": prompt})
         resp = self.client.messages.create(
             model=self.model,
-            max_tokens=min(256 * len(npc_beats), 1024),
+            max_tokens=min(256 * n, 1024),
             system=SYSTEM_PROMPT,
             messages=self.messages,
         )
@@ -465,10 +478,10 @@ class DMAgent:
         narration_beats: list[str] = []
         narration_beats.append(self._narrate_for(trace_len))
 
-        # --- NPC turns (only while combat is active) ---
-        # Accumulate (actor_name, round) for every resolved NPC action; a single
-        # narration call is issued after the loop instead of one per NPC.
-        npc_beats: list[tuple[str, int]] = []
+        # --- NPC turns and automatic death saves (only while combat is active) ---
+        # Accumulate ordered combat beats (NPC actions and PC death saves); a single
+        # narration call is issued after the loop instead of one per beat.
+        combat_beats: list[dict] = []
         combat_ended_in_npc_phase = False
 
         if self.state.combat_order and self.state.combat_round > 0:
@@ -495,7 +508,30 @@ class DMAgent:
                     active_round = self.state.combat_round
 
                 if active_key in self.state.party:
-                    break
+                    pc = self.state.party[active_key]
+                    decision = tools._pc_turn_decision(pc)
+                    if decision == "roll":
+                        res = tools.dispatch("roll_death_save", {"character": pc.name}, self.state)
+                        self.tool_trace.append({"name": "roll_death_save", "input": {"character": pc.name}, "result": res})
+                        outcome = (
+                            f"roll {res['roll']} → {res['result_kind']} "
+                            f"(successes {res.get('successes', 0)}, failures {res.get('failures', 0)})"
+                        )
+                        combat_beats.append({"kind": "death_save", "name": active_name, "round": active_round, "outcome": outcome})
+                        self._maybe_end_combat()
+                        if self.state.game_over:
+                            combat_ended_in_npc_phase = True
+                            break
+                        if self.state.combat_round == 0:
+                            combat_ended_in_npc_phase = True
+                            break
+                        if res.get("result_kind") == "revived":
+                            break  # PC is back up; closing prompt addresses them
+                        continue  # save was this PC's whole turn; advance to next
+                    elif decision == "break":
+                        break  # conscious PC — stop and prompt
+                    else:  # "skip" — stable/dead; next_turn should have caught this
+                        continue
 
                 npc_exec_prompt = (
                     f"[Combat — Round {active_round}, {active_name}'s turn — Tool-use phase] "
@@ -504,7 +540,7 @@ class DMAgent:
                 )
                 self._execute(npc_exec_prompt)
                 self._maybe_end_combat()
-                npc_beats.append((active_name, active_round))
+                combat_beats.append({"kind": "npc_action", "name": active_name, "round": active_round})
 
                 if self.state.game_over:  # defeat during NPC phase
                     combat_ended_in_npc_phase = True
@@ -527,12 +563,12 @@ class DMAgent:
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
             return combined
 
-        # Single batched narration call for all NPC actions this cycle.
-        if npc_beats:
+        # Single batched narration call for all combat beats this cycle.
+        if combat_beats:
             if combat_ended_in_npc_phase:
                 narration_beats.append(self._narrate_combat_over())
             else:
-                narration_beats.append(self._narrate_npc_batch(npc_beats))
+                narration_beats.append(self._narrate_combat_batch(combat_beats))
 
         # Persist narration (not the closing prompt) to the rolling window.
         combined = "\n\n".join(n for n in narration_beats if n)

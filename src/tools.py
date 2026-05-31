@@ -321,6 +321,20 @@ def _resolve_actor_key(identifier: str, state) -> str | None:
     return None
 
 
+def _pc_turn_decision(pc) -> str:
+    """Return how next_turn and the combat loop should handle a PC slot.
+
+    "roll"  — dying (hp<=0, not dead, not stable): engine rolls a death save.
+    "break" — conscious: stop and prompt.
+    "skip"  — dead or stable: skip this slot.
+    """
+    if pc.is_dying:
+        return "roll"
+    if not pc.is_down:
+        return "break"
+    return "skip"
+
+
 def _resolve_offensive_target(target_arg: str, state, exclude_name: str = "") -> tuple:
     """Resolve a target for an offensive action (attack or damaging spell).
 
@@ -634,11 +648,23 @@ def dispatch(name: str, args: dict, state) -> dict:
                 state.combat_round += 1
             active_key = state.combat_order[state.combat_index]
             actor = all_actors.get(active_key)
-            if actor is not None and actor.is_down:
-                skipped.append(active_key)
-                state.record(f"skipping downed {active_key} ({actor.name})")
-                continue
-            break
+            if actor is None:
+                break
+            if active_key in state.party:
+                decision = _pc_turn_decision(actor)
+                if decision == "skip":
+                    skipped.append(active_key)
+                    reason = "dead" if actor.is_dead else "stable"
+                    state.record(f"skipping {active_key} ({actor.name}) — {reason}")
+                    continue
+                # "roll" (dying) or "break" (conscious) — stop here
+                break
+            else:
+                if actor.is_down:
+                    skipped.append(active_key)
+                    state.record(f"skipping downed {active_key} ({actor.name})")
+                    continue
+                break
         else:
             return {"ok": False, "error": "All combatants are at 0 HP; call end_combat."}
         active_name = actor.name if actor else active_key
@@ -656,6 +682,19 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.combat_round = 0
         state.record("combat ended")
         return {"ok": True}
+
+    if name == "roll_death_save":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state."}
+        if not (hasattr(character, "death_save_failures") and character.is_dying):
+            return {"ok": False, "reason": "not_dying", "character": args["character"]}
+        res = rules.roll_death_save(character)
+        state.record(
+            f"{character.name} death save: roll {res['roll']} → {res['result_kind']} "
+            f"(S{res.get('successes', 0)}/F{res.get('failures', 0)})"
+        )
+        return res
 
     if name == "skill_check":
         character = state.find_actor(args["character"])

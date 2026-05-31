@@ -3669,6 +3669,24 @@ def test_apply_damage_conscious_to_zero_no_death_save_failure():
     assert "unconscious" in c.conditions
 
 
+def test_apply_damage_crit_conscious_to_zero_no_failure():
+    c = Character(name="Hero", max_hp=20, hp=5, conditions=[])
+    res = rules.apply_damage(c, 8, from_crit=True)
+    assert c.hp == 0
+    assert c.is_dying is True
+    assert c.death_save_failures == 0
+    assert "death_save_failure" not in res
+    assert "unconscious" in c.conditions
+
+
+def test_apply_damage_massive_hit_while_down_instant_death():
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=0)
+    res = rules.apply_damage(c, 20)  # exactly max_hp — instant death
+    assert c.dead is True
+    assert res["dead"] is True
+    assert c.death_save_failures == 0  # killed by damage, not accumulated saves
+
+
 def test_apply_damage_npc_at_zero_unchanged():
     npc = NPC(name="Goblin", max_hp=12, hp=0)
     res = rules.apply_damage(npc, 5)
