@@ -179,11 +179,43 @@ class DMAgent:
             return self._narrate_combat_over()
         return self._narrate()
 
+    def _narrate_npc_batch(self, npc_beats: list[tuple[str, int]]) -> str:
+        """Single narration call covering all NPC actions this cycle, in resolution order.
+
+        Collapses N individual narration calls into 1. Each beat in npc_beats is
+        (actor_name, round_number); the model already has every tool result in its
+        conversation history, so the prompt only needs to name the actors and enforce
+        ordering and coverage constraints.
+        """
+        action_list = "\n".join(
+            f"{i + 1}. {name} (Round {rnd})" for i, (name, rnd) in enumerate(npc_beats)
+        )
+        prompt = (
+            f"Narrate each of the following {len(npc_beats)} NPC action(s) in order. "
+            f"Write 1–3 sentences of in-world prose per beat — exactly one beat per action, "
+            f"none skipped, none merged, no reordering. "
+            f"No tool calls. No prompts. No meta-commentary.\n\n"
+            f"{action_list}"
+        )
+        self.messages.append({"role": "user", "content": prompt})
+        resp = self.client.messages.create(
+            model=self.model,
+            max_tokens=min(256 * len(npc_beats), 1024),
+            system=SYSTEM_PROMPT,
+            messages=self.messages,
+        )
+        self.messages.append({"role": "assistant", "content": resp.content})
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
+
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
-        Each action (player then each NPC) is an _execute/_narrate pair, so the model
-        sees exactly one action per narration call and cannot reorder or skip.
+        Narration is split into two phases to minimise model round-trips:
+          1. Player's action — dedicated _narrate_for call (unchanged coverage guarantee).
+          2. All NPC actions this cycle — a single _narrate_npc_batch call that receives
+             the full ordered list and writes exactly one beat per action.
+        Mechanical resolution is untouched: each NPC still gets its own _execute call,
+        its own next_turn, and all existing guards (turn ownership, action economy).
         Returns all narration beats joined, ending with the engine-sourced player prompt.
         """
         self.tool_trace = []
@@ -202,6 +234,11 @@ class DMAgent:
         narrations.append(self._narrate_for(trace_len))
 
         # --- NPC turns (only while combat is active) ---
+        # Accumulate (actor_name, round) for every resolved NPC action; a single
+        # narration call is issued after the loop instead of one per NPC.
+        npc_beats: list[tuple[str, int]] = []
+        combat_ended_in_npc_phase = False
+
         if self.state.combat_order and self.state.combat_round > 0:
             current_key = self.state.combat_order[self.state.combat_index]
             # advance_first: only true if the active player HAS used their action.
@@ -233,11 +270,19 @@ class DMAgent:
                     f"Decide {active_name}'s action and execute it with the appropriate tool(s). "
                     f"Write no prose — narration is requested separately."
                 )
-                trace_len = len(self.tool_trace)
                 self._execute(npc_exec_prompt)
-                narrations.append(self._narrate_for(trace_len))
+                npc_beats.append((active_name, active_round))
+
                 if self.state.combat_round == 0:  # end_combat fired; don't advance
+                    combat_ended_in_npc_phase = True
                     break
+
+        # Single batched narration call for all NPC actions this cycle.
+        if npc_beats:
+            if combat_ended_in_npc_phase:
+                narrations.append(self._narrate_combat_over())
+            else:
+                narrations.append(self._narrate_npc_batch(npc_beats))
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 

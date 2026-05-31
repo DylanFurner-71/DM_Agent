@@ -763,6 +763,66 @@ def test_loop_halts_at_first_player_when_input_names_another(first_key, second_k
     assert next_turns == [], f"next_turn must not be called when active player hasn't acted; got {next_turns}"
 
 
+def test_npc_turns_batched_into_single_narration_call():
+    """A cycle resolving [player, npc_A, npc_B, next_player] must produce exactly
+    two narration API calls — one for the player action, one batched call carrying
+    both NPC actions in resolution order — followed by one closing player prompt.
+
+    Narration calls are identified as client.messages.create invocations that have
+    no 'tools' kwarg; tool-use executions always pass tools=TOOLS.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
+    gs.npcs["snik"]    = NPC(name="Snik",  max_hp=20, hp=20, ability_modifiers={"dex": 0})
+    gs.npcs["narl"]    = NPC(name="Narl",  max_hp=20, hp=20, ability_modifiers={"dex": -50})
+    gs.party["wisp"]   = Character(name="Wisp",  ability_modifiers={"dex": -100})
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "snik", "narl", "wisp"]}, gs)
+    assert res["combat_order"] == ["aldric", "snik", "narl", "wisp"], "precondition: known order"
+
+    fake_text = MagicMock()
+    fake_text.type = "text"
+    fake_text.text = "Narration."
+    fake_resp = MagicMock()
+    fake_resp.stop_reason = "end_turn"
+    fake_resp.content = [fake_text]
+    fake_client = MagicMock()
+    fake_client.messages.create.return_value = fake_resp
+
+    agent = DMAgent(gs, client=fake_client)
+    gs.action_used = True  # Aldric has used his action; loop must advance past him
+    narration = agent.take_turn("Aldric swings at Snik")
+
+    all_calls = fake_client.messages.create.call_args_list
+    # Narration calls omit 'tools'; execute calls include it.
+    narration_calls = [c for c in all_calls if "tools" not in c[1]]
+    execute_calls   = [c for c in all_calls if "tools"     in c[1]]
+
+    assert len(narration_calls) == 2, (
+        f"expected 2 narration calls, got {len(narration_calls)} "
+        f"(total API calls: {len(all_calls)})"
+    )
+    assert len(execute_calls) == 3, (
+        f"expected 3 execute calls (player + snik + narl), got {len(execute_calls)}"
+    )
+
+    # The batched narration prompt (second narration call) must name both NPCs.
+    batch_messages = narration_calls[1][1]["messages"]
+    last_user_prompt = next(
+        m["content"] for m in reversed(batch_messages)
+        if m["role"] == "user" and isinstance(m["content"], str)
+    )
+    assert "Snik" in last_user_prompt, "batch prompt must name Snik"
+    assert "Narl" in last_user_prompt, "batch prompt must name Narl"
+
+    # Engine-sourced closing prompt must address the next active player.
+    assert "Wisp, what do you do?" in narration
+
+
 def test_end_combat_triggers_post_combat_narration():
     """When end_combat fires during _execute, take_turn must:
     - call _narrate_combat_over (not _narrate) for that action
