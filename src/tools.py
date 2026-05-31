@@ -276,7 +276,7 @@ def _resolve_actor_key(identifier: str, state) -> str | None:
     return None
 
 
-def _resolve_offensive_target(target_arg: str, state) -> tuple:
+def _resolve_offensive_target(target_arg: str, state, exclude_name: str = "") -> tuple:
     """Resolve a target for an offensive action (attack or damaging spell).
 
     Returns (target, None, auto_selected) on success, or (None, error_dict, False) on failure.
@@ -285,7 +285,8 @@ def _resolve_offensive_target(target_arg: str, state) -> tuple:
     Named target:  resolve via find_actor; error if unknown. No restriction to hostiles —
                    targeting an ally is legal.
     No target:     candidates = hostile NPCs that are alive; during combat, restricted to
-                   those in combat_order.
+                   those in combat_order. The attacker (exclude_name) is always excluded so
+                   an NPC never appears in its own candidate list.
                      0  → ok=false, reason "no_target"
                      1  → auto-resolve; caller should surface auto_target in the result
                     >1  → ok=false, reason "ambiguous_target", candidates list
@@ -298,10 +299,12 @@ def _resolve_offensive_target(target_arg: str, state) -> tuple:
             return None, {"ok": False, "error": f"Unknown target {target_arg!r}; call get_state."}, False
         return target, None, False
 
+    excl = exclude_name.strip().lower()
     candidates = [
         npc for key, npc in state.npcs.items()
         if npc.hostile and not npc.is_down
         and (state.combat_round == 0 or key in state.combat_order)
+        and (not excl or npc.name.lower() != excl)
     ]
 
     if not candidates:
@@ -334,7 +337,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(attacker.name, state) or _action_guard(state)
         if err:
             return err
-        target, err, auto_selected = _resolve_offensive_target(args.get("defender", ""), state)
+        target, err, auto_selected = _resolve_offensive_target(args.get("defender", ""), state, exclude_name=attacker.name)
         if err:
             state.action_used = False
             return err
@@ -356,7 +359,7 @@ def dispatch(name: str, args: dict, state) -> dict:
             return err
         spell_name = args.get("spell_name", "").strip()
         if spell_name:
-            target, err, auto_selected = _resolve_offensive_target(args.get("target", ""), state)
+            target, err, auto_selected = _resolve_offensive_target(args.get("target", ""), state, exclude_name=caster.name)
             if err:
                 state.action_used = False
                 return err

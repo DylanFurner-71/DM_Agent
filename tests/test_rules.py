@@ -2291,7 +2291,7 @@ def test_closing_prompt_names_targets_after_ambiguous():
     tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
     assert gs.combat_order[0] == "wisp"
 
-    trace = [{"name": "cast_spell", "input": {}, "result": {
+    trace = [{"name": "cast_spell", "input": {"caster": "Wisp"}, "result": {
         "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
     }}]
     agent = _agent_with_trace(gs, trace)
@@ -2361,7 +2361,7 @@ def test_closing_prompt_two_candidates():
     gs.party["aldric"].ability_modifiers["dex"] = 100
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
 
-    trace = [{"name": "attack", "input": {}, "result": {
+    trace = [{"name": "attack", "input": {"attacker": "Aldric"}, "result": {
         "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
     }}]
     agent = _agent_with_trace(gs, trace)
@@ -2375,11 +2375,30 @@ def test_closing_prompt_three_candidates():
     gs.party["aldric"].ability_modifiers["dex"] = 100
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
 
-    trace = [{"name": "attack", "input": {}, "result": {
+    trace = [{"name": "attack", "input": {"attacker": "Aldric"}, "result": {
         "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl", "Ugor"],
     }}]
     agent = _agent_with_trace(gs, trace)
     assert agent._closing_prompt() == "Aldric, name your target — Grik, Narl, or Ugor?"
+
+
+def test_closing_prompt_npc_ambiguous_does_not_pollute_next_player():
+    """When an NPC's attack got ambiguous_target this cycle, the next active player
+    must receive the generic 'what do you do?' — not the NPC's candidate list."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = -100   # goes last
+    gs.npcs["snik"].ability_modifiers["dex"] = 100       # goes first
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    tools.dispatch("next_turn", {}, gs)   # advance pointer to aldric
+    assert gs.combat_order[gs.combat_index] == "aldric"
+
+    # Trace contains Snik's ambiguous_target rejection — must not affect Aldric's prompt.
+    trace = [{"name": "attack", "input": {"attacker": "Snik"}, "result": {
+        "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    assert agent._closing_prompt() == "Aldric, what do you do?"
 
 
 def test_closing_prompt_ambiguous_only_when_active_is_up():
@@ -2390,7 +2409,7 @@ def test_closing_prompt_ambiguous_only_when_active_is_up():
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
     gs.party["aldric"].hp = 0
 
-    trace = [{"name": "attack", "input": {}, "result": {
+    trace = [{"name": "attack", "input": {"attacker": "Aldric"}, "result": {
         "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
     }}]
     agent = _agent_with_trace(gs, trace)

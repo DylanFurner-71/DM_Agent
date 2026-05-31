@@ -294,9 +294,16 @@ class DMAgent:
         if not actor or actor.is_down:
             return None
         name = actor.name
+        name_lower = name.lower()
         for call in self.tool_trace:
             result = call.get("result", {})
+            inp = call.get("input", {})
             if not result.get("ok") and result.get("reason") == "ambiguous_target":
+                # Only surface a disambiguation prompt for the *current* active actor's
+                # rejection — not for an NPC's rejection that happened earlier this cycle.
+                actor_in_call = (inp.get("attacker") or inp.get("caster") or "").strip().lower()
+                if actor_in_call != name_lower:
+                    continue
                 candidates = result.get("candidates", [])
                 if candidates:
                     if len(candidates) == 2:
