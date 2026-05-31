@@ -2051,6 +2051,107 @@ def test_attack_ambiguous_target_asks():
     assert gs.action_used is False          # turn stays alive
 
 
+# --- engine-driven end-of-combat detection -----------------------------------
+
+def test_engine_auto_ends_combat_when_last_enemy_downed():
+    """Player attack downs the last hostile → _maybe_end_combat fires, combat_round=0,
+    _narrate_for routes to post-combat wrap-up, no combat-turn closing prompt emitted."""
+    from unittest.mock import MagicMock, patch
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(
+        name="Aldric",
+        ability_modifiers={"str": 5, "dex": 100},
+        inventory=["mace"],
+        proficiency_bonus=2,
+    )
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=1, hp=1, ac=1)
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    # Model calls attack(Aldric, mace) — engine auto-selects Snik
+    atk_block = MagicMock()
+    atk_block.type = "tool_use"; atk_block.id = "t1"
+    atk_block.name = "attack"
+    atk_block.input = {"attacker": "Aldric", "weapon": "mace"}
+
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [atk_block]
+
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "Silence falls. The passage yawns ahead. What do you do?"
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+
+    # d20=15 (hit), 1d6=3 (damage → 3+5=8 > Snik's 1 HP)
+    with patch.object(rules._rng, "randint", side_effect=[15, 3]):
+        narration = agent.take_turn("Aldric strikes Snik")
+
+    assert gs.npcs["snik"].hp == 0 and gs.npcs["snik"].is_down
+
+    # Engine ended combat automatically
+    assert gs.combat_round == 0
+    assert gs.combat_order == []
+    ec_calls = [c for c in agent.tool_trace if c["name"] == "end_combat"]
+    assert len(ec_calls) == 1
+
+    # _narrate_combat_over was used (its prompt contains "Combat is over")
+    third_call_msgs = fake_client.messages.create.call_args_list[2][1]["messages"]
+    last_user_content = next(
+        m["content"] for m in reversed(third_call_msgs) if m["role"] == "user"
+    )
+    assert "Combat is over" in str(last_user_content)
+
+    # No combat-turn prompt appended
+    assert "Aldric, what do you do?" not in narration
+    assert "Snik, what do you do?" not in narration
+
+
+def test_maybe_end_combat_noop_outside_combat():
+    """_maybe_end_combat is idempotent — no-op and no trace entry when not in combat."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric")
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=0)  # downed, but not in combat
+    agent = DMAgent(gs, client=MagicMock())
+
+    agent._maybe_end_combat()
+
+    assert gs.combat_round == 0       # unchanged
+    assert agent.tool_trace == []     # nothing appended
+
+
+def test_maybe_end_combat_noop_when_enemies_alive():
+    """_maybe_end_combat does not end combat when living hostiles remain."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=12)
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    agent = DMAgent(gs, client=MagicMock())
+    agent._maybe_end_combat()
+
+    assert gs.combat_round == 1       # still in combat
+    assert agent.tool_trace == []     # nothing appended
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

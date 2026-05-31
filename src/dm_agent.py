@@ -75,8 +75,10 @@ If start_combat reports an active combatant different from the one the player na
 stop immediately without attempting the named action.
 3. NPC TURNS: In the tool-use phase, decide the NPC's action (hostile NPCs attack; \
 frightened ones flee) and execute it with `attack`, `cast_spell`, `skill_check`, etc.
-4. ENDING: After any action that might finish the fight, call `get_state` to check \
-whether any hostile NPCs remain (hp > 0). If none do, call `end_combat`.
+4. ENDING: The engine ends combat automatically when all enemies or all party members \
+reach 0 HP — do NOT call `get_state` to check HP counts or call `end_combat` for \
+defeat. `end_combat` is only for narrative endings where no one reaches 0 HP: enemies \
+flee, surrender, or parley — call it yourself only in those cases.
 5. POST-COMBAT BEAT: When `end_combat` fires, the engine requests a two-paragraph \
 closing beat — (1) the finishing blow and its immediate aftermath; (2) brief stock of \
 the party (wounds, spent slots, the body, the sudden silence), then re-orient to the \
@@ -258,6 +260,20 @@ class DMAgent:
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
+    def _maybe_end_combat(self) -> None:
+        """End combat automatically when one side is entirely down.
+
+        Fires end_combat via dispatch so _narrate_for routes to the post-combat
+        wrap-up narration. Idempotent — no-op when not in combat.
+        """
+        if self.state.combat_round == 0:
+            return
+        living_hostiles = any(n.hostile and not n.is_down for n in self.state.npcs.values())
+        living_party = any(not c.is_down for c in self.state.party.values())
+        if not living_hostiles or not living_party:
+            result = tools.dispatch("end_combat", {}, self.state)
+            self.tool_trace.append({"name": "end_combat", "input": {}, "result": result})
+
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
@@ -287,6 +303,7 @@ class DMAgent:
         )
         trace_len = len(self.tool_trace)
         self._execute(player_prompt)
+        self._maybe_end_combat()
 
         narration_beats: list[str] = []
         narration_beats.append(self._narrate_for(trace_len))
@@ -329,6 +346,7 @@ class DMAgent:
                     f"Write no prose — narration is requested separately."
                 )
                 self._execute(npc_exec_prompt)
+                self._maybe_end_combat()
                 npc_beats.append((active_name, active_round))
 
                 if self.state.combat_round == 0:  # end_combat fired; don't advance
