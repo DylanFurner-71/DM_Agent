@@ -350,6 +350,56 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
     return result
 
 
+# --- canonical monster stat blocks -----------------------------------------
+# Values the engine owns; the model must never invent HP, AC, or attack numbers.
+# inventory lists the weapons an NPC carries; dispatch validates these against WEAPONS.
+MONSTERS: dict[str, dict] = {
+    "goblin": {
+        "name": "Goblin",
+        "max_hp": 12,
+        "ac": 13,
+        "attack_bonus": 4,
+        "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 0, "wis": -1, "cha": -1},
+        "inventory": ["shortsword", "shortbow"],
+    },
+    "orc": {
+        "name": "Orc",
+        "max_hp": 15,
+        "ac": 13,
+        "attack_bonus": 5,
+        "ability_modifiers": {"str": 3, "dex": 1, "con": 3, "int": -2, "wis": -1, "cha": -1},
+        "inventory": ["greataxe"],
+    },
+    "skeleton": {
+        "name": "Skeleton",
+        "max_hp": 13,
+        "ac": 13,
+        "attack_bonus": 4,
+        "ability_modifiers": {"str": 0, "dex": 2, "con": 2, "int": -4, "wis": -2, "cha": -3},
+        "inventory": ["shortsword", "shortbow"],
+    },
+}
+
+
+def spawn_npc(monster_id: str, name: str | None = None) -> dict:
+    """Return NPC constructor kwargs from the MONSTERS table.
+
+    Usage:
+        from src.game_state import NPC
+        npc = NPC(**rules.spawn_npc("goblin", name="Snik"))
+
+    Raises KeyError for an unknown monster_id.
+    """
+    template = MONSTERS.get(monster_id)
+    if template is None:
+        raise KeyError(f"Unknown monster {monster_id!r}. Known: {', '.join(sorted(MONSTERS))}")
+    kwargs = dict(template)
+    if name is not None:
+        kwargs["name"] = name
+    kwargs["hp"] = kwargs["max_hp"]  # start at full HP
+    return kwargs
+
+
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------
 SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",

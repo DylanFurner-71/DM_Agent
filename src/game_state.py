@@ -47,6 +47,7 @@ class NPC:
     attack_bonus: int = 3
     hostile: bool = True
     ability_modifiers: dict[str, int] = field(default_factory=dict)
+    inventory: list[str] = field(default_factory=list)
 
     @property
     def is_down(self) -> bool:

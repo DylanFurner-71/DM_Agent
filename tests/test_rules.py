@@ -183,6 +183,44 @@ def test_dice_notation_parsing():
             pass
 
 
+def test_spawn_npc_goblin_stat_block():
+    """spawn_npc returns the correct canonical stat block for a goblin."""
+    kwargs = rules.spawn_npc("goblin")
+    assert kwargs["name"] == "Goblin"
+    assert kwargs["max_hp"] == 12
+    assert kwargs["hp"] == 12           # starts at full HP
+    assert kwargs["ac"] == 13
+    assert kwargs["attack_bonus"] == 4
+    assert kwargs["ability_modifiers"]["dex"] == 2
+    assert "shortsword" in kwargs["inventory"]
+    assert "shortbow" in kwargs["inventory"]
+
+
+def test_spawn_npc_name_override():
+    """spawn_npc allows overriding the display name without changing the stat block."""
+    kwargs = rules.spawn_npc("goblin", name="Snik")
+    assert kwargs["name"] == "Snik"
+    assert kwargs["max_hp"] == 12
+
+
+def test_spawn_npc_unknown_raises():
+    """spawn_npc raises KeyError for an unrecognised monster id."""
+    with pytest.raises(KeyError, match="dragon"):
+        rules.spawn_npc("dragon")
+
+
+def test_spawn_npc_can_attack_with_inventory_weapon():
+    """An NPC built from spawn_npc can use its inventory weapon through dispatch."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.npcs["grix"] = NPC(**rules.spawn_npc("goblin", name="Grix"))
+    gs.party["hero"] = Character(name="Hero", max_hp=20, hp=20, ac=12)
+    res = tools.dispatch("attack", {"attacker": "Grix", "defender": "Hero", "weapon": "shortsword"}, gs)
+    assert res["ok"] is True
+    assert res["weapon"] == "shortsword"
+    assert res["damage_type"] == "piercing"
+
+
 def test_state_round_trips_through_json(tmp_path=None):
     gs = GameState(location="Crypt")
     gs.party["w"] = Character(name="Wisp", spell_slots={1: 2, 2: 1}, inventory=["dagger"])
