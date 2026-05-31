@@ -19,6 +19,31 @@ _RESERVED_FLAG_KEYS = frozenset({
 })
 
 
+def _target(exit_val) -> str:
+    """Extract the destination scene_key from a bare string or gated exit dict."""
+    return exit_val["to"] if isinstance(exit_val, dict) else exit_val
+
+
+def _exits_for_model(exits: dict) -> dict:
+    """Return exits with 'denied' stripped — only 'to' and 'requires' are surfaced.
+
+    The 'denied' message is the engine's rejection copy; not shown to the model
+    in advance so it can't echo it before the gate actually fires.
+    Extension point: allow "requires": {"flag": x, "equals": v} for value matching.
+    MVP is truthiness: state.quest_flags.get(flag).
+    """
+    result = {}
+    for label, val in exits.items():
+        if isinstance(val, dict):
+            entry: dict = {"to": val["to"]}
+            if "requires" in val:
+                entry["requires"] = val["requires"]
+            result[label] = entry
+        else:
+            result[label] = val
+    return result
+
+
 def _normalize_flag_key(raw: str) -> str | None:
     """Normalize a quest flag key; return None if the result is empty.
 
@@ -573,15 +598,16 @@ def dispatch(name: str, args: dict, state) -> dict:
     if name == "move_scene":
         if state.scenes:
             scene_key = args.get("scene_key", "").strip()
-            # Current scene's exits: {player-facing label: target scene_key}
-            current_exits: dict = (
-                state.scenes.get(state.current_scene, {}).get("exits", {})
+            # Current scene's exits: {player-facing label: bare scene_key or gated dict}
+            current_scene_data: dict = (
+                state.scenes.get(state.current_scene, {})
                 if state.current_scene else {}
             )
+            current_exits: dict = current_scene_data.get("exits", {})
             if not scene_key:
                 if current_exits:
                     exits_str = "; ".join(
-                        f"{lbl!r} -> {tgt!r}" for lbl, tgt in current_exits.items()
+                        f"{lbl!r} -> {_target(v)!r}" for lbl, v in current_exits.items()
                     )
                     return {
                         "ok": False,
@@ -591,11 +617,11 @@ def dispatch(name: str, args: dict, state) -> dict:
                     "ok": False,
                     "error": "scene_key is required. The current scene has no exits.",
                 }
-            exit_targets = set(current_exits.values())
+            exit_targets = {_target(v) for v in current_exits.values()}
             if scene_key not in exit_targets:
                 if current_exits:
                     exits_str = "; ".join(
-                        f"{lbl!r} -> {tgt!r}" for lbl, tgt in current_exits.items()
+                        f"{lbl!r} -> {_target(v)!r}" for lbl, v in current_exits.items()
                     )
                     return {
                         "ok": False,
@@ -604,7 +630,16 @@ def dispatch(name: str, args: dict, state) -> dict:
                             f"Available exits: {exits_str}."
                         ),
                     }
+                # Terminal scene: check for a flag gate before granting victory.
                 if state.combat_round == 0:
+                    exit_req = current_scene_data.get("exit_requires")
+                    if exit_req and not state.quest_flags.get(exit_req):
+                        return {
+                            "ok": False,
+                            "reason": "locked",
+                            "required_flag": exit_req,
+                            "error": current_scene_data.get("exit_denied", "That way is barred."),
+                        }
                     state.game_over = True
                     state.game_outcome = "victory"
                     return {"ok": True, "adventure_complete": True, "outcome": "victory"}
@@ -612,6 +647,18 @@ def dispatch(name: str, args: dict, state) -> dict:
                     "ok": False,
                     "error": "The current scene has no exits — there is nowhere to move.",
                 }
+            # scene_key is a declared exit target — check for a flag gate.
+            exit_val = next(v for v in current_exits.values() if _target(v) == scene_key)
+            if isinstance(exit_val, dict) and "requires" in exit_val:
+                req = exit_val["requires"]
+                # Gate check: truthiness (extension point: {"flag": x, "equals": v}).
+                if not state.quest_flags.get(req):
+                    return {
+                        "ok": False,
+                        "reason": "locked",
+                        "required_flag": req,
+                        "error": exit_val.get("denied", "That way is barred."),
+                    }
             scene_data = state.scenes.get(scene_key)
             if scene_data is None:
                 return {
@@ -642,16 +689,17 @@ def dispatch(name: str, args: dict, state) -> dict:
         d = state.to_dict()
         if state.scenes:
             del d["scenes"]   # omit verbose definitions from model context
-            exits: dict = (
-                state.scenes.get(state.current_scene, {}).get("exits", {})
+            current_scene_data = (
+                state.scenes.get(state.current_scene, {})
                 if state.current_scene else {}
             )
-            d["exits"] = exits  # {player-facing label: target scene_key}
-            loot: dict = (
-                state.scenes.get(state.current_scene, {}).get("loot", [])
-                if state.current_scene else {}
-            )
+            exits = current_scene_data.get("exits", {})
+            d["exits"] = _exits_for_model(exits)  # denied text stripped; requires surfaced
+            loot = current_scene_data.get("loot", [])
             d["loot"] = loot
+            exit_req = current_scene_data.get("exit_requires")
+            if exit_req:
+                d["exit_requires"] = exit_req
         return {"ok": True, "state": d}
 
     if name == "start_combat":

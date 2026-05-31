@@ -4027,6 +4027,200 @@ def test_take_item_round_trip_inventory_and_loot():
     assert restored.scenes["vault"]["loot"] == ["pearl_of_power"]  # one copy gone, one remains
 
 
+# --- gated exits and terminal endings -----------------------------------------
+
+def _make_gated_exits_state(flag: str | None = None) -> GameState:
+    """State with one ungated string exit and one gated dict exit."""
+    gs = GameState(
+        current_scene="hall",
+        scenes={
+            "hall": {
+                "location": "The Hall",
+                "scene": "Two doors.",
+                "exits": {
+                    "north door": "north_room",
+                    "iron door": {"to": "vault", "requires": "has_key", "denied": "The iron door is locked."},
+                },
+            },
+            "north_room": {"location": "North Room", "scene": "", "exits": {}},
+            "vault":      {"location": "The Vault",  "scene": "", "exits": {}},
+        },
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    if flag:
+        gs.quest_flags[flag] = True
+    return gs
+
+
+def _make_terminal_gated_state(flag: str | None = None) -> GameState:
+    """Terminal scene with exit_requires; no regular exits."""
+    gs = GameState(
+        current_scene="final_chamber",
+        scenes={
+            "final_chamber": {
+                "location": "Final Chamber",
+                "scene": "An iron door bars the exit.",
+                "exits": {},
+                "exit_requires": "iron_door_open",
+                "exit_denied": "The iron door is sealed.",
+            },
+        },
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    if flag:
+        gs.quest_flags[flag] = True
+    return gs
+
+
+def test_gated_exit_target_extraction_dict():
+    """_target() returns the 'to' value from a gated exit dict."""
+    from src.tools import _target
+    assert _target({"to": "vault", "requires": "has_key", "denied": "Locked."}) == "vault"
+
+
+def test_gated_exit_target_extraction_string():
+    """_target() passes a bare string through unchanged."""
+    from src.tools import _target
+    assert _target("north_room") == "north_room"
+
+
+def test_exits_for_model_strips_denied_keeps_requires():
+    """_exits_for_model removes 'denied'; string exits unchanged; 'requires' preserved."""
+    from src.tools import _exits_for_model
+    exits = {
+        "north door": "north_room",
+        "iron door": {"to": "vault", "requires": "has_key", "denied": "Locked."},
+    }
+    result = _exits_for_model(exits)
+    assert result["north door"] == "north_room"
+    assert result["iron door"] == {"to": "vault", "requires": "has_key"}
+    assert "denied" not in result["iron door"]
+
+
+def test_ungated_string_exit_backward_compat():
+    """Ungated string exits move as before after the gated-exit changes."""
+    gs = _make_gated_exits_state()
+    res = tools.dispatch("move_scene", {"scene_key": "north_room"}, gs)
+    assert res["ok"] is True
+    assert gs.current_scene == "north_room"
+
+
+def test_gated_exit_flag_absent_returns_locked():
+    """Gated exit without the flag: ok=False reason='locked', current_scene unchanged."""
+    gs = _make_gated_exits_state()  # no flag
+    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "locked"
+    assert res["required_flag"] == "has_key"
+    assert res["error"] == "The iron door is locked."
+    assert gs.current_scene == "hall"  # unchanged
+
+
+def test_gated_exit_flag_set_allows_move():
+    """Gated exit with the required flag set: move proceeds normally."""
+    gs = _make_gated_exits_state(flag="has_key")
+    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res["ok"] is True
+    assert gs.current_scene == "vault"
+
+
+def test_non_declared_exit_rejected_not_locked():
+    """A scene_key absent from all exits is rejected as undeclared, not as locked."""
+    gs = _make_gated_exits_state()
+    res = tools.dispatch("move_scene", {"scene_key": "secret_passage"}, gs)
+    assert res["ok"] is False
+    assert res.get("reason") != "locked"
+    assert gs.current_scene == "hall"
+
+
+def test_terminal_scene_no_exit_requires_fires_victory():
+    """Backward compat: terminal scene with no exit_requires grants victory on move attempt."""
+    gs = GameState(
+        current_scene="end",
+        scenes={"end": {"location": "End", "scene": "", "exits": {}}},
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is True
+    assert res.get("outcome") == "victory"
+    assert gs.game_over is True
+
+
+def test_terminal_scene_exit_requires_flag_absent_returns_locked():
+    """Terminal scene with exit_requires: flag absent -> locked, game_over stays False."""
+    gs = _make_terminal_gated_state()  # no flag
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "locked"
+    assert res["required_flag"] == "iron_door_open"
+    assert res["error"] == "The iron door is sealed."
+    assert gs.game_over is False
+
+
+def test_terminal_scene_exit_requires_flag_set_fires_victory():
+    """Terminal scene with exit_requires: flag set -> game_over True, outcome victory."""
+    gs = _make_terminal_gated_state(flag="iron_door_open")
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is True
+    assert res.get("outcome") == "victory"
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
+
+
+def test_maybe_end_combat_ungated_terminal_fires_victory():
+    """_maybe_end_combat: combat ends in ungated terminal scene -> game_over=True."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(
+        current_scene="end",
+        scenes={"end": {"location": "End", "scene": "", "exits": {}}},
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=0)  # already down
+    gs.combat_order = ["aldric", "snik"]
+    gs.combat_index = 0
+    gs.combat_round = 1
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
+    assert gs.combat_round == 0  # end_combat fired
+
+
+def test_maybe_end_combat_gated_terminal_ends_combat_not_game():
+    """_maybe_end_combat: combat ends in gated terminal scene -> combat cleared, game_over False."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(
+        current_scene="final_chamber",
+        scenes={
+            "final_chamber": {
+                "location": "Final Chamber",
+                "scene": "",
+                "exits": {},
+                "exit_requires": "iron_door_open",
+            },
+        },
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=0)  # already down
+    gs.combat_order = ["aldric", "snik"]
+    gs.combat_index = 0
+    gs.combat_round = 1
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0   # combat ended
+    assert gs.game_over is False  # victory deferred — party must open the gated exit
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

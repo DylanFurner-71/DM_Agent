@@ -63,6 +63,14 @@ and call `move_scene` with that exit's scene_key. A scene whose exits map is emp
 absent) is a dead end; tell the player there is nowhere further to go. When combat ends \
 in a terminal scene the engine closes the run and requests a closing epilogue — write it \
 and stop; never call `move_scene` to fabricate an exit that was not listed.
+- GATED WAYS — some exits and endings require a quest flag (a key, a password, a met \
+condition). The state marks which ways are gated and the flag each needs. If the party \
+uses a gated way without the flag, move_scene returns ok=false reason 'locked' — narrate \
+the way as barred using the denied text, do NOT treat it as a transition, and never \
+fabricate passage. When the party has the flag, the way opens. In a terminal scene whose \
+ending is gated, winning the final fight does NOT end the run: narrate the aftermath, then \
+the party must open the gated exit (e.g. the iron door) — call move_scene when they do, \
+and the engine grants victory if the flag is set.
 - When the engine requests a closing epilogue ("The adventure is over — the party has \
 prevailed" or "…has fallen"), write the single paragraph asked for. The session ends \
 there — no prompts, no further turns, no improvised continuation.
@@ -217,12 +225,16 @@ class DMAgent:
         if s.current_scene:
             snap["current_scene"] = s.current_scene
             if s.scenes:
-                exits = s.scenes.get(s.current_scene, {}).get("exits", {})
+                scene_data = s.scenes.get(s.current_scene, {})
+                exits = scene_data.get("exits", {})
                 if exits:
-                    snap["exits"] = exits
-                loot = s.scenes.get(s.current_scene, {}).get("loot", [])
+                    snap["exits"] = tools._exits_for_model(exits)
+                loot = scene_data.get("loot", [])
                 if loot:
                     snap["loot"] = loot
+                exit_req = scene_data.get("exit_requires")
+                if exit_req:
+                    snap["exit_requires"] = exit_req
         if s.quest_flags:
             snap["quest_flags"] = s.quest_flags
         if s.combat_round > 0:
@@ -373,14 +385,15 @@ class DMAgent:
                 self.state.game_over = True
                 self.state.game_outcome = "defeat"
             else:
-                # Victory: if the current scene is terminal (no exits) the run is over.
-                # Covers single-scene scenarios (no scenes dict) and named terminal scenes.
                 s = self.state
-                current_exits = (
-                    s.scenes.get(s.current_scene, {}).get("exits", {})
+                current_scene_data = (
+                    s.scenes.get(s.current_scene, {})
                     if s.scenes else {}
                 )
-                if not current_exits:
+                current_exits = current_scene_data.get("exits", {})
+                # Gated terminal scenes: end combat but defer victory until the party
+                # opens the flagged exit. Ungated terminals auto-win as before.
+                if not current_exits and not current_scene_data.get("exit_requires"):
                     s.game_over = True
                     s.game_outcome = "victory"
             return True
