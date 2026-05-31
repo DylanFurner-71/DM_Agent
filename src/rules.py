@@ -282,6 +282,16 @@ SPELLS: dict[str, dict] = {
         "by_slot": {1: "4d6", 2: "5d6", 3: "6d6"},
         "target": "single",
     },
+    "chromatic_orb": {
+        "name": "Chromatic Orb",
+        "level": 1,
+        "tradition": "arcane",
+        "resolution": "spell_attack",
+        "effect": "damage",
+        "damage_type": "force",
+        "by_slot": {1: "3d8", 2: "4d8", 3: "5d8"},
+        "target": "single",
+    },
 }
 
 
@@ -433,6 +443,7 @@ SRD_RULES = {
     "spell_slots": "Casting a leveled spell consumes one slot of that level or higher. Cantrips are free. Slots refresh on a long rest.",
     "armor_class": "An attack hits if the d20 roll plus attack bonus meets or exceeds the target's AC.",
     "magic_missile": "1st-level force evocation, auto-hit, no attack roll. Damage: 3d4+3 (L1); each slot level above 1st adds one missile (+1d4+1). Use cast_spell with spell_name='magic_missile' and a target.",
+    "chromatic_orb": "1st-level arcane evocation, spell attack roll. Damage: 3d8 force (L1); each slot level above 1st adds one die (+1d8). Use cast_spell with spell_name='chromatic_orb' and a target.",
 }
 
 

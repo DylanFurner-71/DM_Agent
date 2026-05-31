@@ -33,12 +33,12 @@
       "hp": 16,
       "ac": 12,
       "attack_bonus": 4,
-      "spell_slots": {"1": 1, "2": 0},
+      "spell_slots": {"1": 5, "2": 2},
       "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
       "inventory": ["dagger", "spellbook", "50ft rope"],
       "conditions": [],
       "spellcasting_ability": "int",
-      "spells": ["magic_missile"]
+      "spells": ["magic_missile", "chromatic_orb"]
     }
   },
   "quest_flags": {},
