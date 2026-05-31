@@ -183,12 +183,13 @@ class DMAgent:
 
         self.full_trace.append({"turn": self.state.turn, "calls": list(self.tool_trace)})
 
-        # Engine-sourced closing prompt: always addresses the engine's active combatant.
+        # Engine-sourced closing prompt: only prompt a live (non-downed) combatant.
         if self.state.combat_order and self.state.combat_round > 0:
             all_actors = {**self.state.party, **self.state.npcs}
             active_key = self.state.combat_order[self.state.combat_index]
-            active_name = all_actors[active_key].name if active_key in all_actors else active_key
-            narrations.append(f"{active_name}, what do you do?")
+            actor = all_actors.get(active_key)
+            if actor and not actor.is_down:
+                narrations.append(f"{actor.name}, what do you do?")
 
         return "\n\n".join(n for n in narrations if n)
 

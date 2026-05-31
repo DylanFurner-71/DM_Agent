@@ -275,16 +275,29 @@ def dispatch(name: str, args: dict, state) -> dict:
     if name == "next_turn":
         if not state.combat_order:
             return {"ok": False, "error": "No combat in progress; call start_combat first."}
-        state.combat_index += 1
-        if state.combat_index >= len(state.combat_order):
-            state.combat_index = 0
-            state.combat_round += 1
-        active_key = state.combat_order[state.combat_index]
         all_actors = {**state.party, **state.npcs}
-        active_name = all_actors[active_key].name if active_key in all_actors else active_key
+        skipped: list[str] = []
+        for _ in range(len(state.combat_order)):
+            state.combat_index += 1
+            if state.combat_index >= len(state.combat_order):
+                state.combat_index = 0
+                state.combat_round += 1
+            active_key = state.combat_order[state.combat_index]
+            actor = all_actors.get(active_key)
+            if actor is not None and actor.is_down:
+                skipped.append(active_key)
+                state.record(f"skipping downed {active_key} ({actor.name})")
+                continue
+            break
+        else:
+            return {"ok": False, "error": "All combatants are at 0 HP; call end_combat."}
+        active_name = actor.name if actor else active_key
         state.action_used = False
         state.record(f"round {state.combat_round}, turn -> {active_key} ({active_name})")
-        return {"ok": True, "active": active_key, "active_name": active_name, "round": state.combat_round, "combat_index": state.combat_index}
+        result = {"ok": True, "active": active_key, "active_name": active_name, "round": state.combat_round, "combat_index": state.combat_index}
+        if skipped:
+            result["skipped_downed"] = skipped
+        return result
 
     if name == "end_combat":
         state.combat_order = []

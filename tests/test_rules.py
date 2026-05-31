@@ -295,6 +295,28 @@ def test_action_guard_blocks_second_attack():
     assert "Aldric" in res2["error"]
 
 
+def test_second_attack_blocked_hp_unchanged():
+    """First attack on a combatant's turn is accepted; a second attack before
+    next_turn must be refused AND must leave the target's HP exactly where the
+    first attack left it."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100   # guaranteed first
+    gs.npcs["snik"].hp = gs.npcs["snik"].max_hp = 20    # enough HP to survive
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    res1 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert res1["ok"] is True
+    hp_after_first = gs.npcs["snik"].hp
+
+    res2 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
+    assert res2["ok"] is False
+    assert "already acted" in res2["error"]
+    assert gs.npcs["snik"].hp == hp_after_first   # blocked attack must not touch HP
+
+
 def test_action_guard_blocks_second_cast():
     rules.seed(0)
     gs = _make_combat_state()
@@ -401,6 +423,45 @@ def test_combat_loop_halts_at_player_no_skip():
     assert len(next_turns) == 2, f"expected 2 next_turn calls, got {len(next_turns)}"
     assert next_turns[0]["result"]["active"] == "snik"
     assert next_turns[1]["result"]["active"] == "wisp"
+
+
+def test_next_turn_skips_downed_combatant():
+    """next_turn must skip any combatant at 0 HP and land on the next live one."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100   # first
+    gs.npcs["snik"].ability_modifiers["dex"] = 0        # second
+    gs.party["wisp"].ability_modifiers["dex"] = -100    # third (will be downed)
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "snik", "wisp"]}, gs)
+    assert res["combat_order"] == ["aldric", "snik", "wisp"]
+
+    gs.party["wisp"].hp = 0  # down Wisp before her turn arrives
+
+    # aldric (0) → snik (1): non-downed, no skip
+    adv1 = tools.dispatch("next_turn", {}, gs)
+    assert adv1["ok"] is True
+    assert adv1["active"] == "snik"
+    assert "skipped_downed" not in adv1
+
+    # snik (1) → wisp (2, downed — skip) → aldric (0, round 2)
+    adv2 = tools.dispatch("next_turn", {}, gs)
+    assert adv2["ok"] is True
+    assert adv2["active"] == "aldric"
+    assert adv2["round"] == 2
+    assert adv2.get("skipped_downed") == ["wisp"]
+
+
+def test_next_turn_all_downed_returns_error():
+    """next_turn must return ok=False when every combatant is at 0 HP."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.party["aldric"].hp = 0
+    gs.npcs["snik"].hp = 0
+    res = tools.dispatch("next_turn", {}, gs)
+    assert res["ok"] is False
+    assert "end_combat" in res["error"]
 
 
 def test_end_combat_clears_state():
