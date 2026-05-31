@@ -13,11 +13,50 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 
 from .dm_agent import DMAgent
 from .game_state import GameState
 
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
+SAVE_DIR = Path("saves")
+
+
+def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR) -> Path:
+    """Return the full Path for a save file, creating base_dir if needed.
+
+    Raises ValueError for empty/whitespace-only names. Strips directory
+    components (path-traversal guard) and appends .json if absent.
+    """
+    name = raw.strip()
+    if not name:
+        raise ValueError("Save name cannot be empty.")
+    name = Path(name).name  # basename only — discards any leading ../
+    if not name:
+        raise ValueError("Save name resolved to empty after stripping directory components.")
+    if not name.lower().endswith(".json"):
+        name = name + ".json"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return base_dir / name
+
+
+def _do_save(game_state, raw: str, base_dir: Path = SAVE_DIR, overwrite: bool = False) -> tuple:
+    """Resolve path and write state; return (status, path_or_message).
+
+    status values: "saved", "exists" (no-clobber), "error".
+    Never raises — all failures are captured and returned as ("error", msg).
+    """
+    try:
+        path = _resolve_save_path(raw, base_dir)
+    except Exception as e:
+        return ("error", str(e))
+    if path.exists() and not overwrite:
+        return ("exists", path)
+    try:
+        game_state.save(str(path))
+    except Exception as e:
+        return ("error", str(e))
+    return ("saved", path)
 
 
 def print_state(state: GameState) -> None:
@@ -121,9 +160,31 @@ def main() -> None:
             continue
         if player.startswith("/save"):
             parts = player.split(maxsplit=1)
-            out = parts[1] if len(parts) > 1 else "savegame.json"
-            state.save(out)
-            print(f"  saved -> {out}")
+            if len(parts) > 1:
+                raw = parts[1]
+            else:
+                try:
+                    raw = input("Save as: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+            status, val = _do_save(state, raw)
+            if status == "saved":
+                print(f"  Saved to {val}")
+            elif status == "exists":
+                try:
+                    confirm = input(f"  {val} exists — overwrite? (y/N): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+                if confirm == "y":
+                    status2, val2 = _do_save(state, raw, overwrite=True)
+                    if status2 == "saved":
+                        print(f"  Saved to {val2}")
+                    else:
+                        print(f"  {val2}")
+            else:
+                print(f"  {val}")
             continue
 
         narration = agent.take_turn(player)
