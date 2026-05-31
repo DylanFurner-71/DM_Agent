@@ -12,6 +12,7 @@ In-session commands: /state  /trace  /save [path]  /quit
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -40,11 +41,22 @@ def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR) -> Path:
     return base_dir / name
 
 
-def _do_save(game_state, raw: str, base_dir: Path = SAVE_DIR, overwrite: bool = False) -> tuple:
+def _do_save(
+    game_state,
+    raw: str,
+    base_dir: Path = SAVE_DIR,
+    overwrite: bool = False,
+    trace: list | None = None,
+) -> tuple:
     """Resolve path and write state; return (status, path_or_message).
 
     status values: "saved", "exists" (no-clobber), "error".
     Never raises — all failures are captured and returned as ("error", msg).
+
+    When trace is provided, also writes a sidecar at <name>.trace.jsonl —
+    one JSON record per list element, one per line. The game file is written
+    first; a sidecar failure is silently swallowed so it never blocks the save
+    or crashes the REPL.
     """
     try:
         path = _resolve_save_path(raw, base_dir)
@@ -56,6 +68,14 @@ def _do_save(game_state, raw: str, base_dir: Path = SAVE_DIR, overwrite: bool = 
         game_state.save(str(path))
     except Exception as e:
         return ("error", str(e))
+    if trace is not None:
+        sidecar = path.with_suffix(".trace.jsonl")
+        try:
+            with open(sidecar, "w") as _f:
+                for record in trace:
+                    _f.write(json.dumps(record) + "\n")
+        except Exception:
+            pass  # trace failure must not affect the game save result
     return ("saved", path)
 
 
@@ -168,7 +188,13 @@ def main() -> None:
                 except (EOFError, KeyboardInterrupt):
                     print()
                     continue
-            status, val = _do_save(state, raw)
+            # Flatten per-turn groups into one record per tool call.
+            trace = [
+                {"turn": entry["turn"], **call}
+                for entry in agent.full_trace
+                for call in entry["calls"]
+            ]
+            status, val = _do_save(state, raw, trace=trace)
             if status == "saved":
                 print(f"  Saved to {val}")
             elif status == "exists":
@@ -178,7 +204,7 @@ def main() -> None:
                     print()
                     continue
                 if confirm == "y":
-                    status2, val2 = _do_save(state, raw, overwrite=True)
+                    status2, val2 = _do_save(state, raw, overwrite=True, trace=trace)
                     if status2 == "saved":
                         print(f"  Saved to {val2}")
                     else:

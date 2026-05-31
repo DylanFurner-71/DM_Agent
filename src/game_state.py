@@ -83,6 +83,7 @@ class GameState:
     quest_flags: dict[str, bool] = field(default_factory=dict)
     turn: int = 0
     log: list[str] = field(default_factory=list)
+    transcript: list[dict] = field(default_factory=list)  # {"kind": "player"|"dm", "text": str}
     # Combat state — defaults to "not in combat".
     combat_order: list[str] = field(default_factory=list)  # party/NPC dict keys in initiative order
     combat_index: int = 0    # index into combat_order for the active combatant
@@ -122,6 +123,7 @@ class GameState:
             "quest_flags": self.quest_flags,
             "turn": self.turn,
             "log": self.log,
+            "transcript": self.transcript,
             "combat_order": self.combat_order,
             "combat_index": self.combat_index,
             "combat_round": self.combat_round,
@@ -162,6 +164,7 @@ class GameState:
             quest_flags=d.get("quest_flags", {}),
             turn=d.get("turn", 0),
             log=d.get("log", []),
+            transcript=d.get("transcript", []),
             combat_order=d.get("combat_order", []),
             combat_index=d.get("combat_index", 0),
             combat_round=d.get("combat_round", 0),

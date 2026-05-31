@@ -108,6 +108,63 @@ def test_do_save_error_does_not_raise(tmp_path, monkeypatch):
     assert "disk full" in val
 
 
+# --- trace sidecar -----------------------------------------------------------
+
+def test_save_writes_trace_sidecar(tmp_path):
+    """M trace records → M lines in <name>.trace.jsonl, each valid JSON."""
+    gs = _simple_state()
+    trace = [
+        {"turn": 1, "name": "attack",    "input": {"attacker": "Aldric"}, "result": {"ok": True}},
+        {"turn": 1, "name": "get_state", "input": {},                     "result": {"ok": True}},
+        {"turn": 2, "name": "cast_spell","input": {"caster": "Wisp"},     "result": {"ok": False}},
+    ]
+    _do_save(gs, "slot1", base_dir=tmp_path, trace=trace)
+
+    sidecar = tmp_path / "slot1.trace.jsonl"
+    assert sidecar.exists(), "sidecar must be created alongside the save file"
+    lines = sidecar.read_text().splitlines()
+    assert len(lines) == len(trace), f"expected {len(trace)} lines, got {len(lines)}"
+    for line in lines:
+        json.loads(line)  # every line must be independently parseable JSON
+
+
+def test_save_game_json_has_no_trace(tmp_path):
+    """The game-state JSON must contain only game state — no trace keys."""
+    gs = _simple_state()
+    trace = [{"turn": 1, "name": "attack", "input": {}, "result": {}}]
+    _do_save(gs, "slot1", base_dir=tmp_path, trace=trace)
+
+    data = json.loads((tmp_path / "slot1.json").read_text())
+    for key in ("trace", "tool_trace", "full_trace", "calls"):
+        assert key not in data, f"save-game JSON must not contain {key!r}"
+
+
+def test_sidecar_failure_does_not_affect_save(tmp_path, monkeypatch):
+    """A write error on the sidecar must leave the game file intact and return 'saved'."""
+    import builtins
+    gs = _simple_state()
+    original_open = builtins.open
+
+    def bad_open(path, *args, **kwargs):
+        if str(path).endswith(".trace.jsonl"):
+            raise OSError("no space left on device")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", bad_open)
+    trace = [{"turn": 1, "name": "roll_dice", "input": {}, "result": {}}]
+    status, val = _do_save(gs, "slot1", base_dir=tmp_path, trace=trace)
+
+    assert status == "saved"           # game save succeeded despite sidecar failure
+    assert (tmp_path / "slot1.json").exists()
+
+
+def test_no_sidecar_when_trace_is_none(tmp_path):
+    """When trace=None (default), no sidecar file must be created."""
+    gs = _simple_state()
+    _do_save(gs, "slot1", base_dir=tmp_path)  # trace omitted
+    assert not (tmp_path / "slot1.trace.jsonl").exists()
+
+
 def test_do_save_empty_name_returns_error(tmp_path):
     gs = _simple_state()
     status, val = _do_save(gs, "", base_dir=tmp_path)

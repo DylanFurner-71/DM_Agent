@@ -114,6 +114,33 @@ _NARRATE_ONLY = (
 )
 
 
+def _record_turn(game_state, player_text: str, dm_text: str) -> None:
+    """Append one turn's narrative to the transcript in chronological order.
+
+    Appends two entries: the player's input then the DM's narration. This
+    function is model-free and has no side effects beyond mutating transcript.
+    """
+    game_state.transcript.append({"kind": "player", "text": player_text})
+    game_state.transcript.append({"kind": "dm", "text": dm_text})
+
+
+def _context_from_transcript(transcript: list[dict], bound: int) -> list[dict]:
+    """Return the last `bound` transcript entries as API message dicts.
+
+    Maps kind to role (player→user, dm→assistant). When the transcript has
+    fewer than `bound` entries, all are returned. The caller is responsible
+    for choosing `bound` to match the live-loop window (typically NARRATION_WINDOW*2).
+    """
+    tail = transcript[-bound:] if bound > 0 else []
+    return [
+        {
+            "role": "user" if entry["kind"] == "player" else "assistant",
+            "content": entry["text"],
+        }
+        for entry in tail
+    ]
+
+
 class DMAgent:
     def __init__(self, state, client: Anthropic | None = None, model: str = MODEL):
         self.state = state
@@ -123,6 +150,13 @@ class DMAgent:
         self.tool_trace: list[dict] = []  # tool calls from the last turn; read by debug mode
         self.full_trace: list[dict] = []  # cumulative [{turn, calls}] across all turns; read by /trace
         self.narration_history: list[tuple[str, str]] = []  # rolling (player_input, narration) window
+        # Seed the rolling window from the transcript tail so a resumed session
+        # starts with the same recent-narrative context as a live one.
+        if state.transcript:
+            msgs = _context_from_transcript(state.transcript, NARRATION_WINDOW * 2)
+            for i in range(0, len(msgs), 2):
+                if i + 1 < len(msgs) and msgs[i]["role"] == "user" and msgs[i + 1]["role"] == "assistant":
+                    self.narration_history.append((msgs[i]["content"], msgs[i + 1]["content"]))
 
     def _state_snapshot(self) -> str:
         """Compact JSON of current game state for injection into each turn's prompt.
@@ -415,6 +449,7 @@ class DMAgent:
             self.narration_history.append((player_input, epilogue))
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
+            _record_turn(self.state, player_input, epilogue)
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
             return epilogue
 
@@ -478,6 +513,7 @@ class DMAgent:
             self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
+            _record_turn(self.state, player_input, combined)
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
             return combined
 
@@ -493,6 +529,7 @@ class DMAgent:
         self.narration_history.append((player_input, combined))
         if len(self.narration_history) > NARRATION_WINDOW:
             self.narration_history = self.narration_history[-NARRATION_WINDOW:]
+        _record_turn(self.state, player_input, combined)
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 
