@@ -39,6 +39,39 @@ def test_damage_downs_and_clamps():
     assert res["downed"] is True
 
 
+def test_overkill_damage_clamps_hp_to_zero():
+    """Damage exceeding remaining HP sets HP to exactly 0, never negative."""
+    snik = NPC(name="Snik", max_hp=12, hp=12)
+    res = rules.apply_damage(snik, 15)
+    assert snik.hp == 0
+    assert snik.hp >= 0          # never negative
+    assert res["hp"] == 0
+    assert res["downed"] is True
+    assert snik.is_down is True
+
+
+def test_overkill_attack_clamps_hp_to_zero():
+    """An attack roll whose damage exceeds the defender's HP sets HP to 0, not below."""
+    rules.seed(0)
+    # Give attacker guaranteed-high stats so the attack almost certainly hits and deals
+    # enough damage to overkill; use a defender with 1 HP so any hit is overkill.
+    attacker = Character(
+        name="A", attack_bonus=0,
+        inventory=["greataxe"],
+        ability_modifiers={"str": 10},  # +10 str so even minimum roll exceeds 1 HP
+        proficiency_bonus=2,
+    )
+    defender = NPC(name="D", ac=1, hp=1, max_hp=1)
+    res = rules.attack(attacker, defender, weapon="greataxe")
+    assert res["ok"] is True
+    if res["hit"]:
+        assert defender.hp == 0
+        assert defender.hp >= 0      # never negative
+        assert res["defender_hp"] == 0
+        assert res["downed"] is True
+        assert defender.is_down is True
+
+
 def test_heal_clamps_to_max_and_revives():
     c = Character(name="Hero", max_hp=20, hp=0, conditions=["unconscious"])
     res = rules.heal(c, 50)
