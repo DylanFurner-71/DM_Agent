@@ -1353,9 +1353,9 @@ def test_from_dict_expands_template_npc():
 
 
 def test_scenario2_loads_correctly():
-    """scenario2.json (multi-scene format) populates state from current_scene."""
+    """two_scenes_test.json (multi-scene format) populates state from current_scene."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     # current_scene is barrow_entrance → snik should be in the live roster
     assert "snik" in gs.npcs
@@ -1394,7 +1394,7 @@ def test_multi_scene_load_location_and_scene_text():
 def test_move_scene_replaces_npcs_and_updates_location():
     """move_scene with a scene_key replaces the NPC roster and updates location/scene."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     assert "snik" in gs.npcs
 
@@ -1413,7 +1413,7 @@ def test_move_scene_replaces_npcs_and_updates_location():
 def test_move_scene_npc_stats_and_overrides():
     """move_scene expands template NPCs and applies per-entry overrides (e.g. max_hp)."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
 
@@ -1431,7 +1431,7 @@ def test_move_scene_npc_stats_and_overrides():
 def test_move_scene_party_untouched():
     """Scene transitions must never modify the party."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     gs.party["aldric"].hp = 10   # simulate damage
 
@@ -1445,7 +1445,7 @@ def test_move_scene_party_untouched():
 def test_move_scene_unknown_key_rejected():
     """move_scene with an unknown scene_key returns ok=False."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     original_location = gs.location
 
@@ -1459,7 +1459,7 @@ def test_move_scene_unknown_key_rejected():
 def test_move_scene_missing_scene_key_rejected():
     """move_scene without scene_key when scenes are defined returns ok=False."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
 
     res = tools.dispatch("move_scene", {"location": "Somewhere"}, gs)
@@ -1479,7 +1479,7 @@ def test_move_scene_free_form_without_scenes():
 def test_multi_scene_savegame_round_trip():
     """Saving and reloading preserves scenes dict and live NPC state (not re-expanded)."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     gs.npcs["snik"].hp = 3   # simulate combat damage
 
@@ -1491,15 +1491,16 @@ def test_multi_scene_savegame_round_trip():
 
 
 def test_get_state_surfaces_available_scenes():
-    """get_state returns available_scenes keys without the verbose scene definitions."""
+    """get_state returns the current scene's exits, not the global scene list."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
     gs = GameState.load(path)
     res = tools.dispatch("get_state", {}, gs)
     assert res["ok"] is True
     state_dict = res["state"]
-    assert "available_scenes" in state_dict
-    assert set(state_dict["available_scenes"]) == {"barrow_entrance", "ember_chamber"}
+    assert "exits" in state_dict
+    assert state_dict["exits"] == {"the passage descending deeper into the barrow": "ember_chamber"}
+    assert "available_scenes" not in state_dict
     assert "scenes" not in state_dict   # omitted to keep context lean
 
 
@@ -2471,6 +2472,84 @@ def test_take_turn_emits_ambiguous_target_prompt():
     assert "Grik" in narration
     assert "Narl" in narration
     assert "Aldric, what do you do?" not in narration
+
+
+# --- exits / scene topology tests -------------------------------------------
+
+def test_move_scene_follows_declared_exit():
+    """move_scene to a scene_key that is a declared exit of the current scene succeeds."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    gs = GameState.load(path)
+    assert gs.current_scene == "barrow_entrance"
+    res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
+    assert res["ok"] is True
+    assert gs.current_scene == "ember_chamber"
+
+
+def test_move_scene_rejects_non_exit():
+    """move_scene to a defined scene that is not in the current scene's exits is rejected."""
+    gs = GameState(location="Start", current_scene="a")
+    gs.scenes = {
+        "a": {"location": "A", "exits": {"to b": "b"}},
+        "b": {"location": "B", "exits": {}},
+        "c": {"location": "C", "exits": {}},
+    }
+    # 'c' is defined but not reachable from 'a'
+    res = tools.dispatch("move_scene", {"scene_key": "c"}, gs)
+    assert res["ok"] is False
+    assert "c" in res["error"]
+    assert gs.current_scene == "a"   # state unchanged
+
+
+def test_move_scene_terminal_has_no_exits():
+    """move_scene from a scene with empty exits is rejected; error mentions no exits."""
+    gs = GameState(location="Chamber", current_scene="ember_chamber")
+    gs.scenes = {
+        "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
+    }
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is False
+    assert "no exits" in res["error"].lower()
+
+
+def test_get_state_surfaces_current_exits():
+    """get_state returns the current scene's exits dict, not a global scene list."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    gs = GameState.load(path)
+    assert gs.current_scene == "barrow_entrance"
+    res = tools.dispatch("get_state", {}, gs)
+    assert res["ok"] is True
+    state_dict = res["state"]
+    # exits contains the current scene's exits (label → target), not the full scene list
+    assert "exits" in state_dict
+    assert state_dict["exits"] == {"the passage descending deeper into the barrow": "ember_chamber"}
+    assert "scenes" not in state_dict
+    assert "available_scenes" not in state_dict
+
+
+def test_state_snapshot_includes_exits():
+    """_state_snapshot includes the current scene's exits when exits are defined."""
+    import json as _json
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Barrow Entrance", current_scene="barrow_entrance")
+    gs.scenes = {
+        "barrow_entrance": {
+            "location": "Barrow Entrance",
+            "exits": {"the dark passage ahead": "ember_chamber"},
+        },
+        "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
+    }
+    gs.party["aldric"] = Character(name="Aldric")
+
+    agent = DMAgent(gs, client=MagicMock())
+    snap = _json.loads(agent._state_snapshot())
+
+    assert "exits" in snap
+    assert snap["exits"] == {"the dark passage ahead": "ember_chamber"}
 
 
 if __name__ == "__main__":

@@ -52,6 +52,11 @@ Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only r
 `modify_hp` accepts flat, known amounts only (e.g. "the mechanism deals exactly 10").
 - When you need exact current numbers (HP, remaining slots, who's present), call \
 `get_state` rather than guessing.
+- Scene geography is fixed. When `exits` appears in the state snapshot, those are the \
+ONLY paths that exist — narrate only declared exits, never invent a passage, door, fork, \
+or room that isn't listed. When the player moves, match their intent to a declared exit \
+and call `move_scene` with that exit's scene_key. A scene whose exits map is empty (or \
+absent) is a dead end; tell the player there is nowhere further to go.
 - Stay in the fiction. Never expose raw tool JSON, internal reasoning, process notes, \
 or meta-commentary.
 
@@ -136,6 +141,10 @@ class DMAgent:
             }
         if s.current_scene:
             snap["current_scene"] = s.current_scene
+            if s.scenes:
+                exits = s.scenes.get(s.current_scene, {}).get("exits", {})
+                if exits:
+                    snap["exits"] = exits
         if s.quest_flags:
             snap["quest_flags"] = s.quest_flags
         if s.combat_round > 0:

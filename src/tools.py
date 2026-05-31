@@ -127,16 +127,20 @@ TOOLS = [
         "name": "move_scene",
         "description": (
             "Move the party to a new location. Two modes:\n"
-            "NAMED SCENE (use when get_state shows available_scenes): pass scene_key matching "
-            "one of the available scene keys — the engine sets location, scene text, and "
-            "replaces the NPC roster from the scene definition. Party is untouched.\n"
+            "NAMED SCENE (use when exits is shown in the state snapshot): pass scene_key "
+            "matching one of the VALUES in the current scene's exits map — the engine "
+            "validates the move is along a declared exit, then sets location, scene text, "
+            "and replaces the NPC roster. Party is untouched. "
+            "NEVER supply a scene_key that is not listed in the current scene's exits — "
+            "moves to non-adjacent scenes are rejected even if the scene is defined. "
+            "A scene whose exits map is empty is a dead end; no further move is possible.\n"
             "FREE-FORM (no named scenes defined): pass location string and optional scene "
             "description to update them directly."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "scene_key": {"type": "string", "description": "Named scene key, e.g. 'ember_chamber'. Use when available_scenes is present in get_state."},
+                "scene_key": {"type": "string", "description": "A scene_key that appears as a VALUE in the current scene's exits map, e.g. 'ember_chamber'."},
                 "location":  {"type": "string", "description": "Free-form location name. Use when no named scenes are defined."},
                 "scene":     {"type": "string", "description": "Free-form scene description. Optional companion to location."},
             },
@@ -427,19 +431,46 @@ def dispatch(name: str, args: dict, state) -> dict:
     if name == "move_scene":
         if state.scenes:
             scene_key = args.get("scene_key", "").strip()
+            # Current scene's exits: {player-facing label: target scene_key}
+            current_exits: dict = (
+                state.scenes.get(state.current_scene, {}).get("exits", {})
+                if state.current_scene else {}
+            )
             if not scene_key:
+                if current_exits:
+                    exits_str = "; ".join(
+                        f"{lbl!r} -> {tgt!r}" for lbl, tgt in current_exits.items()
+                    )
+                    return {
+                        "ok": False,
+                        "error": f"scene_key is required. Current exits: {exits_str}.",
+                    }
                 return {
                     "ok": False,
-                    "error": (
-                        "scene_key is required when named scenes are defined. "
-                        f"Available: {', '.join(state.scenes)}."
-                    ),
+                    "error": "scene_key is required. The current scene has no exits.",
+                }
+            exit_targets = set(current_exits.values())
+            if scene_key not in exit_targets:
+                if current_exits:
+                    exits_str = "; ".join(
+                        f"{lbl!r} -> {tgt!r}" for lbl, tgt in current_exits.items()
+                    )
+                    return {
+                        "ok": False,
+                        "error": (
+                            f"{scene_key!r} is not a declared exit from the current scene. "
+                            f"Available exits: {exits_str}."
+                        ),
+                    }
+                return {
+                    "ok": False,
+                    "error": "The current scene has no exits — there is nowhere to move.",
                 }
             scene_data = state.scenes.get(scene_key)
             if scene_data is None:
                 return {
                     "ok": False,
-                    "error": f"Unknown scene {scene_key!r}. Available: {', '.join(state.scenes)}.",
+                    "error": f"Scene {scene_key!r} is declared as an exit but has no definition.",
                 }
             state.current_scene = scene_key
             state.location = scene_data.get("location", "")
@@ -464,8 +495,12 @@ def dispatch(name: str, args: dict, state) -> dict:
     if name == "get_state":
         d = state.to_dict()
         if state.scenes:
-            d["available_scenes"] = list(state.scenes)
-            del d["scenes"]   # omit verbose definitions; keys are enough for the model
+            del d["scenes"]   # omit verbose definitions from model context
+            exits: dict = (
+                state.scenes.get(state.current_scene, {}).get("exits", {})
+                if state.current_scene else {}
+            )
+            d["exits"] = exits  # {player-facing label: target scene_key}
         return {"ok": True, "state": d}
 
     if name == "start_combat":

@@ -7,7 +7,8 @@
       "npcs": {
         "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18 },
         "narl": { "template": "goblin", "name": "Narl", "hostile": true }
-      }
+      },
+      "exits":{}
     }
   },
   "party": {
