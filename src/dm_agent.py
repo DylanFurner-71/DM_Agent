@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from anthropic import Anthropic
 
@@ -273,6 +274,8 @@ class DMAgent:
         """Tool-use phase for one action. Runs the loop; state mutates; no narration."""
         self.messages.append({"role": "user", "content": prompt})
         for _ in range(MAX_TOOL_HOPS):
+            print("  [thinking...]", flush=True)
+            _t0 = time.monotonic()
             resp = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
@@ -280,12 +283,14 @@ class DMAgent:
                 tools=tools.TOOLS,
                 messages=self.messages,
             )
+            print(f"  [thinking done — {time.monotonic() - _t0:.1f}s]", flush=True)
             self.messages.append({"role": "assistant", "content": resp.content})
             if resp.stop_reason != "tool_use":
                 break
             tool_results = []
             for block in resp.content:
                 if block.type == "tool_use":
+                    print(f"  [tool: {block.name}]", flush=True)
                     result = tools.dispatch(block.name, block.input, self.state)
                     self.tool_trace.append({"name": block.name, "input": block.input, "result": result})
                     tool_results.append({
@@ -298,12 +303,15 @@ class DMAgent:
     def _narrate(self) -> str:
         """Narration phase: single text-only call; returns 1-3 in-world sentences."""
         self.messages.append({"role": "user", "content": _NARRATE_ONLY})
+        print("  [narrating...]", flush=True)
+        _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=256,
             system=SYSTEM_PROMPT,
             messages=self.messages,  # no tools= → text only
         )
+        print(f"  [narrating done — {time.monotonic() - _t0:.1f}s]", flush=True)
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -326,12 +334,15 @@ class DMAgent:
             "you do?' — not a combat-turn prompt."
         )
         self.messages.append({"role": "user", "content": prompt})
+        print("  [narrating combat close...]", flush=True)
+        _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=400,
             system=SYSTEM_PROMPT,
             messages=self.messages,
         )
+        print(f"  [narrating combat close done — {time.monotonic() - _t0:.1f}s]", flush=True)
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -368,12 +379,15 @@ class DMAgent:
             f"{action_list}"
         )
         self.messages.append({"role": "user", "content": prompt})
+        print(f"  [narrating {n} combat beat(s)...]", flush=True)
+        _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=min(256 * n, 1024),
             system=SYSTEM_PROMPT,
             messages=self.messages,
         )
+        print(f"  [narrating {n} combat beat(s) done — {time.monotonic() - _t0:.1f}s]", flush=True)
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -424,12 +438,15 @@ class DMAgent:
                 "follows, what was lost. No tool calls. No prompts. No meta-commentary."
             )
         self.messages.append({"role": "user", "content": prompt})
+        print("  [narrating epilogue...]", flush=True)
+        _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=300,
             system=SYSTEM_PROMPT,
             messages=self.messages,
         )
+        print(f"  [narrating epilogue done — {time.monotonic() - _t0:.1f}s]", flush=True)
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
