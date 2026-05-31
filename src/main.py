@@ -109,6 +109,19 @@ def print_state(state: GameState) -> None:
     print()
 
 
+def _launch_mode(gs) -> str:
+    """Return 'resume' if any play has happened, 'new' otherwise."""
+    if gs.narrative or gs.turn > 0 or gs.combat_round > 0:
+        return "resume"
+    return "new"
+
+
+def _resume_opening(gs, n: int = 1) -> str:
+    """Return the last n DM narration beats joined by blank lines."""
+    tail = gs.narrative[-n:] if gs.narrative else []
+    return "\n\n".join(e["text"] for e in tail)
+
+
 def print_tool_trace(trace: list) -> None:
     if not trace:
         return
@@ -158,7 +171,12 @@ def main() -> None:
     print("  DM AGENT — type /state, /trace, /save, or /quit at any time")
     print(f"  Scenario: {args.scenario}")
     print("=" * 60)
-    if state.scene:
+    mode = _launch_mode(state)
+    if mode == "resume":
+        opening = _resume_opening(state)
+        if opening:
+            print(f"\n{opening}\n")
+    elif state.scene:
         print(f"\n{state.scene}\n")
 
     while True:

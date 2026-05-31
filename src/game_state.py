@@ -84,6 +84,7 @@ class GameState:
     turn: int = 0
     log: list[str] = field(default_factory=list)
     transcript: list[dict] = field(default_factory=list)  # {"kind": "player"|"dm", "text": str}
+    narrative: list[dict] = field(default_factory=list)   # {"turn": int, "text": str} — DM beats only
     # Combat state — defaults to "not in combat".
     combat_order: list[str] = field(default_factory=list)  # party/NPC dict keys in initiative order
     combat_index: int = 0    # index into combat_order for the active combatant
@@ -124,6 +125,7 @@ class GameState:
             "turn": self.turn,
             "log": self.log,
             "transcript": self.transcript,
+            "narrative": self.narrative,
             "combat_order": self.combat_order,
             "combat_index": self.combat_index,
             "combat_round": self.combat_round,
@@ -165,6 +167,7 @@ class GameState:
             turn=d.get("turn", 0),
             log=d.get("log", []),
             transcript=d.get("transcript", []),
+            narrative=d.get("narrative", []),
             combat_order=d.get("combat_order", []),
             combat_index=d.get("combat_index", 0),
             combat_round=d.get("combat_round", 0),

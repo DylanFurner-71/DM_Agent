@@ -458,6 +458,7 @@ class DMAgent:
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
             _record_turn(self.state, player_input, epilogue)
+            self.state.narrative.append({"turn": self.state.turn, "text": epilogue})
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
             return epilogue
 
@@ -522,6 +523,7 @@ class DMAgent:
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
             _record_turn(self.state, player_input, combined)
+            self.state.narrative.append({"turn": self.state.turn, "text": combined})
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
             return combined
 
@@ -538,6 +540,7 @@ class DMAgent:
         if len(self.narration_history) > NARRATION_WINDOW:
             self.narration_history = self.narration_history[-NARRATION_WINDOW:]
         _record_turn(self.state, player_input, combined)
+        self.state.narrative.append({"turn": self.state.turn, "text": combined})
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 
