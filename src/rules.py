@@ -534,6 +534,61 @@ def spawn_npc(monster_id: str, name: str | None = None) -> dict:
     return kwargs
 
 
+CONSUMABLES: dict[str, dict] = {
+    "healing_potion": {"name": "Potion of Healing",        "effect": "heal",         "dice": "2d4+2"},
+    "greater_healing": {"name": "Potion of Greater Healing", "effect": "heal",         "dice": "4d4+4"},
+    "pearl_of_power":  {"name": "Pearl of Power",            "effect": "restore_slot", "level": 1},
+}
+
+
+def apply_consumable(character, item_id: str) -> dict:
+    """Apply the mechanical effect of a consumable item.
+
+    Does NOT remove the item from inventory — that is the caller's (dispatch's) job,
+    matching the separation in rules.attack / rules.heal vs dispatch.
+
+    Effects:
+      "heal"         — roll the item's dice expression, call heal(), return rolled + hp.
+      "restore_slot" — increment spell_slots[level] by 1, return new count.
+    """
+    item = CONSUMABLES.get(item_id.strip().lower())
+    if item is None:
+        return {
+            "ok": False,
+            "reason": "unknown_consumable",
+            "error": f"Unknown consumable {item_id!r}. Known: {', '.join(CONSUMABLES)}.",
+        }
+
+    effect = item["effect"]
+
+    if effect == "heal":
+        rolled = roll(item["dice"])
+        result = heal(character, rolled.total)
+        return {
+            "ok": True,
+            "item": item["name"],
+            "effect": "heal",
+            "rolled": rolled.total,
+            "roll_detail": rolled.describe(),
+            "healed": result["healed"],
+            "hp": result["hp"],
+        }
+
+    if effect == "restore_slot":
+        level = item["level"]
+        new_count = character.spell_slots.get(level, 0) + 1
+        character.spell_slots[level] = new_count
+        return {
+            "ok": True,
+            "item": item["name"],
+            "effect": "restore_slot",
+            "level": level,
+            "slots_remaining": new_count,
+        }
+
+    return {"ok": False, "reason": "unknown_effect", "error": f"Unhandled effect {effect!r} for {item_id!r}."}
+
+
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------
 SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",

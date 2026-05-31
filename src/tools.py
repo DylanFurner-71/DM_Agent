@@ -235,6 +235,27 @@ TOOLS = [
         },
     },
     {
+        "name": "take_item",
+        "description": (
+            "Take an item from the current scene's loot list and add it to a party member's "
+            "inventory. The scene's loot list is the sole authority — the model cannot conjure "
+            "items not listed there; ok=false with reason 'not_available' if absent (mirrors "
+            "move_scene rejecting undeclared exits). Each take removes exactly one instance, "
+            "so items cannot be farmed. "
+            "carrier: optional — omit to auto-select the sole party member; name one explicitly "
+            "when multiple are present (returns reason 'ambiguous_carrier' with candidates). "
+            "Not action-guarded — looting is a free interaction, valid in and out of combat."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "item":    {"type": "string", "description": "Item id to take, e.g. 'healing_potion'. Must appear in the current scene's loot list."},
+                "carrier": {"type": "string", "description": "Name of the party member who receives the item. Omit to auto-select when only one member is present."},
+            },
+            "required": ["item"],
+        },
+    },
+    {
         "name": "add_npc",
         "description": (
             "Instantiate a new NPC from a canonical monster template and add it to the roster. "
@@ -254,6 +275,27 @@ TOOLS = [
                 "name":        {"type": "string", "description": "Optional display name override"},
             },
             "required": ["template", "instance_id"],
+        },
+    },
+    {
+        "name": "use_item",
+        "description": (
+            "Use a consumable item from a character's inventory on themselves. "
+            "The item must be in character.inventory (ok=false 'not_in_inventory') AND "
+            "in the CONSUMABLES table (ok=false 'not_consumable' — a mace is not drinkable). "
+            "In combat, using an item IS your action and is turn-guarded. "
+            "Out of combat, the guards no-op and the item is used freely. "
+            "On a validation failure the action guard is undone so the character keeps their turn. "
+            "Applies the effect atomically via the engine (rolled == applied). "
+            "Self-use only — the character field must name the user, not a recipient."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the character using the item"},
+                "item":      {"type": "string", "description": "Item id to use, e.g. 'healing_potion'. Must be in character's inventory."},
+            },
+            "required": ["character", "item"],
         },
     },
 ]
@@ -779,5 +821,91 @@ def dispatch(name: str, args: dict, state) -> dict:
             "ac": npc.ac,
             "combat": False,
         }
+
+    if name == "use_item":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat is starting this turn — wait for the initiative order before acting."}
+        err = _turn_guard(character.name, state) or _action_guard(state)
+        if err:
+            return err
+
+        item_key = args.get("item", "").strip().lower()
+        inv_lower = [i.strip().lower() for i in character.inventory]
+
+        if item_key not in inv_lower:
+            state.action_used = False
+            available = [i for i in character.inventory if i.strip().lower() in rules.CONSUMABLES]
+            return {
+                "ok": False,
+                "reason": "not_in_inventory",
+                "error": (
+                    f"{character.name} does not have {item_key!r}."
+                    + (f" Usable items in inventory: {available}." if available else "")
+                ),
+            }
+
+        if item_key not in rules.CONSUMABLES:
+            state.action_used = False
+            return {
+                "ok": False,
+                "reason": "not_consumable",
+                "error": f"{item_key!r} is not a consumable item.",
+            }
+
+        res = rules.apply_consumable(character, item_key)
+        # Remove ONE instance (inventory may hold duplicates).
+        idx = inv_lower.index(item_key)
+        character.inventory.pop(idx)
+        state.record(f"{character.name} uses {item_key}: {res.get('effect')} ({res})")
+        return res
+
+    if name == "take_item":
+        item_arg = args.get("item", "").strip().lower()
+        if not item_arg:
+            return {"ok": False, "error": "item is required."}
+
+        # Scene loot is the sole authority — the model cannot conjure items.
+        scene_data = state.scenes.get(state.current_scene, {}) if state.current_scene else {}
+        loot_list: list = scene_data.get("loot", [])
+        loot_lower = [i.strip().lower() for i in loot_list]
+        if item_arg not in loot_lower:
+            available = loot_list if loot_list else []
+            return {
+                "ok": False,
+                "reason": "not_available",
+                "error": (
+                    f"{item_arg!r} is not in this scene's loot."
+                    + (f" Available: {available}." if available else " The scene has no loot.")
+                ),
+            }
+
+        # Resolve carrier.
+        carrier_arg = (args.get("carrier") or "").strip()
+        if carrier_arg:
+            carrier = state.find_actor(carrier_arg)
+            if not carrier or not hasattr(carrier, "proficiency_bonus"):
+                return {"ok": False, "error": f"Unknown party member {carrier_arg!r}; call get_state."}
+        else:
+            pcs = list(state.party.values())
+            if len(pcs) == 1:
+                carrier = pcs[0]
+            else:
+                return {
+                    "ok": False,
+                    "reason": "ambiguous_carrier",
+                    "error": "Multiple party members — name one with carrier.",
+                    "candidates": [c.name for c in pcs],
+                }
+
+        # Remove ONE instance from scene loot (finite — cannot be farmed).
+        idx = loot_lower.index(item_arg)
+        original = loot_list.pop(idx)
+        carrier.inventory.append(original)
+        state.record(f"{carrier.name} takes {original} from scene {state.current_scene!r}")
+        return {"ok": True, "item": original, "owner": carrier.name}
 
     return {"ok": False, "error": f"Unknown tool {name!r}"}

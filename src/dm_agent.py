@@ -81,6 +81,13 @@ saves automatically at their turn — never roll one yourself, never have a dyin
 attack/cast/move, never prompt them. Healing a dying or stable PC brings them back and \
 the engine resets their saves; narrate the revival. When the engine reports a death save, \
 narrate its given outcome — do not change it.
+- Loot is author-placed. You may only grant items via `take_item`, and only items in the \
+current scene's loot list — never invent treasure. Reveal loot through exploration (a search, \
+opening a chest, a successful check), not by announcing the list.
+- Consumables have fixed engine effects. Use `use_item` to spend one; never narrate a potion \
+healing a specific amount yourself — the tool rolls and applies it.
+- Drinking a potion or using an item in combat costs that character's action, exactly like an \
+attack. Only the active combatant may do it, on their turn.
 
 TWO-PHASE PROTOCOL — every action uses two separate prompts:
 TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
@@ -206,6 +213,9 @@ class DMAgent:
                 exits = s.scenes.get(s.current_scene, {}).get("exits", {})
                 if exits:
                     snap["exits"] = exits
+                loot = s.scenes.get(s.current_scene, {}).get("loot", [])
+                if loot:
+                    snap["loot"] = loot
         if s.quest_flags:
             snap["quest_flags"] = s.quest_flags
         if s.combat_round > 0:
