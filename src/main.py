@@ -148,6 +148,20 @@ def print_full_trace(full_trace: list) -> None:
         for call in entry["calls"]:
             result_summary = {k: v for k, v in call["result"].items() if k != "state"}
             print(f"    {call['name']}({call['input']}) -> {result_summary}")
+    print()
+
+
+def print_full_trace_verbose(full_trace: list) -> None:
+    if not full_trace:
+        print("  No tool calls recorded yet.\n")
+        return
+    for entry in full_trace:
+        print(f"  [Turn {entry['turn']}] > {entry.get('input', '')}")
+        if not entry["calls"]:
+            print("    (no tool calls)")
+        for call in entry["calls"]:
+            result_summary = {k: v for k, v in call["result"].items() if k != "state"}
+            print(f"    {call['name']}({call['input']}) -> {result_summary}")
         for ac in entry.get("api_calls", []):
             u = ac["usage"]
             tokens = f"in={u['input']} out={u['output']}"
@@ -175,7 +189,7 @@ def main() -> None:
     agent = DMAgent(state)
 
     print("=" * 60)
-    print("  DM AGENT — type /state, /trace, /save, or /quit at any time")
+    print("  DM AGENT — type /state, /trace, /full_trace, /save, or /quit at any time")
     print(f"  Scenario: {args.scenario}")
     print("=" * 60)
     mode = _launch_mode(state)
@@ -202,6 +216,9 @@ def main() -> None:
             continue
         if player == "/trace":
             print_full_trace(agent.full_trace)
+            continue
+        if player == "/full_trace":
+            print_full_trace_verbose(agent.full_trace)
             continue
         if player.startswith("/save"):
             parts = player.split(maxsplit=1)

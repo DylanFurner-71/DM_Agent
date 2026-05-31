@@ -166,14 +166,6 @@ def _usage_dict(usage) -> dict:
     return d
 
 
-def _usage_str(usage) -> str:
-    parts = [f"in={usage.input_tokens}", f"out={usage.output_tokens}"]
-    if getattr(usage, "cache_read_input_tokens", 0):
-        parts.append(f"cache_read={usage.cache_read_input_tokens}")
-    if getattr(usage, "cache_creation_input_tokens", 0):
-        parts.append(f"cache_write={usage.cache_creation_input_tokens}")
-    return " ".join(parts)
-
 
 _NARRATE_ONLY = (
     "Narrate what just happened in 1–3 sentences of in-world prose. "
@@ -298,7 +290,6 @@ class DMAgent:
         """Tool-use phase for one action. Runs the loop; state mutates; no narration."""
         self.messages.append({"role": "user", "content": prompt})
         for _ in range(MAX_TOOL_HOPS):
-            print("  [thinking...]", flush=True)
             _t0 = time.monotonic()
             resp = self.client.messages.create(
                 model=self.model,
@@ -308,7 +299,6 @@ class DMAgent:
                 messages=self.messages,
             )
             _elapsed = time.monotonic() - _t0
-            print(f"  [thinking done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
             self.api_stats.append({"phase": "thinking", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
             if resp.stop_reason != "tool_use":
@@ -316,7 +306,6 @@ class DMAgent:
             tool_results = []
             for block in resp.content:
                 if block.type == "tool_use":
-                    print(f"  [tool: {block.name}]", flush=True)
                     result = tools.dispatch(block.name, block.input, self.state)
                     self.tool_trace.append({"name": block.name, "input": block.input, "result": result})
                     tool_results.append({
@@ -329,7 +318,6 @@ class DMAgent:
     def _narrate(self) -> str:
         """Narration phase: single text-only call; returns 1-3 in-world sentences."""
         self.messages.append({"role": "user", "content": _NARRATE_ONLY})
-        print("  [narrating...]", flush=True)
         _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
@@ -338,7 +326,6 @@ class DMAgent:
             messages=self.messages,  # no tools= → text only
         )
         _elapsed = time.monotonic() - _t0
-        print(f"  [narrating done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
         self.api_stats.append({"phase": "narrating", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
@@ -362,7 +349,6 @@ class DMAgent:
             "you do?' — not a combat-turn prompt."
         )
         self.messages.append({"role": "user", "content": prompt})
-        print("  [narrating combat close...]", flush=True)
         _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
@@ -371,7 +357,6 @@ class DMAgent:
             messages=self.messages,
         )
         _elapsed = time.monotonic() - _t0
-        print(f"  [narrating combat close done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
         self.api_stats.append({"phase": "narrating_combat_close", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
@@ -409,7 +394,6 @@ class DMAgent:
             f"{action_list}"
         )
         self.messages.append({"role": "user", "content": prompt})
-        print(f"  [narrating {n} combat beat(s)...]", flush=True)
         _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
@@ -418,7 +402,6 @@ class DMAgent:
             messages=self.messages,
         )
         _elapsed = time.monotonic() - _t0
-        print(f"  [narrating {n} combat beat(s) done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
         self.api_stats.append({"phase": f"narrating_combat_{n}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
@@ -470,7 +453,6 @@ class DMAgent:
                 "follows, what was lost. No tool calls. No prompts. No meta-commentary."
             )
         self.messages.append({"role": "user", "content": prompt})
-        print("  [narrating epilogue...]", flush=True)
         _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
@@ -479,7 +461,6 @@ class DMAgent:
             messages=self.messages,
         )
         _elapsed = time.monotonic() - _t0
-        print(f"  [narrating epilogue done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
         self.api_stats.append({"phase": "narrating_epilogue", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
