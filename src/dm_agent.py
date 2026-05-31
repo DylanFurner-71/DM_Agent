@@ -103,6 +103,14 @@ marked hidden. After revealing a clue, record the fact learned with set_quest_fl
 healing a specific amount yourself — the tool rolls and applies it.
 - Drinking a potion or using an item in combat costs that character's action, exactly like an \
 attack. Only the active combatant may do it, on their turn.
+- SOCIAL — talking a foe down. When the party tries to persuade or intimidate a HOSTILE NPC into \
+standing down, call influence_npc with the approach; the engine rolls against that NPC's authored \
+difficulty and applies the result. Never decide a negotiation's outcome yourself or flip a \
+disposition in narration — only influence_npc (or an attack) changes it. A success makes the NPC \
+non-hostile: it stands down, and if it was the last hostile the engine ends combat. A non-hostile \
+NPC takes no hostile action on its turn — narrate it standing aside. Each NPC can be swayed once; \
+a failed or refused attempt cannot be retried — narrate the refusal and move on. \
+Attacking a non-hostile NPC makes it hostile again.
 
 TWO-PHASE PROTOCOL — every action uses two separate prompts:
 TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
@@ -218,10 +226,12 @@ class DMAgent:
             "party": party,
         }
         if s.npcs:
-            snap["npcs"] = {
-                n.name: {"hp": f"{n.hp}/{n.max_hp}", "hostile": n.hostile}
-                for n in s.npcs.values()
-            }
+            def _npc_entry(n):
+                entry = {"hp": f"{n.hp}/{n.max_hp}", "hostile": n.hostile}
+                if n.social_attempted:
+                    entry["social_attempted"] = True
+                return entry
+            snap["npcs"] = {n.name: _npc_entry(n) for n in s.npcs.values()}
         if s.current_scene:
             snap["current_scene"] = s.current_scene
             if s.scenes:

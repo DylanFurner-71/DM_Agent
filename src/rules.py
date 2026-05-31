@@ -13,10 +13,18 @@ from __future__ import annotations
 
 import random
 import re
+from collections import deque
 from dataclasses import dataclass
 
 # Module-level RNG so tests can seed it deterministically.
 _rng = random.Random()
+_forced: deque[int] = deque()
+
+
+def force_rolls(values: list[int]) -> None:
+    """Queue exact roll values consumed one-per-die before falling back to _rng (tests only)."""
+    _forced.clear()
+    _forced.extend(values)
 
 
 def seed(value: int) -> None:
@@ -49,7 +57,7 @@ def roll(notation: str) -> RollResult:
     modifier = int(m.group(3).replace(" ", "")) if m.group(3) else 0
     if count < 1 or count > 100 or sides < 2 or sides > 1000:
         raise ValueError(f"Unreasonable dice: {notation!r}")
-    rolls = [_rng.randint(1, sides) for _ in range(count)]
+    rolls = [_forced.popleft() if _forced else _rng.randint(1, sides) for _ in range(count)]
     return RollResult(notation, rolls, modifier, sum(rolls) + modifier)
 
 

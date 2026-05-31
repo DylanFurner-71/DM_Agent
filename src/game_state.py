@@ -82,6 +82,8 @@ class NPC:
     hostile: bool = True
     ability_modifiers: dict[str, int] = field(default_factory=dict)
     inventory: list[str] = field(default_factory=list)
+    disposition_dc: int | None = None   # None = cannot be reasoned with
+    social_attempted: bool = False      # one persuasion attempt allowed per NPC
 
     @property
     def is_down(self) -> bool:

@@ -323,6 +323,29 @@ TOOLS = [
             "required": ["character", "item"],
         },
     },
+    {
+        "name": "influence_npc",
+        "description": (
+            "Attempt to sway a hostile NPC through persuasion or intimidation. "
+            "Rolls Charisma against the NPC's disposition_dc; on success the NPC turns non-hostile. "
+            "Each NPC allows exactly one attempt — the result is permanent whether it succeeds or fails. "
+            "Invalid if: the NPC is already down, not hostile, has no disposition_dc (immovable), "
+            "or a social attempt was already made. "
+            "In combat this costs the character's action and is turn-guarded. "
+            "Out of combat the guards no-op. "
+            "On a validation failure the action guard is undone so the character keeps their turn. "
+            "The engine rolls and applies the result atomically — never call skill_check separately."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member making the attempt"},
+                "npc":       {"type": "string", "description": "Name of the NPC to influence"},
+                "approach":  {"type": "string", "enum": ["persuade", "intimidate"], "description": "The social approach taken"},
+            },
+            "required": ["character", "npc", "approach"],
+        },
+    },
 ]
 
 
@@ -475,6 +498,10 @@ def dispatch(name: str, args: dict, state) -> dict:
             state.record(f"{attacker.name} attacks {target.name}: {'hit' if res['hit'] else 'miss'}")
             if auto_selected:
                 res["auto_target"] = target.name
+            if res["hit"] and hasattr(target, "hostile") and not target.hostile:
+                target.hostile = True
+                state.record(f"{target.name} provoked — now hostile")
+                res["provoked"] = True
         else:
             state.action_used = False  # invalid action — undo guard; character stays active
         return res
@@ -915,6 +942,52 @@ def dispatch(name: str, args: dict, state) -> dict:
         character.inventory.pop(idx)
         state.record(f"{character.name} uses {item_key}: {res.get('effect')} ({res})")
         return res
+
+    if name == "influence_npc":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state."}
+        npc = state.find_actor(args["npc"])
+        if not npc or not hasattr(npc, "hostile"):
+            return {"ok": False, "error": f"Unknown NPC {args['npc']!r}; call get_state."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat is starting this turn — wait for the initiative order before acting."}
+        err = _turn_guard(character.name, state) or _action_guard(state)
+        if err:
+            return err
+        if npc.is_down:
+            state.action_used = False
+            return {"ok": False, "reason": "target_down", "error": f"{npc.name} is already down."}
+        if not npc.hostile:
+            state.action_used = False
+            return {"ok": False, "reason": "not_hostile", "error": f"{npc.name} is not hostile."}
+        if npc.disposition_dc is None:
+            state.action_used = False
+            return {"ok": False, "reason": "immovable", "error": f"{npc.name} cannot be reasoned with."}
+        if npc.social_attempted:
+            state.action_used = False
+            return {"ok": False, "reason": "already_attempted", "error": f"{npc.name} will not be moved further."}
+        approach = args.get("approach", "persuade")
+        res = rules.skill_check(character, "cha", npc.disposition_dc)
+        npc.social_attempted = True
+        if res["success"]:
+            npc.hostile = False
+        state.record(
+            f"{character.name} {approach}s {npc.name} (DC {npc.disposition_dc}): "
+            f"{'success' if res['success'] else 'failure'} — now_hostile={npc.hostile}"
+        )
+        return {
+            "ok": True,
+            "character": character.name,
+            "npc": npc.name,
+            "approach": approach,
+            "roll": res["roll"],
+            "total": res["total"],
+            "dc": res["dc"],
+            "success": res["success"],
+            "now_hostile": npc.hostile,
+        }
 
     if name == "take_item":
         item_arg = args.get("item", "").strip().lower()

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .dm_agent import DMAgent
 from .game_state import GameState
+from .rules import CONSUMABLES
 
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
 SAVE_DIR = Path("saves")
@@ -85,7 +86,10 @@ def print_state(state: GameState) -> None:
         slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
         status = ", ".join(c.conditions) or "ok"
         print(f"  {c.name}: HP {c.hp}/{c.max_hp} | slots {slots} | {status}")
-        print(f"    Inventory: {', '.join(c.inventory) if c.inventory else '—'}")
+        def _fmt_item(item: str) -> str:
+            return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
+        inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
+        print(f"    Inventory: {inv}")
         if c.spells:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
             print(f"    Spells{ability}: {', '.join(c.spells)}")
