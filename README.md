@@ -103,29 +103,8 @@ persistent campaign across sessions, image generation, voice, a polished GUI,
 procedural map generation. Note them in the README as "future work" — that reads
 as judgment, not omission.
 
-## Extend it with Claude Code
-
-Good next prompts to hand Claude Code, in order:
-
-- "Add a `skill_check` tool: roll d20 + a named ability modifier against a DC, and
-  surface the modifiers on `Character`."
-- "Add an `initiative` system so combat resolves in turn order, and have the DM
-  run NPC turns automatically."
-- "Add a tool-call trace: log every tool name + result per turn and print it with
-  a `/trace` command, so the agent's decisions are visible."
-- "Write an integration test that mocks the Anthropic client and asserts the agent
-  re-prompts after a failed `cast_spell` instead of narrating success."
 
 ## Mechanics note
 
 Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0). Expand `rules.SRD_RULES`
 and the combat math as you go.
-
-
-Design decision: batch NPC turn narration into a single model call
-Decision. Combat narration is split — the player's own action is narrated in its own dedicated call, while all auto-run NPC actions for the cycle are narrated together in one call (fed an ordered list, one beat per action) — instead of one narration call per resolved action.
-Why. Per-action narration made model round-trips scale with combatant count, so a two-goblin room (scene 2) ran noticeably slower than a one-goblin room (scene 1). Batching makes NPC narration a constant single call regardless of how many NPCs act, cutting per-round latency and token cost.
-The trade-off. This trades a reliability guarantee for speed. Per-action narration was introduced specifically to stop the model dropping, merging, or reordering beats — when each call holds exactly one beat, it physically can't. Batching NPC beats back into one call reintroduces some of that risk for NPC actions: the model could drop or merge a goblin's beat even though the engine applied its effect, producing a narration/engine mismatch (HP changed in state, no prose explaining it). We accept that weaker guarantee for NPCs but deliberately keep the player's own action on the strong, per-action path, because a dropped player-action beat is the worst version of that bug.
-Scope — what's unaffected. This is purely a narration-presentation change. Mechanical resolution is untouched: each NPC action still runs its own tool call, its own next_turn, and all enforcement (turn ownership, action economy, rolled==applied). Engine state stays authoritative regardless of how narration is grouped, so the worst case is incomplete prose, never wrong numbers.
-Guardrails. Feed the batched call the explicit ordered list with "one beat per action, in order"; keep the mocked-client test asserting the batched call receives every NPC action in resolution order; optionally add a cheap check that the beat count matches the NPC-action count, to catch a silently dropped beat.
-Reversibility. Localized to the narration step in dm_agent.py — easy to revert to per-action, or make it conditional (batch above N NPCs, per-action at or below). Low lock-in, so revisit if you ever run large multi-enemy encounters, where drop/reorder risk grows with batch size.
