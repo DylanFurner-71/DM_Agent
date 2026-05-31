@@ -338,6 +338,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         attacker = state.find_actor(args["attacker"])
         if not attacker:
             return {"ok": False, "error": "Unknown attacker; call get_state to see valid names."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat is starting this turn — wait for the initiative order before acting."}
         err = _turn_guard(attacker.name, state) or _action_guard(state)
         if err:
             return err
@@ -358,6 +361,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         caster = state.find_actor(args["caster"])
         if not caster:
             return {"ok": False, "error": "Unknown caster; call get_state."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat is starting this turn — wait for the initiative order before acting."}
         err = _turn_guard(caster.name, state) or _action_guard(state)
         if err:
             return err
@@ -531,6 +537,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.combat_index = 0
         state.combat_round = 1
         state.action_used = False
+        state.combat_starting = True   # barrier: deny action tools for rest of this player _execute
         active_key = ordered[0]
         state.record(f"combat started round 1, order: {ordered}, first: {active_key}")
         return {"ok": True, "combat_order": ordered, "active": active_key, "active_name": all_actors[active_key].name, "round": 1}
@@ -574,6 +581,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         character = state.find_actor(args["character"])
         if not character:
             return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat is starting this turn — wait for the initiative order before acting."}
         err = _turn_guard(character.name, state)
         if err:
             return err

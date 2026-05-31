@@ -79,7 +79,12 @@ No meta-commentary. One action per call.
 
 COMBAT FLOW:
 1. STARTING: Before the first attack or offensive spell, call `start_combat` with every \
-participant. Never call `attack` or `cast_spell` offensively before `start_combat`.
+participant. Never call `attack` or `cast_spell` offensively before `start_combat`. \
+`start_combat` is the TERMINAL call for the input that triggers it — once you call it, \
+do NOT also call `attack`, `cast_spell`, `skill_check`, or any other action tool in \
+the same [Tool-use phase]; the engine will deny it with reason "combat_starting". \
+Announce the initiative order from the result and stop; the engine runs any leading NPC \
+turns and then prompts the first PC.
 2. TURN ORDER: `next_turn` is not available to you — the engine advances the pointer. \
 The preamble shows "[Combat: Round N — Name's turn]" so you always know who is active. \
 Only that combatant may act; the tools enforce this and return ok=false if you try to \
@@ -367,6 +372,8 @@ class DMAgent:
                     else:
                         targets = ", ".join(candidates[:-1]) + f", or {candidates[-1]}"
                     return f"{name}, name your target — {targets}?"
+        if any(c["name"] == "start_combat" and c["result"].get("ok") for c in self.tool_trace):
+            return f"{name}, you're up — what do you do?"
         return f"{name}, what do you do?"
 
     def take_turn(self, player_input: str) -> str:
@@ -385,6 +392,7 @@ class DMAgent:
         """
         self.tool_trace = []
         self.state.turn += 1
+        self.state.combat_starting = False  # clear any stale barrier from a prior turn
 
         # Reset to a fresh bounded context; _execute will append this turn's messages.
         self.messages = self._build_turn_context()
@@ -399,6 +407,7 @@ class DMAgent:
         trace_len = len(self.tool_trace)
         self._execute(player_prompt)
         self._maybe_end_combat()
+        self.state.combat_starting = False  # clear barrier before NPC loop so NPCs can act
 
         # Check point 1: game_over from player phase (victory via move_scene, or party wipe).
         if self.state.game_over:

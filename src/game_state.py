@@ -91,6 +91,9 @@ class GameState:
     combat_initiatives: dict[str, int] = field(default_factory=dict)  # {key: initiative_total}
     game_over: bool = False
     game_outcome: str = ""  # "" | "victory" | "defeat"
+    # Transient runtime flag — set when start_combat fires this turn so action tools
+    # cannot also resolve in the same player _execute phase.  Not serialized.
+    combat_starting: bool = False
 
     # --- lookup helpers -------------------------------------------------
     def find_actor(self, name: str):

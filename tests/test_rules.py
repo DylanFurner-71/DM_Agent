@@ -529,6 +529,7 @@ def test_turn_guard_blocks_non_active_attacker():
     rules.seed(0)
     gs = _make_combat_state()
     res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     active_key = res["active"]
     # Pick a party member who is NOT active to try attacking.
     non_active = next(k for k in ("aldric", "wisp") if k != active_key)
@@ -544,6 +545,7 @@ def test_turn_guard_allows_active_attacker():
     # Give Aldric a guaranteed-high initiative so he's first.
     gs.party["aldric"].ability_modifiers["dex"] = 100
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "aldric"
     result = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
     assert result["ok"] is True
@@ -561,6 +563,7 @@ def test_turn_guard_blocks_cast_spell_out_of_turn():
     gs = _make_combat_state()
     gs.party["wisp"].spell_slots = {1: 2}
     res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     active_key = res["active"]
     # If Wisp is not active, casting should be rejected.
     if active_key != "wisp":
@@ -574,6 +577,7 @@ def test_action_guard_blocks_second_attack():
     gs = _make_combat_state()
     gs.party["aldric"].ability_modifiers["dex"] = 100  # guaranteed first
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "aldric"
 
     res1 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
@@ -596,6 +600,7 @@ def test_second_attack_blocked_hp_unchanged():
     gs.npcs["snik"].hp = gs.npcs["snik"].max_hp = 20    # enough HP to survive
 
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "aldric"
 
     res1 = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
@@ -614,6 +619,7 @@ def test_action_guard_blocks_second_cast():
     gs.party["wisp"].spell_slots = {1: 2}
     gs.party["wisp"].ability_modifiers["dex"] = 100  # Wisp first
     tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "wisp"
 
     res1 = tools.dispatch("cast_spell", {
@@ -634,6 +640,7 @@ def test_next_turn_resets_action_flag():
     gs = _make_combat_state()
     gs.party["aldric"].ability_modifiers["dex"] = 100
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
 
     tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
     assert gs.action_used is True
@@ -1935,6 +1942,7 @@ def test_spell_ambiguous_target_asks():
     slots_before = gs.party["wisp"].spell_slots[1]
 
     tools.dispatch("start_combat", {"combatants": ["wisp", "grik", "narl"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "wisp"
 
     res = tools.dispatch("cast_spell", {
@@ -2040,6 +2048,7 @@ def test_attack_ambiguous_target_asks():
     narl_hp = gs.npcs["narl"].hp
 
     tools.dispatch("start_combat", {"combatants": ["aldric", "grik", "narl"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier after player phase
     assert gs.combat_order[0] == "aldric"
 
     res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
@@ -2723,6 +2732,130 @@ def test_state_snapshot_includes_exits():
 
     assert "exits" in snap
     assert snap["exits"] == {"the dark passage ahead": "ember_chamber"}
+
+
+# --- combat_starting barrier -------------------------------------------------
+
+def test_start_combat_barrier_blocks_attack():
+    """After start_combat fires, attack returns ok=False reason=combat_starting;
+    HP is unchanged and action_used stays False."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"],
+                                   ability_modifiers={"dex": 100}, proficiency_bonus=2)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_starting is True
+
+    hp_before = gs.npcs["snik"].hp
+    res = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik", "weapon": "mace"}, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "combat_starting"
+    assert gs.npcs["snik"].hp == hp_before   # no damage
+    assert gs.action_used is False            # turn not consumed
+
+
+def test_start_combat_barrier_blocks_cast_spell():
+    """After start_combat fires, cast_spell returns ok=False reason=combat_starting;
+    spell slot is unchanged and action_used stays False."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"],
+                                  ability_modifiers={"dex": 100})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
+
+    slots_before = gs.party["wisp"].spell_slots[1]
+    hp_before = gs.npcs["snik"].hp
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp", "spell_level": 1, "spell_name": "magic_missile", "target": "Snik",
+    }, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "combat_starting"
+    assert gs.npcs["snik"].hp == hp_before              # no damage
+    assert gs.party["wisp"].spell_slots[1] == slots_before  # no slot consumed
+    assert gs.action_used is False
+
+
+def test_closing_prompt_youre_up_after_start_combat():
+    """When start_combat fires this turn and a PC is active, _closing_prompt uses
+    the 'you're up' variant instead of the generic 'what do you do?'."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
+    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 0})
+
+    sc_result = tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    agent = _agent_with_trace(gs, [
+        {"name": "start_combat", "input": {"combatants": ["aldric", "snik"]}, "result": sc_result},
+    ])
+    prompt = agent._closing_prompt()
+
+    assert prompt is not None
+    assert "Aldric" in prompt
+    assert "you're up" in prompt
+
+
+def test_take_turn_start_combat_defers_attack():
+    """End-to-end: a player input that calls start_combat AND attack in the same
+    tool-use phase has the attack silently blocked (combat_starting barrier).
+    The engine then prompts the first PC with the 'you're up' variant."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100},
+                                   inventory=["mace"], proficiency_bonus=2)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 0})
+
+    # Model returns two tool_use blocks in one hop: start_combat then attack.
+    sc_block = MagicMock()
+    sc_block.type = "tool_use"; sc_block.id = "t1"
+    sc_block.name = "start_combat"; sc_block.input = {"combatants": ["aldric", "snik"]}
+
+    atk_block = MagicMock()
+    atk_block.type = "tool_use"; atk_block.id = "t2"
+    atk_block.name = "attack"; atk_block.input = {"attacker": "Aldric", "weapon": "mace"}
+
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [sc_block, atk_block]
+
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"; narr_block.text = "Torchlight flickers as steel rings out — combat begins."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("move toward the goblin and attack")
+
+    # Attack was blocked — Snik's HP must be untouched.
+    assert gs.npcs["snik"].hp == 12
+
+    # Barrier rejection is in the trace.
+    atk_calls = [c for c in agent.tool_trace if c["name"] == "attack"]
+    assert len(atk_calls) == 1
+    assert atk_calls[0]["result"]["ok"] is False
+    assert atk_calls[0]["result"]["reason"] == "combat_starting"
+
+    # action_used is False — the blocked attack did not consume the turn.
+    assert gs.action_used is False
+
+    # Closing prompt addresses the first PC with the initiative variant.
+    assert "Aldric" in narration
+    assert "you're up" in narration
 
 
 if __name__ == "__main__":
