@@ -168,3 +168,111 @@ STEP 1 — consumables catalog + effect application (rules.py)
 - NOTE (your call, flag in DECISIONS.md): there is no max-spell-slot field, so restore_slot can't
   cap at a character's starting maximum. For rare single-use items a simple +1 is fine; if you'd
   rather cap it, add max_spell_slots to Character and clamp. Recommend uncapped +1 for now.
+
+
+  ## ADR: Target agency is soft-enforced
+
+**Status:** Accepted
+
+**Context:** When a player attacks or casts without naming a target and more than one
+living hostile is present, the player — not the engine or the model — should choose. But a
+tool call erases provenance: the engine cannot tell a target the *player* named from one the
+*model* guessed and filled in. There is no engine-side signal to validate against.
+
+**Decision:** Ship target selection as a three-part tripod — schema (`defender`/`target`
+optional), dispatch (a shared resolver that auto-resolves the sole living hostile and returns
+`ok=false reason "ambiguous_target"` with a candidate list when several exist), and a
+system-prompt rule (omit the target for *player* actions when unnamed with multiple hostiles;
+NPCs always name a target, and the engine auto-picks for them). Candidates are the attacker's
+*enemies* (a PC's are hostile NPCs; a hostile NPC's are the living party); the ambiguous→ask
+path is PC-only.
+
+**Consequences:** This is the project's one soft-enforced rule. The engine cannot detect a
+violation — a model that fills in a valid target produces a tool call identical to a player
+naming one — so the prompt rule is load-bearing, not belt-and-suspenders. Accepted as an
+unenforceable residual; everything else (who is a legal target, single vs. multiple) stays hard.
+
+## ADR: quest_flags hold narrative facts only (soft boundary)
+
+**Status:** Accepted
+
+**Context:** quest_flags is the durable cross-scene fact store. Two failure modes: the model
+using it as a backdoor for mechanical state, and junk-drawering it with routine actions.
+
+**Decision:** quest_flags records narrative/progress facts with no dedicated home — never
+mechanical values. Two layers. Hard: a reserved-key denylist (`hp, max_hp, ac, spell_slots,
+damage, initiative`) plus JSON-primitive value validation in dispatch. Soft: a prompt rule on
+*what qualifies*, framed as action-vs-discovery — record a discovery, change, or commitment a
+later turn must stay consistent with, never the act itself. Test: "would a later turn
+contradict itself if this were forgotten?"
+
+**Consequences:** The denylist stops obvious mechanical footguns but cannot catch a clever
+proxy (e.g. a flag like `warden_favor` quietly used as a combat modifier) — that boundary is
+prompt-only and unenforceable at the engine. What's flag-worthy is the model's judgment. The
+rule was recalibrated once after observing over-flagging (`approached_snik`): the original
+"flags are rare, when in doubt set none" suppressed legitimate discoveries, so it became the
+action-vs-discovery discriminator, which keeps routine actions out without silencing real clues.
+
+## ADR: Loot is author-placed and obvious-on-look
+
+**Status:** Accepted
+
+**Context:** Loot must be findable without the model inventing items, and without reveals
+gated behind failable checks the model improvises — a bad roll on the run's only healing is a
+feel-bad lockout.
+
+**Decision:** Scene loot is author-placed (declared in the scene's `loot` list) and validated:
+`take_item` grants only declared loot, so the model cannot conjure treasure (mirrors exits and
+NPC templates). Present loot is obvious-on-look — the player choosing to search or examine is
+the gate; the engine and model do NOT gate present loot behind `skill_check` or `roll_dice`. A
+check applies only to content explicitly marked hidden. Generalized into a broad reveal
+principle: never gate authored content (loot or written clues) behind an invented check.
+
+**Consequences:** This replaced earlier behavior where the model invented failable checks to
+gate reveals, locking the party out of load-bearing items on a low roll. The reveal gate is now
+exploration *intent*, not a die roll. The "reveal through exploration" half is prompt-driven
+(soft); the `take_item` validation that nothing un-declared can be granted is hard.
+
+## ADR: Cross-scene resource economy — tight provisioning + loot, no rest
+
+**Status:** Accepted
+
+**Context:** Spell slots only deplete and never refresh, so casters run dry across scenes. A
+recovery model was needed for a multi-scene run to function.
+
+**Decision:** Tight starting provisions plus loot-as-recovery, and no formal mid-dungeon rest.
+The party starts lean (the caster rations); recovery comes from found consumables — HP potions
+and a rare slot-restorer. Using a consumable in combat costs that character's action.
+
+**Consequences:** HP recovery and slot recovery are distinct problems; since the caster issue
+is a *slot* problem, the slot-restoring item is load-bearing (HP potions alone don't solve it).
+Chosen over formal rests (adds a mechanic and a rest-spam pacing problem, overkill for a 2–3
+scene demo) and over pure provisioning (back-half grind). The choice is additive and
+reversible: a rest layer can be added later — naturally at the session boundary for
+multi-session play — without reworking loot; the cost of adding it later is rebalancing, not
+code. The in-combat action cost is what keeps the valve from quietly undoing the tightness.
+
+## ADR: Flag-gated transitions and endings
+
+**Status:** Accepted
+
+**Context:** quest_flags were recorded but gated nothing — `move_scene` validated only against
+the scene graph, so a learned password or a held key could never actually block progress.
+
+**Decision:** Exits and terminal endings may require a quest flag. An exit value is either a
+bare `scene_key` (ungated) or `{to, requires, denied}`; a terminal scene may carry
+`exit_requires`/`exit_denied`. `move_scene` rejects a gated way (`ok=false, reason "locked"`,
+with the `denied` text) unless the required flag is truthy. A gated terminal scene defers its
+victory to the gated move rather than auto-winning at combat-end; ungated terminal scenes
+auto-win as before.
+
+**Consequences:** Gating is on flag presence/truthiness, not value (value-matching via
+`{flag, equals}` is a noted extension). Recording a flag and gating on it are now separate,
+working capabilities. When a gate leads to a real scene (the iron door → iron_chamber), the
+per-exit `requires` is the clean mechanism and the terminal `exit_requires` path goes unused;
+the terminal gate exists for endings with no scene beyond. Backward compatible: string exits
+and ungated terminals are unchanged.
+
+KNOWN ROUGH EDGE (leave for now): a de-escalated NPC stays in combat_order if other hostiles
+remain, so its turn still comes up — the system-prompt rule above handles it (narrate it standing
+aside). Cleanly removing it from the order is a later refinement; do not modify next_turn here.

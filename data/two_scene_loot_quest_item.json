@@ -5,8 +5,13 @@
       "location": "The collapsed entrance of the Ashen Barrow",
       "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper, blade already drawn. Slumped in the rubble lies an earlier scout, long dead, a water-stained journal still clutched in one hand — its final legible entry warns that the iron door in the deep chamber yields to no key, only to a spoken word: 'ashfall.' Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
       "npcs": {
-        "snik": { "template": "goblin", "name": "Snik", "hostile": true }
-      },
+        "snik": {
+          "template": "goblin",
+          "name": "Snik",
+          "hostile": true,
+          "disposition_dc": 13,
+          "alertness_dc": 12
+        }      },
       "loot": ["healing_potion", "pearl_of_power"],
       "exits": {
         "the passage descending deeper into the barrow": "ember_chamber"
@@ -16,11 +21,13 @@
       "location": "The Ashen Barrow — The Ember Chamber",
       "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
       "npcs": {
-        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18 },
-        "narl": { "template": "goblin", "name": "Narl", "hostile": true }
+        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18, "alertness_dc": 14},
+        "narl": { "template": "goblin", "name": "Narl", "hostile": true, "alertness_dc": 12 }
       },
       "loot": ["healing_potion"],
-      "exits": {}
+      "exits": {},
+      "exit_requires": "iron_door_password",
+      "exit_denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
     }
   },
   "party": {

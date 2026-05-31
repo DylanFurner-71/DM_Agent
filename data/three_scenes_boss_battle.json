@@ -1,0 +1,144 @@
+{
+    "current_scene": "barrow_entrance",
+    "scenes": {
+        "barrow_entrance": {
+            "location": "The collapsed entrance of the Ashen Barrow",
+            "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper, blade already drawn. Slumped in the rubble lies an earlier scout, long dead, a water-stained journal still clutched in one hand — its final legible entry warns that the iron door in the deep chamber yields to no key, only to a spoken word: 'ashfall.' Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+            "npcs": {
+                "snik": {
+                    "template": "goblin",
+                    "name": "Snik",
+                    "hostile": true,
+                    "disposition_dc": 13,
+                    "alertness_dc": 12
+                }
+            },
+            "loot": [
+                "healing_potion",
+                "pearl_of_power"
+            ],
+            "exits": {
+                "the passage descending deeper into the barrow": "ember_chamber"
+            }
+        },
+        "ember_chamber": {
+            "location": "The Ashen Barrow — The Ember Chamber",
+            "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
+            "npcs": {
+                "grik": {
+                    "template": "goblin",
+                    "name": "Grik",
+                    "hostile": true,
+                    "max_hp": 18,
+                    "alertness_dc": 14
+                },
+                "narl": {
+                    "template": "goblin",
+                    "name": "Narl",
+                    "hostile": true,
+                    "alertness_dc": 12
+                }
+            },
+            "loot": [
+                "healing_potion"
+            ],
+            "exits": {},
+            "exit_requires": "iron_door_password",
+            "exit_denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
+        },
+        "iron_chamber": {
+            "location": "The Ashen Barrow — The Iron Chamber",
+            "scene": "Beyond the iron door the air turns to grit and grave-cold. The chamber is a perfect circle of black stone, its floor ankle-deep in fine grey ash that drinks every footfall. At its center, on a throne of fused bone, sits a figure wound in tarnished mail and centuries of dust — the Ash Warden, the thing the dead scout's journal feared. It does not stir. But the moment Aldric's torchlight spills across the threshold, the warden's hollow sockets kindle with a slow answering ember and a sound like settling cinders climbs out of its ribs — exactly as the journal warned: keep the flame away. Behind the throne, half-drowned in ash, a reliquary of tarnished silver catches the light, the thing this barrow was raised to keep.",
+            "npcs": {
+                "ash_warden": {
+                    "template": "skeleton",
+                    "name": "The Ash Warden",
+                    "hostile": true,
+                    "max_hp": 30,
+                    "ac": 15,
+                    "attack_bonus": 6,
+                    "ability_modifiers": {
+                        "str": 3,
+                        "dex": 2,
+                        "con": 3,
+                        "int": -2,
+                        "wis": 0,
+                        "cha": -2
+                    },
+                    "inventory": [
+                        "greataxe"
+                    ]
+                }
+            },
+            "loot": [
+                "healing_potion"
+            ],
+            "exits": {}
+        }
+    },
+    "party": {
+        "aldric": {
+            "name": "Aldric",
+            "level": 3,
+            "max_hp": 24,
+            "hp": 24,
+            "ac": 16,
+            "attack_bonus": 5,
+            "spell_slots": {
+                "1": 2
+            },
+            "ability_modifiers": {
+                "str": 2,
+                "dex": 0,
+                "con": 2,
+                "int": 1,
+                "wis": 3,
+                "cha": 1
+            },
+            "inventory": [
+                "mace",
+                "holy symbol",
+                "torch"
+            ],
+            "conditions": [],
+            "spellcasting_ability": "wis",
+            "spells": [
+                "guiding_bolt"
+            ]
+        },
+        "wisp": {
+            "name": "Wisp",
+            "level": 3,
+            "max_hp": 16,
+            "hp": 16,
+            "ac": 12,
+            "attack_bonus": 4,
+            "spell_slots": {
+                "1": 2,
+                "2": 1
+            },
+            "ability_modifiers": {
+                "str": -1,
+                "dex": 2,
+                "con": 0,
+                "int": 4,
+                "wis": 1,
+                "cha": 2
+            },
+            "inventory": [
+                "dagger",
+                "spellbook",
+                "50ft rope"
+            ],
+            "conditions": [],
+            "spellcasting_ability": "int",
+            "spells": [
+                "magic_missile",
+                "chromatic_orb"
+            ]
+        }
+    },
+    "quest_flags": {},
+    "turn": 0,
+    "log": []
+}
