@@ -1794,6 +1794,109 @@ def test_pc_no_weapon_keeps_unarmed_fallback():
         assert res["damage_detail"].startswith("1d6")
 
 
+# --- apply_dice: atomic roll-and-apply tool ----------------------------------
+
+def test_apply_dice_damage_rolls_and_applies_same():
+    """Engine rolls 2d6 and applies exactly that total (no model step in between).
+    Predict the roll with a parallel Random — not by calling rules.roll, which
+    would advance _rng and diverge from the dispatch call's draw sequence."""
+    import random as _stdlib
+
+    seed = 7
+    preview = _stdlib.Random(seed)
+    predicted = preview.randint(1, 6) + preview.randint(1, 6)   # mirrors roll("2d6")
+
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(name="Hero", max_hp=100, hp=100, ac=12)
+    rules.seed(seed)
+    res = tools.dispatch("apply_dice", {"target": "Hero", "notation": "2d6", "source": "spike trap"}, gs)
+
+    assert res["ok"] is True
+    assert res["roll"] == predicted
+    assert 100 - gs.party["hero"].hp == predicted   # applied == rolled, no clamp
+    assert res["downed"] is False
+
+
+def test_apply_dice_healing_clamps_at_max():
+    """Healing is clamped at max_hp; the full rolled total is still reported."""
+    from unittest.mock import patch
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(name="Hero", max_hp=10, hp=3, ac=12)
+
+    # Force 2d4+2 → [4,4]+2 = 10, which exceeds the 7-point gap to max
+    with patch.object(rules._rng, "randint", side_effect=[4, 4]):
+        res = tools.dispatch("apply_dice", {"target": "Hero", "notation": "2d4+2", "kind": "healing"}, gs)
+
+    assert res["ok"] is True
+    assert res["roll"] == 10            # full roll reported, not the 7-point delta
+    assert gs.party["hero"].hp == 10   # clamped at max_hp, not 3+10=13
+
+
+def test_apply_dice_damage_overkill_floors_at_zero():
+    """Overkill damage floors HP at 0; reported roll is the full amount, not the clamped delta."""
+    from unittest.mock import patch
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(name="Hero", max_hp=20, hp=1, ac=12)
+
+    with patch.object(rules._rng, "randint", side_effect=[6]):
+        res = tools.dispatch("apply_dice", {"target": "Hero", "notation": "1d6", "source": "lava"}, gs)
+
+    assert res["ok"] is True
+    assert res["roll"] == 6         # full roll, not the clamped delta (1)
+    assert gs.party["hero"].hp == 0
+    assert res["downed"] is True
+
+
+def test_apply_dice_bad_notation_rejected():
+    """Invalid dice notation returns ok=False; target HP is unchanged."""
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(name="Hero", max_hp=20, hp=20, ac=12)
+    res = tools.dispatch("apply_dice", {"target": "Hero", "notation": "not_dice"}, gs)
+    assert res["ok"] is False
+    assert gs.party["hero"].hp == 20
+
+
+def test_apply_dice_unknown_target_rejected():
+    """Unknown target name returns ok=False with no state change."""
+    gs = GameState(location="Test")
+    res = tools.dispatch("apply_dice", {"target": "Nobody", "notation": "1d6"}, gs)
+    assert res["ok"] is False
+
+
+def test_modify_hp_fixed_still_works():
+    """modify_hp with fixed integer amounts still damages and heals (regression)."""
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(name="Hero", max_hp=20, hp=20, ac=12)
+
+    res = tools.dispatch("modify_hp", {"target": "Hero", "amount": -5}, gs)
+    assert res["ok"] is True
+    assert gs.party["hero"].hp == 15
+
+    res = tools.dispatch("modify_hp", {"target": "Hero", "amount": 3}, gs)
+    assert res["ok"] is True
+    assert gs.party["hero"].hp == 18
+
+
+def test_roll_dice_applies_nothing():
+    """roll_dice is a pure oracle — it returns a total but changes no actor's HP,
+    spell slots, or conditions (regression: must stay a no-op against tracked state)."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["hero"] = Character(
+        name="Hero", max_hp=20, hp=15, spell_slots={1: 2}, conditions=["prone"],
+    )
+    gs.npcs["goblin"] = NPC(name="Goblin", max_hp=12, hp=12)
+
+    res = tools.dispatch("roll_dice", {"notation": "3d6+2"}, gs)
+
+    assert res["ok"] is True
+    assert "result" in res
+    assert gs.party["hero"].hp == 15
+    assert gs.party["hero"].spell_slots == {1: 2}
+    assert gs.party["hero"].conditions == ["prone"]
+    assert gs.npcs["goblin"].hp == 12
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

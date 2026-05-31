@@ -41,6 +41,11 @@ mace. What does Aldric do?" The engine keeps that character's turn alive; do NOT
 this as a turn change. Never silently substitute a different weapon or spell, and never \
 fabricate a success. (This is distinct from a turn-guard rejection — "it is not X's turn" \
 — which is the engine enforcing order and does advance the pointer.)
+- Any roll that changes tracked state (HP, slots, or conditions) MUST use the tool that \
+rolls AND applies atomically. Weapon damage → `attack`. Spell damage → `cast_spell`. \
+Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only randomness \
+(encounter table, NPC flee direction, coins in a chest) and must NEVER feed `modify_hp`. \
+`modify_hp` accepts flat, known amounts only (e.g. "the mechanism deals exactly 10").
 - When you need exact current numbers (HP, remaining slots, who's present), call \
 `get_state` rather than guessing.
 - Stay in the fiction. Never expose raw tool JSON, internal reasoning, process notes, \

@@ -14,7 +14,13 @@ from .game_state import NPC, expand_npc_entry
 TOOLS = [
     {
         "name": "roll_dice",
-        "description": "Roll dice in standard notation (e.g. '2d6+3', '1d20'). Use this for ALL randomness; never invent a result.",
+        "description": (
+            "Roll dice in standard notation — for fiction or flavor ONLY "
+            "(e.g. random encounter table, which way an NPC flees, coins in a chest). "
+            "NEVER use this for anything that changes HP, slots, or conditions — those have "
+            "dedicated atomic tools: attack (weapon damage), cast_spell (spell damage), "
+            "apply_dice (trap/hazard/potion dice)."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {"notation": {"type": "string", "description": "Dice notation, e.g. '1d20+5'"}},
@@ -65,9 +71,11 @@ TOOLS = [
     {
         "name": "modify_hp",
         "description": (
-            "Apply damage (negative) or healing (positive) for non-spell effects: "
-            "traps, potions, environmental hazards. "
-            "Do NOT use this for spell damage — use cast_spell with spell_name and target instead."
+            "Apply a flat, known amount of damage (negative) or healing (positive) — "
+            "for exact non-dice values ONLY, e.g. 'the lava deals exactly 20' or "
+            "'the potion restores exactly 10 HP'. "
+            "For any dice-rolled amount use apply_dice. "
+            "Do NOT use this for spell damage — use cast_spell instead."
         ),
         "input_schema": {
             "type": "object",
@@ -76,6 +84,27 @@ TOOLS = [
                 "amount": {"type": "integer", "description": "Negative to damage, positive to heal"},
             },
             "required": ["target", "amount"],
+        },
+    },
+    {
+        "name": "apply_dice",
+        "description": (
+            "Roll a dice expression AND apply the result to an actor's HP atomically — "
+            "rolled == applied is guaranteed, the same way attack and cast_spell work. "
+            "Use for ALL dice-based damage or healing from traps, hazards, and potions. "
+            "Never resolve these with roll_dice + modify_hp. "
+            "kind: 'damage' (default) or 'healing'. "
+            "source: optional label for the log (e.g. 'spike trap', 'healing potion')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target":   {"type": "string", "description": "Name of the target actor"},
+                "notation": {"type": "string", "description": "Dice expression, e.g. '2d6', '2d4+2'"},
+                "kind":     {"type": "string", "enum": ["damage", "healing"], "description": "damage (default) or healing"},
+                "source":   {"type": "string", "description": "Optional label for the log, e.g. 'spike trap'"},
+            },
+            "required": ["target", "notation"],
         },
     },
     {
@@ -302,6 +331,38 @@ def dispatch(name: str, args: dict, state) -> dict:
         amount = int(args["amount"])
         res = rules.heal(target, amount) if amount >= 0 else rules.apply_damage(target, -amount)
         return res
+
+    if name == "apply_dice":
+        target = state.find_actor(args["target"])
+        if not target:
+            return {"ok": False, "error": "Unknown target; call get_state."}
+        try:
+            rolled = rules.roll(args["notation"])
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        kind = args.get("kind", "damage")
+        source = args.get("source", "")
+        label = f"{source}: " if source else ""
+        if kind == "healing":
+            applied = rules.heal(target, rolled.total)
+            state.record(f"{label}heal {target.name} {rolled.total} ({rolled.describe()})")
+            return {
+                "ok": True,
+                "target": target.name,
+                "roll": rolled.total,
+                "roll_detail": rolled.describe(),
+                "target_hp": applied["hp"],
+            }
+        applied = rules.apply_damage(target, rolled.total)
+        state.record(f"{label}{target.name} takes {rolled.total} damage ({rolled.describe()})")
+        return {
+            "ok": True,
+            "target": target.name,
+            "roll": rolled.total,
+            "roll_detail": rolled.describe(),
+            "target_hp": applied["hp"],
+            "downed": applied["downed"],
+        }
 
     if name == "set_quest_flag":
         state.quest_flags[args["flag"]] = bool(args.get("value", True))
