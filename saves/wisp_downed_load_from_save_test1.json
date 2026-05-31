@@ -1,0 +1,480 @@
+{
+  "location": "The collapsed entrance of the Ashen Barrow",
+  "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper into the barrow, blade already drawn. Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+  "current_scene": "barrow_entrance",
+  "scenes": {
+    "barrow_entrance": {
+      "location": "The collapsed entrance of the Ashen Barrow",
+      "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper into the barrow, blade already drawn. Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+      "npcs": {
+        "snik": {
+          "template": "goblin",
+          "name": "Snik",
+          "hostile": true,
+          "max_hp": 1000
+        }
+      },
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 3,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "spell_slots": {
+        "1": 2
+      },
+      "ability_modifiers": {
+        "str": 2,
+        "dex": 0,
+        "con": 2,
+        "int": 1,
+        "wis": 3,
+        "cha": 1
+      },
+      "inventory": [
+        "mace",
+        "holy symbol",
+        "torch"
+      ],
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": [
+        "guiding_bolt"
+      ],
+      "death_save_successes": 0,
+      "death_save_failures": 0,
+      "dead": false,
+      "stable": false
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 0,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {
+        "1": 5,
+        "2": 2
+      },
+      "ability_modifiers": {
+        "str": -1,
+        "dex": 2,
+        "con": 0,
+        "int": 4,
+        "wis": 1,
+        "cha": 2
+      },
+      "inventory": [
+        "dagger",
+        "spellbook",
+        "50ft rope"
+      ],
+      "conditions": [
+        "unconscious"
+      ],
+      "spellcasting_ability": "int",
+      "spells": [
+        "magic_missile",
+        "chromatic_orb"
+      ],
+      "death_save_successes": 0,
+      "death_save_failures": 3,
+      "dead": true,
+      "stable": false
+    }
+  },
+  "npcs": {
+    "snik": {
+      "name": "Snik",
+      "max_hp": 1000,
+      "hp": 914,
+      "ac": 13,
+      "attack_bonus": 4,
+      "hostile": true,
+      "ability_modifiers": {
+        "str": -1,
+        "dex": 2,
+        "con": 0,
+        "int": 0,
+        "wis": -1,
+        "cha": -1
+      },
+      "inventory": [
+        "shortsword",
+        "shortbow"
+      ]
+    }
+  },
+  "quest_flags": {},
+  "turn": 22,
+  "log": [
+    "[turn 1] combat started round 1, order: ['aldric', 'snik', 'wisp'], first: aldric",
+    "[turn 2] Aldric attacks Snik: hit",
+    "[turn 2] round 1, turn -> snik (Snik)",
+    "[turn 2] Snik attacks Aldric: miss",
+    "[turn 2] round 1, turn -> wisp (Wisp)",
+    "[turn 3] Wisp attacks Snik: miss",
+    "[turn 3] round 2, turn -> aldric (Aldric)",
+    "[turn 4] Aldric attacks Snik: hit",
+    "[turn 4] round 2, turn -> snik (Snik)",
+    "[turn 4] Snik attacks Aldric: miss",
+    "[turn 4] round 2, turn -> wisp (Wisp)",
+    "[turn 5] Wisp attacks Snik: hit",
+    "[turn 5] round 3, turn -> aldric (Aldric)",
+    "[turn 6] Aldric attacks Snik: hit",
+    "[turn 6] round 3, turn -> snik (Snik)",
+    "[turn 6] Snik attacks Aldric: miss",
+    "[turn 6] round 3, turn -> wisp (Wisp)",
+    "[turn 7] Wisp attacks Snik: miss",
+    "[turn 7] round 4, turn -> aldric (Aldric)",
+    "[turn 8] Aldric attacks Snik: hit",
+    "[turn 8] round 4, turn -> snik (Snik)",
+    "[turn 8] Snik attacks Aldric: hit",
+    "[turn 8] round 4, turn -> wisp (Wisp)",
+    "[turn 9] Wisp attacks Snik: hit",
+    "[turn 9] round 5, turn -> aldric (Aldric)",
+    "[turn 10] Aldric attacks Snik: hit",
+    "[turn 10] round 5, turn -> snik (Snik)",
+    "[turn 10] Snik attacks Aldric: miss",
+    "[turn 10] round 5, turn -> wisp (Wisp)",
+    "[turn 11] Wisp attacks Snik: miss",
+    "[turn 11] round 6, turn -> aldric (Aldric)",
+    "[turn 12] Aldric attacks Snik: hit",
+    "[turn 12] round 6, turn -> snik (Snik)",
+    "[turn 12] Snik attacks Aldric: hit",
+    "[turn 12] round 6, turn -> wisp (Wisp)",
+    "[turn 13] Wisp attacks Snik: miss",
+    "[turn 13] round 7, turn -> aldric (Aldric)",
+    "[turn 14] Aldric attacks Snik: miss",
+    "[turn 14] round 7, turn -> snik (Snik)",
+    "[turn 14] Snik attacks Wisp: miss",
+    "[turn 14] round 7, turn -> wisp (Wisp)",
+    "[turn 15] Wisp attacks Snik: hit",
+    "[turn 15] round 8, turn -> aldric (Aldric)",
+    "[turn 16] Aldric attacks Snik: hit",
+    "[turn 16] round 8, turn -> snik (Snik)",
+    "[turn 16] Snik attacks Wisp: miss",
+    "[turn 16] round 8, turn -> wisp (Wisp)",
+    "[turn 17] Wisp attacks Snik: hit",
+    "[turn 17] round 9, turn -> aldric (Aldric)",
+    "[turn 18] Aldric attacks Snik: hit",
+    "[turn 18] round 9, turn -> snik (Snik)",
+    "[turn 18] Snik attacks Wisp: hit",
+    "[turn 18] round 9, turn -> wisp (Wisp)",
+    "[turn 18] Wisp death save: roll 7 \u2192 failure (S0/F1)",
+    "[turn 18] round 10, turn -> aldric (Aldric)",
+    "[turn 19] Aldric attacks Snik: miss",
+    "[turn 19] round 10, turn -> snik (Snik)",
+    "[turn 19] Snik attacks Aldric: miss",
+    "[turn 19] round 10, turn -> wisp (Wisp)",
+    "[turn 19] Wisp death save: roll 5 \u2192 failure (S0/F2)",
+    "[turn 19] round 11, turn -> aldric (Aldric)",
+    "[turn 20] Aldric attacks Snik: hit",
+    "[turn 20] round 11, turn -> snik (Snik)",
+    "[turn 20] Snik attacks Aldric: hit",
+    "[turn 20] round 11, turn -> wisp (Wisp)",
+    "[turn 20] Wisp death save: roll 8 \u2192 dead (S0/F3)",
+    "[turn 20] round 12, turn -> aldric (Aldric)",
+    "[turn 21] Aldric attacks Snik: hit",
+    "[turn 21] round 12, turn -> snik (Snik)",
+    "[turn 21] Snik attacks Aldric: miss",
+    "[turn 21] skipping wisp (Wisp) \u2014 dead",
+    "[turn 21] round 13, turn -> aldric (Aldric)",
+    "[turn 22] Aldric attacks Snik: hit",
+    "[turn 22] round 13, turn -> snik (Snik)",
+    "[turn 22] Snik attacks Aldric: hit",
+    "[turn 22] skipping wisp (Wisp) \u2014 dead",
+    "[turn 22] round 14, turn -> aldric (Aldric)"
+  ],
+  "transcript": [
+    {
+      "kind": "player",
+      "text": "move forward towards the goblin"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's boots scrape against the damp stone as he advances, torch flame whipping sideways in the sudden draft. Snik bares a mouthful of jagged teeth, shortsword leveled at chest height, yellow eyes darting between the cleric and the pale, swaying figure of Wisp behind him \u2014 sensing weakness, calculating odds."
+    },
+    {
+      "kind": "player",
+      "text": "swing the mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace arcs in a powerful overhead swing, cracking squarely against Snik's collarbone with a satisfying crunch. The goblin staggers back a step, spitting a curse in his raspy tongue \u2014 hurt, but far from finished, his yellow eyes now blazing with fury.\n\nSnarling with rage, Snik lunges forward and drives his shortsword at Aldric's gut \u2014 but the blade skitters harmlessly off the cleric's armour, sparks dancing in the torchlight as the goblin's fury outpaces his aim."
+    },
+    {
+      "kind": "player",
+      "text": "use dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp lunges forward on trembling legs, driving the dagger at Snik with desperate urgency \u2014 but the blade swings wide, slicing nothing but cold air as the goblin sidesteps with contemptuous ease."
+    },
+    {
+      "kind": "player",
+      "text": "use mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace comes down with the full weight of his devotion behind it, crashing against Snik's skull with a brutal crack that echoes off the barrow's stone walls. The goblin's knees buckle, a strangled yelp escaping his twisted lips as he staggers, blood matting the coarse fur at his temple \u2014 still standing, barely, but the arrogance has drained clean from those yellow eyes.\n\nSnik snarls and thrusts his shortsword at Aldric in a wild, desperate lunge \u2014 but the cleric's armour turns the blade aside with a dull scrape of metal on metal, and the goblin's momentum carries him stumbling half a step forward, leaving him dangerously off-balance."
+    },
+    {
+      "kind": "player",
+      "text": "use dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's dagger finds its mark this time \u2014 the blade punches into Snik's side with a wet, satisfying *thwack*, drawing a high-pitched shriek from the goblin. It's a small wound on a surprisingly resilient creature, but Wisp's eyes gleam with grim satisfaction as dark blood wells around the hilt's edge."
+    },
+    {
+      "kind": "player",
+      "text": "use mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric brings the mace down in a thunderous arc, the critical blow landing square on Snik's crown with a resounding crack \u2014 enough force to floor any ordinary foe. Yet the goblin merely staggers, shakes the blood from his eyes, and grins through broken teeth, something unnatural keeping him upright when he should be crumpled on the cold stone floor.\n\nSnik lunges at Aldric with a furious, snarling thrust of his shortsword, but the cleric holds his ground and the blade glances off the chainmail with a hollow clang \u2014 the goblin's wounded arm betraying him at the last moment, his strike carrying all rage and no precision."
+    },
+    {
+      "kind": "player",
+      "text": "dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's dagger stabs forward in a desperate, shaking thrust, but there is nothing left in her spent limbs \u2014 the blade scrapes uselessly against Snik's armour and she lurches sideways, barely catching herself against the barrow wall, breath coming in ragged, rattling gasps."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric drives the mace into Snik's ribs with a focused, powerful blow \u2014 bone cracks and the goblin lets out a sharp, wheezing grunt, lurching backward. Seven points of punishment land clean, yet Snik somehow remains upright, hunched and bleeding, that unnatural vitality still burning in his hateful yellow eyes.\n\nSnik's shortsword finds a gap between Aldric's pauldron and gorget, punching a shallow but stinging wound into the cleric's shoulder \u2014 four points of hot, piercing pain that draw a sharp hiss through Aldric's clenched teeth. The goblin wrenches the blade free with a wet rasp and bares his broken-toothed grin, emboldened by the first blood he's drawn in rounds."
+    },
+    {
+      "kind": "player",
+      "text": "dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp summons the last dregs of her will and drives the dagger into Snik's thigh \u2014 a shallow, desperate jab that draws blood and a snarl from the goblin, but does precious little to slow the unnatural creature. She slumps back against the cold barrow wall, knuckles white around the hilt, her ragged breathing the only sound she can manage."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric brings the mace down in a savage, perfectly-timed arc, the critical blow crunching into Snik's jaw with a spray of black ichor and shattered teeth \u2014 a hit that would drop any mortal creature stone dead. Yet the goblin merely rolls with the impact, spitting a mouthful of ruin onto the barrow floor, and straightens back up with those hateful yellow eyes burning brighter than ever, utterly unmoved by punishment that defies all natural law.\n\nSnik snarls and drives his shortsword at Aldric's throat in a wild, hatred-fuelled lunge \u2014 but the cleric steps inside the blow with practiced ease, the blade skittering harmlessly off his chainmail with a hollow scrape, Snik's broken jaw robbing the strike of any real fury."
+    },
+    {
+      "kind": "player",
+      "text": "swing the dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's trembling arm swings the dagger in a wild, desperate arc \u2014 but her body is nearly spent, and the blade cuts nothing but cold barrow air, skittering off the stone wall in a shower of sparks. Snik doesn't even flinch, those yellow eyes sliding to her with something almost like contempt."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Snik lunges at Aldric with a guttural shriek, shortsword slashing in a vicious diagonal \u2014 but Aldric catches the blow on his forearm, the blade skittering off the chainmail with a hollow ring, the goblin's broken body failing to land the killing stroke it so desperately wants.\n\nSnik's shortsword darts forward with unnatural speed, finding the same wound in Aldric's ribs he opened moments ago \u2014 a cruel, precise thrust that drives four points of piercing agony deep into the cleric's side, staggering him back a half-step against the barrow wall. Aldric's breath comes in short, ragged pulls now, blood darkening the links of his chainmail, but his grip on the mace does not waver."
+    },
+    {
+      "kind": "player",
+      "text": "dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's dagger jabs forward in a last, feeble thrust, but her arm shakes so violently the blade scrapes nothing but cold stone at Snik's feet \u2014 a pitiful swing that draws a wet, gurgling laugh from the goblin's shattered jaw. She is nearly spent, clinging to consciousness by a thread, and Snik knows it."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric swings the mace in a punishing overhead arc, but exhaustion and the blood seeping from his side betray him \u2014 the blow sails wide, glancing off the barrow's stone doorframe with a dull clang that shudders up his arm and leaves Snik untouched, the goblin ducking beneath it with an almost contemptuous ease.\n\nSnik wheels away from Aldric and lunges at Wisp with a feral shriek, shortsword driving straight for her heart \u2014 but the little wizard stumbles sideways on trembling legs and the blade hisses past her ear, close enough to slice a lock of singed hair from her temple, the killing stroke denied by sheer, desperate luck."
+    },
+    {
+      "kind": "player",
+      "text": "dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "With a last, desperate surge of will, Wisp drives the dagger upward into the gap beneath Snik's leather jerkin \u2014 the blade bites true, and the goblin lets out a sharp, wet yelp, staggering back a half-step with dark blood welling between his fingers as he clutches his ribs. It is a small wound on a creature that has weathered far worse, but Wisp stands a little straighter, the ghost of triumph flickering in her exhausted eyes."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace crashes down onto Snik's shoulder with a bone-cracking thud, the goblin's arm buckling under the impact as he's driven a stumbling step sideways into the barrow wall \u2014 a grunt of pain tears from his ruined jaw, dark blood spattering the ancient stonework. But Snik rights himself with savage stubbornness, yellow eyes blazing, shortsword still clutched in a white-knuckled fist.\n\nSnik wheels on Wisp with murder in his eyes, shortsword slashing in a vicious horizontal arc aimed at her throat \u2014 but the blade cuts only empty air as Wisp throws herself backward against the barrow wall, the steel kissing nothing but cold shadow an inch from her chin."
+    },
+    {
+      "kind": "player",
+      "text": "dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's blade finds the meat of Snik's thigh with a precise, desperate thrust, and the goblin's howl splits the barrow air like a cracked bell \u2014 dark blood sheets down his leg as he staggers, teeth bared in a rictus of rage and pain. He does not fall. But for one breathless moment, the monster looks almost afraid."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Snik lunges at Wisp with a shriek of animal rage, shortsword aimed to gut her where she stands \u2014 the blade connects, tearing across her side in a shallow but vicious slash that drops her to one knee with a ragged gasp. The torchlight wavers as she crumples against the cold stone, fingers pressed to the wound, her breath coming in thin, desperate gulps.\n\nSnik plants a boot on the edge of Wisp's crumpled form and throws back his head in a rattling, triumphant shriek, shortsword raised toward the barrow ceiling \u2014 a victor's howl that echoes off the ancient stones and fills the passage with something cold and gloating.\n\nWisp lies deathly still, her lips parted around a breath that barely comes \u2014 somewhere in the darkness behind her eyes she fights, but the darkness pushes back, and the first tremor of defeat moves through her like a cold tide; one failure, and the silence grows heavier."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace swings wide \u2014 a desperate, grief-fuelled arc that clips the barrow wall with a hollow clang and sends sparks skittering across the stone. The goblin doesn't even flinch, already turning his yellow gaze back down to Wisp's crumpled form with something like hunger in his eyes. Aldric stands over her, mace raised, chest heaving \u2014 the only thing between her and the blade.\n\nSnik feints low and drives his shortsword at Aldric's ribs, but the cleric's armour turns the blade with a screech of steel on steel \u2014 the blow glances harmlessly away, and for a single heartbeat Snik is overextended, snarling in frustration just inches from Aldric's face.\n\nOn the cold stone floor, Wisp shudders once \u2014 a rattling, involuntary tremor that runs through her whole body \u2014 and then goes terribly still again, the darkness behind her eyes deepening like ink dropped in water. Two failures now. The thread of her life grows thinner, fraying at the edges, and the barrow seems to lean in closer as if it has already begun to claim her."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Snik lunges forward with terrifying speed, driving his shortsword in a brutal thrust at Aldric's chest \u2014 the blade punches through a gap in the cleric's armour and bites deep, and Aldric staggers backward with a choked cry, one hand flying to the wound as hot blood soaks through his vestments. He catches himself against the barrow wall, mace still clutched in a trembling fist, teeth gritted against the pain \u2014 but his eyes stay on Snik, burning with desperate, furious resolve.\n\nSnik plants his boot on the barrow floor and stands tall over the carnage, shortsword dripping, his rattling shriek of triumph bouncing off the ancient stones \u2014 he turns his yellow eyes from the kneeling Aldric to the still form of Wisp with an expression of absolute, hollow contempt.\n\nOn the cold floor, Wisp's body shudders once \u2014 the faintest flutter of her lashes, a breath that never quite arrives \u2014 and then she is still, truly still, the light behind her eyes gone out like a snuffed candle; the barrow claims her, and the silence that follows is the loudest thing Aldric has ever heard."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Snik moves with savage, unhurried precision \u2014 the shortsword coming in low and fast, a butcher's stroke aimed at Aldric's legs \u2014 and the blade finds its mark with a wet, sickening thud that buckles the cleric's knee and drops him hard against the cold stone floor. Aldric's mace clatters from his fingers, rolling away into the dark. He lies there in the torchlight, breath rattling, one hand outstretched toward Wisp's still form as the shadows press in from every corner of the barrow.\n\nSnik straightens to his full, wiry height above Aldric's crumpled form, chest heaving, yellow eyes bright with contempt \u2014 he turns a slow circle in the torchlight as if daring the barrow itself to produce another challenger, shortsword trailing a thin line of blood across the ancient stones."
+    },
+    {
+      "kind": "player",
+      "text": "mace"
+    },
+    {
+      "kind": "dm",
+      "text": "From his knees, Aldric drags every last scrap of will he has left and swings his mace in a wild, desperate arc \u2014 the head connects with Snik's shin with a satisfying crack of iron on bone, and the goblin lets out a shriek of pain and hops backward, clutching his leg, yellow eyes blazing with sudden, furious surprise. It isn't enough to end him \u2014 but it's enough to tell Snik that Aldric is still in the fight, still breathing, still dangerous \u2014 a wounded animal with nothing left to lose.\n\nSnik snarls through the pain in his shin and drives his shortsword down in a savage overhead thrust, catching Aldric across the shoulder and raking the blade along his collarbone with a wet, tearing sound \u2014 Aldric slumps against the barrow wall, blood soaking dark through his vestments, fingers still wrapped around his mace with the last stubborn grip of a man who refuses to let go."
+    }
+  ],
+  "narrative": [
+    {
+      "turn": 1,
+      "text": "Aldric's boots scrape against the damp stone as he advances, torch flame whipping sideways in the sudden draft. Snik bares a mouthful of jagged teeth, shortsword leveled at chest height, yellow eyes darting between the cleric and the pale, swaying figure of Wisp behind him \u2014 sensing weakness, calculating odds."
+    },
+    {
+      "turn": 2,
+      "text": "Aldric's mace arcs in a powerful overhead swing, cracking squarely against Snik's collarbone with a satisfying crunch. The goblin staggers back a step, spitting a curse in his raspy tongue \u2014 hurt, but far from finished, his yellow eyes now blazing with fury.\n\nSnarling with rage, Snik lunges forward and drives his shortsword at Aldric's gut \u2014 but the blade skitters harmlessly off the cleric's armour, sparks dancing in the torchlight as the goblin's fury outpaces his aim."
+    },
+    {
+      "turn": 3,
+      "text": "Wisp lunges forward on trembling legs, driving the dagger at Snik with desperate urgency \u2014 but the blade swings wide, slicing nothing but cold air as the goblin sidesteps with contemptuous ease."
+    },
+    {
+      "turn": 4,
+      "text": "Aldric's mace comes down with the full weight of his devotion behind it, crashing against Snik's skull with a brutal crack that echoes off the barrow's stone walls. The goblin's knees buckle, a strangled yelp escaping his twisted lips as he staggers, blood matting the coarse fur at his temple \u2014 still standing, barely, but the arrogance has drained clean from those yellow eyes.\n\nSnik snarls and thrusts his shortsword at Aldric in a wild, desperate lunge \u2014 but the cleric's armour turns the blade aside with a dull scrape of metal on metal, and the goblin's momentum carries him stumbling half a step forward, leaving him dangerously off-balance."
+    },
+    {
+      "turn": 5,
+      "text": "Wisp's dagger finds its mark this time \u2014 the blade punches into Snik's side with a wet, satisfying *thwack*, drawing a high-pitched shriek from the goblin. It's a small wound on a surprisingly resilient creature, but Wisp's eyes gleam with grim satisfaction as dark blood wells around the hilt's edge."
+    },
+    {
+      "turn": 6,
+      "text": "Aldric brings the mace down in a thunderous arc, the critical blow landing square on Snik's crown with a resounding crack \u2014 enough force to floor any ordinary foe. Yet the goblin merely staggers, shakes the blood from his eyes, and grins through broken teeth, something unnatural keeping him upright when he should be crumpled on the cold stone floor.\n\nSnik lunges at Aldric with a furious, snarling thrust of his shortsword, but the cleric holds his ground and the blade glances off the chainmail with a hollow clang \u2014 the goblin's wounded arm betraying him at the last moment, his strike carrying all rage and no precision."
+    },
+    {
+      "turn": 7,
+      "text": "Wisp's dagger stabs forward in a desperate, shaking thrust, but there is nothing left in her spent limbs \u2014 the blade scrapes uselessly against Snik's armour and she lurches sideways, barely catching herself against the barrow wall, breath coming in ragged, rattling gasps."
+    },
+    {
+      "turn": 8,
+      "text": "Aldric drives the mace into Snik's ribs with a focused, powerful blow \u2014 bone cracks and the goblin lets out a sharp, wheezing grunt, lurching backward. Seven points of punishment land clean, yet Snik somehow remains upright, hunched and bleeding, that unnatural vitality still burning in his hateful yellow eyes.\n\nSnik's shortsword finds a gap between Aldric's pauldron and gorget, punching a shallow but stinging wound into the cleric's shoulder \u2014 four points of hot, piercing pain that draw a sharp hiss through Aldric's clenched teeth. The goblin wrenches the blade free with a wet rasp and bares his broken-toothed grin, emboldened by the first blood he's drawn in rounds."
+    },
+    {
+      "turn": 9,
+      "text": "Wisp summons the last dregs of her will and drives the dagger into Snik's thigh \u2014 a shallow, desperate jab that draws blood and a snarl from the goblin, but does precious little to slow the unnatural creature. She slumps back against the cold barrow wall, knuckles white around the hilt, her ragged breathing the only sound she can manage."
+    },
+    {
+      "turn": 10,
+      "text": "Aldric brings the mace down in a savage, perfectly-timed arc, the critical blow crunching into Snik's jaw with a spray of black ichor and shattered teeth \u2014 a hit that would drop any mortal creature stone dead. Yet the goblin merely rolls with the impact, spitting a mouthful of ruin onto the barrow floor, and straightens back up with those hateful yellow eyes burning brighter than ever, utterly unmoved by punishment that defies all natural law.\n\nSnik snarls and drives his shortsword at Aldric's throat in a wild, hatred-fuelled lunge \u2014 but the cleric steps inside the blow with practiced ease, the blade skittering harmlessly off his chainmail with a hollow scrape, Snik's broken jaw robbing the strike of any real fury."
+    },
+    {
+      "turn": 11,
+      "text": "Wisp's trembling arm swings the dagger in a wild, desperate arc \u2014 but her body is nearly spent, and the blade cuts nothing but cold barrow air, skittering off the stone wall in a shower of sparks. Snik doesn't even flinch, those yellow eyes sliding to her with something almost like contempt."
+    },
+    {
+      "turn": 12,
+      "text": "Snik lunges at Aldric with a guttural shriek, shortsword slashing in a vicious diagonal \u2014 but Aldric catches the blow on his forearm, the blade skittering off the chainmail with a hollow ring, the goblin's broken body failing to land the killing stroke it so desperately wants.\n\nSnik's shortsword darts forward with unnatural speed, finding the same wound in Aldric's ribs he opened moments ago \u2014 a cruel, precise thrust that drives four points of piercing agony deep into the cleric's side, staggering him back a half-step against the barrow wall. Aldric's breath comes in short, ragged pulls now, blood darkening the links of his chainmail, but his grip on the mace does not waver."
+    },
+    {
+      "turn": 13,
+      "text": "Wisp's dagger jabs forward in a last, feeble thrust, but her arm shakes so violently the blade scrapes nothing but cold stone at Snik's feet \u2014 a pitiful swing that draws a wet, gurgling laugh from the goblin's shattered jaw. She is nearly spent, clinging to consciousness by a thread, and Snik knows it."
+    },
+    {
+      "turn": 14,
+      "text": "Aldric swings the mace in a punishing overhead arc, but exhaustion and the blood seeping from his side betray him \u2014 the blow sails wide, glancing off the barrow's stone doorframe with a dull clang that shudders up his arm and leaves Snik untouched, the goblin ducking beneath it with an almost contemptuous ease.\n\nSnik wheels away from Aldric and lunges at Wisp with a feral shriek, shortsword driving straight for her heart \u2014 but the little wizard stumbles sideways on trembling legs and the blade hisses past her ear, close enough to slice a lock of singed hair from her temple, the killing stroke denied by sheer, desperate luck."
+    },
+    {
+      "turn": 15,
+      "text": "With a last, desperate surge of will, Wisp drives the dagger upward into the gap beneath Snik's leather jerkin \u2014 the blade bites true, and the goblin lets out a sharp, wet yelp, staggering back a half-step with dark blood welling between his fingers as he clutches his ribs. It is a small wound on a creature that has weathered far worse, but Wisp stands a little straighter, the ghost of triumph flickering in her exhausted eyes."
+    },
+    {
+      "turn": 16,
+      "text": "Aldric's mace crashes down onto Snik's shoulder with a bone-cracking thud, the goblin's arm buckling under the impact as he's driven a stumbling step sideways into the barrow wall \u2014 a grunt of pain tears from his ruined jaw, dark blood spattering the ancient stonework. But Snik rights himself with savage stubbornness, yellow eyes blazing, shortsword still clutched in a white-knuckled fist.\n\nSnik wheels on Wisp with murder in his eyes, shortsword slashing in a vicious horizontal arc aimed at her throat \u2014 but the blade cuts only empty air as Wisp throws herself backward against the barrow wall, the steel kissing nothing but cold shadow an inch from her chin."
+    },
+    {
+      "turn": 17,
+      "text": "Wisp's blade finds the meat of Snik's thigh with a precise, desperate thrust, and the goblin's howl splits the barrow air like a cracked bell \u2014 dark blood sheets down his leg as he staggers, teeth bared in a rictus of rage and pain. He does not fall. But for one breathless moment, the monster looks almost afraid."
+    },
+    {
+      "turn": 18,
+      "text": "Snik lunges at Wisp with a shriek of animal rage, shortsword aimed to gut her where she stands \u2014 the blade connects, tearing across her side in a shallow but vicious slash that drops her to one knee with a ragged gasp. The torchlight wavers as she crumples against the cold stone, fingers pressed to the wound, her breath coming in thin, desperate gulps.\n\nSnik plants a boot on the edge of Wisp's crumpled form and throws back his head in a rattling, triumphant shriek, shortsword raised toward the barrow ceiling \u2014 a victor's howl that echoes off the ancient stones and fills the passage with something cold and gloating.\n\nWisp lies deathly still, her lips parted around a breath that barely comes \u2014 somewhere in the darkness behind her eyes she fights, but the darkness pushes back, and the first tremor of defeat moves through her like a cold tide; one failure, and the silence grows heavier."
+    },
+    {
+      "turn": 19,
+      "text": "Aldric's mace swings wide \u2014 a desperate, grief-fuelled arc that clips the barrow wall with a hollow clang and sends sparks skittering across the stone. The goblin doesn't even flinch, already turning his yellow gaze back down to Wisp's crumpled form with something like hunger in his eyes. Aldric stands over her, mace raised, chest heaving \u2014 the only thing between her and the blade.\n\nSnik feints low and drives his shortsword at Aldric's ribs, but the cleric's armour turns the blade with a screech of steel on steel \u2014 the blow glances harmlessly away, and for a single heartbeat Snik is overextended, snarling in frustration just inches from Aldric's face.\n\nOn the cold stone floor, Wisp shudders once \u2014 a rattling, involuntary tremor that runs through her whole body \u2014 and then goes terribly still again, the darkness behind her eyes deepening like ink dropped in water. Two failures now. The thread of her life grows thinner, fraying at the edges, and the barrow seems to lean in closer as if it has already begun to claim her."
+    },
+    {
+      "turn": 20,
+      "text": "Snik lunges forward with terrifying speed, driving his shortsword in a brutal thrust at Aldric's chest \u2014 the blade punches through a gap in the cleric's armour and bites deep, and Aldric staggers backward with a choked cry, one hand flying to the wound as hot blood soaks through his vestments. He catches himself against the barrow wall, mace still clutched in a trembling fist, teeth gritted against the pain \u2014 but his eyes stay on Snik, burning with desperate, furious resolve.\n\nSnik plants his boot on the barrow floor and stands tall over the carnage, shortsword dripping, his rattling shriek of triumph bouncing off the ancient stones \u2014 he turns his yellow eyes from the kneeling Aldric to the still form of Wisp with an expression of absolute, hollow contempt.\n\nOn the cold floor, Wisp's body shudders once \u2014 the faintest flutter of her lashes, a breath that never quite arrives \u2014 and then she is still, truly still, the light behind her eyes gone out like a snuffed candle; the barrow claims her, and the silence that follows is the loudest thing Aldric has ever heard."
+    },
+    {
+      "turn": 21,
+      "text": "Snik moves with savage, unhurried precision \u2014 the shortsword coming in low and fast, a butcher's stroke aimed at Aldric's legs \u2014 and the blade finds its mark with a wet, sickening thud that buckles the cleric's knee and drops him hard against the cold stone floor. Aldric's mace clatters from his fingers, rolling away into the dark. He lies there in the torchlight, breath rattling, one hand outstretched toward Wisp's still form as the shadows press in from every corner of the barrow.\n\nSnik straightens to his full, wiry height above Aldric's crumpled form, chest heaving, yellow eyes bright with contempt \u2014 he turns a slow circle in the torchlight as if daring the barrow itself to produce another challenger, shortsword trailing a thin line of blood across the ancient stones."
+    },
+    {
+      "turn": 22,
+      "text": "From his knees, Aldric drags every last scrap of will he has left and swings his mace in a wild, desperate arc \u2014 the head connects with Snik's shin with a satisfying crack of iron on bone, and the goblin lets out a shriek of pain and hops backward, clutching his leg, yellow eyes blazing with sudden, furious surprise. It isn't enough to end him \u2014 but it's enough to tell Snik that Aldric is still in the fight, still breathing, still dangerous \u2014 a wounded animal with nothing left to lose.\n\nSnik snarls through the pain in his shin and drives his shortsword down in a savage overhead thrust, catching Aldric across the shoulder and raking the blade along his collarbone with a wet, tearing sound \u2014 Aldric slumps against the barrow wall, blood soaking dark through his vestments, fingers still wrapped around his mace with the last stubborn grip of a man who refuses to let go."
+    }
+  ],
+  "combat_order": [
+    "aldric",
+    "snik",
+    "wisp"
+  ],
+  "combat_index": 0,
+  "combat_round": 14,
+  "action_used": false,
+  "combat_initiatives": {
+    "aldric": 19,
+    "wisp": 12,
+    "snik": 16
+  },
+  "game_over": false,
+  "game_outcome": ""
+}
