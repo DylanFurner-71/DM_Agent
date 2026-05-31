@@ -2012,6 +2012,101 @@ def test_spell_explicit_target_allows_ally():
     assert gs.party["aldric"].hp < aldric_hp_before    # ally takes damage
 
 
+def test_attack_tool_defender_not_required():
+    """defender is absent from the attack tool's required list.
+    Pins the regression cause: when defender was required, the model was forced to
+    supply one, bypassing the ambiguous_target check entirely."""
+    attack_tool = next(t for t in tools.TOOLS if t["name"] == "attack")
+    assert "defender" not in attack_tool["input_schema"]["required"]
+
+
+def test_attack_no_defender_ambiguous_asks():
+    """Two living hostiles, no defender in the call →
+    ok=false, reason ambiguous_target, both names in candidates, no HP change,
+    action_used reset so the turn is preserved."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100},
+                                   inventory=["mace"], proficiency_bonus=2)
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12, hostile=True)
+    grik_hp = gs.npcs["grik"].hp
+    narl_hp = gs.npcs["narl"].hp
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "grik", "narl"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "ambiguous_target"
+    assert set(res["candidates"]) == {"Grik", "Narl"}
+    assert gs.npcs["grik"].hp == grik_hp    # no damage
+    assert gs.npcs["narl"].hp == narl_hp    # no damage
+    assert gs.action_used is False          # turn preserved
+
+
+def test_attack_no_defender_auto_targets_sole_enemy():
+    """One living hostile, no defender → engine auto-selects it, attack resolves,
+    auto_target surfaced in the result."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"],
+                                   ability_modifiers={"str": 3}, proficiency_bonus=2)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=20, hp=20, hostile=True, ac=1)
+
+    res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
+
+    assert res["ok"] is True
+    assert res["auto_target"] == "Snik"
+    assert "hit" in res
+
+
+def test_attack_explicit_defender_honored():
+    """Two living hostiles; attack names Grik explicitly → only Grik is targeted,
+    Narl is untouched regardless of hit or miss."""
+    rules.seed(7)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"],
+                                   ability_modifiers={"str": 3}, proficiency_bonus=2)
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=30, hp=30, hostile=True, ac=1)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=30, hp=30, hostile=True, ac=1)
+    narl_hp = gs.npcs["narl"].hp
+
+    res = tools.dispatch("attack", {
+        "attacker": "Aldric", "weapon": "mace", "defender": "Grik",
+    }, gs)
+
+    assert res["ok"] is True
+    assert res["defender"] == "Grik"
+    assert gs.npcs["narl"].hp == narl_hp    # Narl untouched
+
+
+def test_attack_and_spell_share_resolver():
+    """Unnamed-target attack and unnamed-target offensive spell against the same
+    two-hostile state both return reason='ambiguous_target' and the same candidate set.
+    Confirms attack and cast_spell go through the same resolver."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"], proficiency_bonus=2,
+                                   ability_modifiers={"dex": 0, "str": 2})
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"],
+                                 ability_modifiers={"dex": 0})
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12, hostile=True)
+
+    atk_res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
+    spell_res = tools.dispatch("cast_spell", {
+        "caster": "Wisp", "spell_name": "magic_missile", "spell_level": 1,
+    }, gs)
+
+    assert atk_res["ok"] is False
+    assert atk_res["reason"] == "ambiguous_target"
+    assert spell_res["ok"] is False
+    assert spell_res["reason"] == "ambiguous_target"
+    assert set(atk_res["candidates"]) == set(spell_res["candidates"])
+
+
 def test_attack_auto_targets_sole_enemy():
     """No defender named, one living hostile → auto-resolves, attack resolves, auto_target surfaced."""
     rules.seed(0)
