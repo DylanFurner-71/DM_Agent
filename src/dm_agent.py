@@ -152,6 +152,9 @@ Never use a "<Name>, what do you do?" combat-turn prompt here.
 Keep the player's agency central: present situations, then react to what they choose.
 """
 
+_SYSTEM = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+_TOOLS_CACHED = [*tools.TOOLS[:-1], {**tools.TOOLS[-1], "cache_control": {"type": "ephemeral"}}]
+
 _NARRATE_ONLY = (
     "Narrate what just happened in 1–3 sentences of in-world prose. "
     "No tool calls. No prompts. No 'what do you do'. No meta-commentary."
@@ -279,8 +282,8 @@ class DMAgent:
             resp = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                tools=tools.TOOLS,
+                system=_SYSTEM,
+                tools=_TOOLS_CACHED,
                 messages=self.messages,
             )
             print(f"  [thinking done — {time.monotonic() - _t0:.1f}s]", flush=True)
@@ -308,7 +311,7 @@ class DMAgent:
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=256,
-            system=SYSTEM_PROMPT,
+            system=_SYSTEM,
             messages=self.messages,  # no tools= → text only
         )
         print(f"  [narrating done — {time.monotonic() - _t0:.1f}s]", flush=True)
@@ -339,7 +342,7 @@ class DMAgent:
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=400,
-            system=SYSTEM_PROMPT,
+            system=_SYSTEM,
             messages=self.messages,
         )
         print(f"  [narrating combat close done — {time.monotonic() - _t0:.1f}s]", flush=True)
@@ -384,7 +387,7 @@ class DMAgent:
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=min(256 * n, 1024),
-            system=SYSTEM_PROMPT,
+            system=_SYSTEM,
             messages=self.messages,
         )
         print(f"  [narrating {n} combat beat(s) done — {time.monotonic() - _t0:.1f}s]", flush=True)
@@ -443,7 +446,7 @@ class DMAgent:
         resp = self.client.messages.create(
             model=self.model,
             max_tokens=300,
-            system=SYSTEM_PROMPT,
+            system=_SYSTEM,
             messages=self.messages,
         )
         print(f"  [narrating epilogue done — {time.monotonic() - _t0:.1f}s]", flush=True)
