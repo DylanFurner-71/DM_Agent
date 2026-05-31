@@ -1194,10 +1194,11 @@ def test_from_dict_expands_template_npc():
 
 
 def test_scenario2_loads_correctly():
-    """scenario2.json (template-based NPCs) must load without error."""
+    """scenario2.json (multi-scene format) populates state from current_scene."""
     import os
     path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
     gs = GameState.load(path)
+    # current_scene is barrow_entrance → snik should be in the live roster
     assert "snik" in gs.npcs
     npc = gs.npcs["snik"]
     assert npc.name == "Snik"
@@ -1205,6 +1206,142 @@ def test_scenario2_loads_correctly():
     assert npc.hp == 12
     assert npc.ac == 13
     assert "shortsword" in npc.inventory
+    # Party is top-level and must load too
+    assert "aldric" in gs.party
+    assert "wisp" in gs.party
+    # scenes dict is preserved for future transitions
+    assert "ember_chamber" in gs.scenes
+    assert gs.current_scene == "barrow_entrance"
+
+
+def test_multi_scene_load_location_and_scene_text():
+    """location and scene text are pulled from the active scene on fresh load."""
+    d = {
+        "current_scene": "ember_chamber",
+        "scenes": {
+            "ember_chamber": {
+                "location": "The Ember Chamber",
+                "scene": "Braziers burn with sourceless flame.",
+                "npcs": {},
+            }
+        },
+        "party": {},
+    }
+    gs = GameState.from_dict(d)
+    assert gs.location == "The Ember Chamber"
+    assert gs.scene == "Braziers burn with sourceless flame."
+
+
+def test_move_scene_replaces_npcs_and_updates_location():
+    """move_scene with a scene_key replaces the NPC roster and updates location/scene."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    assert "snik" in gs.npcs
+
+    res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
+
+    assert res["ok"] is True
+    assert res["scene_key"] == "ember_chamber"
+    assert gs.current_scene == "ember_chamber"
+    assert gs.location == "The Ashen Barrow — The Ember Chamber"
+    # Old NPC gone; new scene's NPCs present
+    assert "snik" not in gs.npcs
+    assert "grik" in gs.npcs
+    assert "narl" in gs.npcs
+
+
+def test_move_scene_npc_stats_and_overrides():
+    """move_scene expands template NPCs and applies per-entry overrides (e.g. max_hp)."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
+
+    grik = gs.npcs["grik"]
+    assert grik.name == "Grik"
+    assert grik.max_hp == 18   # overridden from goblin template's 12
+    assert grik.hp == 18       # starts at full overridden HP
+    assert grik.ac == 13       # template value unchanged
+
+    narl = gs.npcs["narl"]
+    assert narl.name == "Narl"
+    assert narl.max_hp == 12   # standard goblin
+
+
+def test_move_scene_party_untouched():
+    """Scene transitions must never modify the party."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    gs.party["aldric"].hp = 10   # simulate damage
+
+    tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
+
+    assert gs.party["aldric"].hp == 10   # unchanged
+    assert "aldric" in gs.party
+    assert "wisp" in gs.party
+
+
+def test_move_scene_unknown_key_rejected():
+    """move_scene with an unknown scene_key returns ok=False."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    original_location = gs.location
+
+    res = tools.dispatch("move_scene", {"scene_key": "nowhere"}, gs)
+
+    assert res["ok"] is False
+    assert "nowhere" in res["error"]
+    assert gs.location == original_location   # state unchanged
+
+
+def test_move_scene_missing_scene_key_rejected():
+    """move_scene without scene_key when scenes are defined returns ok=False."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+
+    res = tools.dispatch("move_scene", {"location": "Somewhere"}, gs)
+
+    assert res["ok"] is False
+
+
+def test_move_scene_free_form_without_scenes():
+    """move_scene still accepts location/scene strings when no scenes dict is defined."""
+    gs = GameState(location="Start")
+    res = tools.dispatch("move_scene", {"location": "The Forest", "scene": "Tall oaks."}, gs)
+    assert res["ok"] is True
+    assert gs.location == "The Forest"
+    assert gs.scene == "Tall oaks."
+
+
+def test_multi_scene_savegame_round_trip():
+    """Saving and reloading preserves scenes dict and live NPC state (not re-expanded)."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    gs.npcs["snik"].hp = 3   # simulate combat damage
+
+    restored = GameState.from_dict(gs.to_dict())
+
+    assert restored.current_scene == "barrow_entrance"
+    assert "ember_chamber" in restored.scenes
+    assert restored.npcs["snik"].hp == 3   # live state, not re-expanded from template
+
+
+def test_get_state_surfaces_available_scenes():
+    """get_state returns available_scenes keys without the verbose scene definitions."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    res = tools.dispatch("get_state", {}, gs)
+    assert res["ok"] is True
+    state_dict = res["state"]
+    assert "available_scenes" in state_dict
+    assert set(state_dict["available_scenes"]) == {"barrow_entrance", "ember_chamber"}
+    assert "scenes" not in state_dict   # omitted to keep context lean
 
 
 def test_add_npc_combat_initiatives_round_trips_through_json():

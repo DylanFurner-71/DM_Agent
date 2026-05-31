@@ -9,7 +9,7 @@ only *request* an action, which the deterministic code below grants or denies.
 from __future__ import annotations
 
 from . import rules
-from .game_state import NPC
+from .game_state import NPC, expand_npc_entry
 
 TOOLS = [
     {
@@ -91,14 +91,21 @@ TOOLS = [
     },
     {
         "name": "move_scene",
-        "description": "Update the party's location and scene description when they travel or the setting changes.",
+        "description": (
+            "Move the party to a new location. Two modes:\n"
+            "NAMED SCENE (use when get_state shows available_scenes): pass scene_key matching "
+            "one of the available scene keys — the engine sets location, scene text, and "
+            "replaces the NPC roster from the scene definition. Party is untouched.\n"
+            "FREE-FORM (no named scenes defined): pass location string and optional scene "
+            "description to update them directly."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "location": {"type": "string"},
-                "scene": {"type": "string"},
+                "scene_key": {"type": "string", "description": "Named scene key, e.g. 'ember_chamber'. Use when available_scenes is present in get_state."},
+                "location":  {"type": "string", "description": "Free-form location name. Use when no named scenes are defined."},
+                "scene":     {"type": "string", "description": "Free-form scene description. Optional companion to location."},
             },
-            "required": ["location"],
         },
     },
     {
@@ -284,6 +291,36 @@ def dispatch(name: str, args: dict, state) -> dict:
         return {"ok": True, "flag": args["flag"], "value": state.quest_flags[args["flag"]]}
 
     if name == "move_scene":
+        if state.scenes:
+            scene_key = args.get("scene_key", "").strip()
+            if not scene_key:
+                return {
+                    "ok": False,
+                    "error": (
+                        "scene_key is required when named scenes are defined. "
+                        f"Available: {', '.join(state.scenes)}."
+                    ),
+                }
+            scene_data = state.scenes.get(scene_key)
+            if scene_data is None:
+                return {
+                    "ok": False,
+                    "error": f"Unknown scene {scene_key!r}. Available: {', '.join(state.scenes)}.",
+                }
+            state.current_scene = scene_key
+            state.location = scene_data.get("location", "")
+            state.scene = scene_data.get("scene", "")
+            state.npcs = {k: expand_npc_entry(v) for k, v in scene_data.get("npcs", {}).items()}
+            state.record(f"scene -> {scene_key} ({state.location})")
+            return {
+                "ok": True,
+                "scene_key": scene_key,
+                "location": state.location,
+                "npcs": list(state.npcs),
+            }
+        # Free-form fallback for scenarios without a scenes dict.
+        if "location" not in args:
+            return {"ok": False, "error": "location is required when no named scenes are defined."}
         state.location = args["location"]
         if "scene" in args:
             state.scene = args["scene"]
@@ -291,7 +328,11 @@ def dispatch(name: str, args: dict, state) -> dict:
         return {"ok": True, "location": state.location}
 
     if name == "get_state":
-        return {"ok": True, "state": state.to_dict()}
+        d = state.to_dict()
+        if state.scenes:
+            d["available_scenes"] = list(state.scenes)
+            del d["scenes"]   # omit verbose definitions; keys are enough for the model
+        return {"ok": True, "state": d}
 
     if name == "start_combat":
         all_actors = {**state.party, **state.npcs}

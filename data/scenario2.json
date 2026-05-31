@@ -1,6 +1,22 @@
 {
-  "location": "The collapsed entrance of the Ashen Barrow",
-  "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper into the barrow, blade already drawn. Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+  "current_scene": "barrow_entrance",
+  "scenes": {
+    "barrow_entrance": {
+      "location": "The collapsed entrance of the Ashen Barrow",
+      "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper into the barrow, blade already drawn. Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+      "npcs": {
+        "snik": { "template": "goblin", "name": "Snik", "hostile": true }
+      }
+    },
+    "ember_chamber": {
+      "location": "The Ashen Barrow — The Ember Chamber",
+      "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
+      "npcs": {
+        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18 },
+        "narl": { "template": "goblin", "name": "Narl", "hostile": true }
+      }
+    }
+  },
   "party": {
     "aldric": {
       "name": "Aldric",
@@ -30,9 +46,6 @@
       "spellcasting_ability": "int",
       "spells": ["magic_missile"]
     }
-  },
-  "npcs": {
-    "snik": { "template": "goblin", "name": "Snik", "hostile": true }
   },
   "quest_flags": {},
   "turn": 0,

@@ -17,6 +17,22 @@ from typing import Optional
 from . import rules
 
 
+def expand_npc_entry(v: dict) -> "NPC":
+    """Expand a scenario NPC entry (possibly template-based) into a live NPC object."""
+    if "template" in v:
+        kwargs = rules.spawn_npc(v["template"], v.get("name"))
+        for field_name, val in v.items():
+            if field_name not in ("template", "name"):
+                kwargs[field_name] = val
+        # spawn_npc sets hp = template max_hp; if max_hp was overridden but hp
+        # was not explicitly specified, sync hp to the new max so the NPC starts
+        # at full health relative to its overridden HP cap.
+        if "max_hp" in v and "hp" not in v:
+            kwargs["hp"] = kwargs["max_hp"]
+        return NPC(**kwargs)
+    return NPC(**v)
+
+
 @dataclass
 class Character:
     name: str
@@ -60,6 +76,8 @@ class NPC:
 class GameState:
     location: str = "An unremarkable crossroads."
     scene: str = ""
+    current_scene: str = ""   # active scene key; empty when not using multi-scene format
+    scenes: dict = field(default_factory=dict)  # {scene_key: {location, scene, npcs}}
     party: dict[str, Character] = field(default_factory=dict)
     npcs: dict[str, NPC] = field(default_factory=dict)
     quest_flags: dict[str, bool] = field(default_factory=dict)
@@ -92,6 +110,8 @@ class GameState:
         return {
             "location": self.location,
             "scene": self.scene,
+            "current_scene": self.current_scene,
+            "scenes": self.scenes,
             "party": {k: asdict(v) for k, v in self.party.items()},
             "npcs": {k: asdict(v) for k, v in self.npcs.items()},
             "quest_flags": self.quest_flags,
@@ -110,9 +130,28 @@ class GameState:
 
     @classmethod
     def from_dict(cls, d: dict) -> "GameState":
+        current_scene = d.get("current_scene", "")
+        scenes = d.get("scenes", {})
+
+        # Fresh multi-scene scenario files have no top-level "npcs" key; expand
+        # location/scene/npcs from the active scene. Savegames always write a
+        # top-level "npcs" key (via to_dict), so they bypass this and load the
+        # live NPC state directly, preserving HP changes from the session.
+        if "npcs" not in d and current_scene and current_scene in scenes:
+            scene_data = scenes[current_scene]
+            location = d.get("location", scene_data.get("location", ""))
+            scene_text = d.get("scene", scene_data.get("scene", ""))
+            npc_entries = scene_data.get("npcs", {})
+        else:
+            location = d.get("location", "")
+            scene_text = d.get("scene", "")
+            npc_entries = d.get("npcs", {})
+
         gs = cls(
-            location=d.get("location", ""),
-            scene=d.get("scene", ""),
+            location=location,
+            scene=scene_text,
+            current_scene=current_scene,
+            scenes=scenes,
             quest_flags=d.get("quest_flags", {}),
             turn=d.get("turn", 0),
             log=d.get("log", []),
@@ -127,16 +166,8 @@ class GameState:
             v = dict(v)
             v["spell_slots"] = {int(lvl): n for lvl, n in v.get("spell_slots", {}).items()}
             gs.party[k] = Character(**v)
-        for k, v in d.get("npcs", {}).items():
-            if "template" in v:
-                kwargs = rules.spawn_npc(v["template"], v.get("name"))
-                # Layer any explicit overrides from the scenario entry on top.
-                for field_name, val in v.items():
-                    if field_name not in ("template", "name"):
-                        kwargs[field_name] = val
-                gs.npcs[k] = NPC(**kwargs)
-            else:
-                gs.npcs[k] = NPC(**v)
+        for k, v in npc_entries.items():
+            gs.npcs[k] = expand_npc_entry(v)
         return gs
 
     @classmethod
