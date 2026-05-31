@@ -31,6 +31,11 @@ HP change, or rules question, you MUST call the matching tool and use its result
 - Never invent a dice result or override a tool's outcome. If `cast_spell` returns \
 ok=false because the caster is out of slots, the spell FAILS — narrate the fizzle, \
 do not let it succeed anyway.
+- When `attack` returns ok=false because the attacker does not have the named weapon, \
+SURFACE the failure — never silently swap to a weapon they do own. In the narration \
+phase, tell the player what happened and offer a correction, e.g. "Wisp has no mace — \
+draw her dagger instead?" or "Aldric isn't carrying a longsword; use his handaxe?" \
+Do not fabricate a valid-looking attack result from an invalid request.
 - When you need exact current numbers (HP, remaining slots, who's present), call \
 `get_state` rather than guessing.
 - Stay in the fiction. Never expose raw tool JSON, internal reasoning, process notes, \
