@@ -763,6 +763,105 @@ def test_loop_halts_at_first_player_when_input_names_another(first_key, second_k
     assert next_turns == [], f"next_turn must not be called when active player hasn't acted; got {next_turns}"
 
 
+def test_context_bounded_regardless_of_history_length():
+    """_build_turn_context always returns at most 2*NARRATION_WINDOW messages,
+    and uses the most recent entries, regardless of how many turns have passed."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent, NARRATION_WINDOW
+
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric")
+    agent = DMAgent(gs, client=MagicMock())
+
+    # Simulate 20 turns of history — far beyond the window.
+    for i in range(20):
+        agent.narration_history.append((f"player did {i}", f"narration {i}"))
+
+    messages = agent._build_turn_context()
+
+    assert len(messages) == 2 * NARRATION_WINDOW
+    # Most recent entries are at the end.
+    assert "player did 19" in messages[-2]["content"]
+    assert "narration 19" in messages[-1]["content"]
+    # Oldest entries (0–15) are not present.
+    assert all("player did 0" not in m["content"] for m in messages)
+
+
+def test_state_snapshot_reflects_current_state_not_history():
+    """_state_snapshot reads self.state directly, so it always shows the LATEST
+    HP, spell slots, NPCs, and combat status — even when narration_history entries
+    contain stale information from earlier turns."""
+    import json as _json
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="The Ember Chamber")
+    gs.party["aldric"] = Character(
+        name="Aldric", max_hp=24, hp=7,
+        spell_slots={1: 0},
+        conditions=["poisoned"],
+    )
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=5)
+    gs.quest_flags["door_open"] = True
+    gs.current_scene = "ember_chamber"
+
+    agent = DMAgent(gs, client=MagicMock())
+    # Add stale history with wrong HP to confirm the snapshot ignores it.
+    agent.narration_history.append(("old input", "Aldric had 24/24 HP previously"))
+
+    snap = _json.loads(agent._state_snapshot())
+
+    assert snap["location"] == "The Ember Chamber"
+    assert snap["current_scene"] == "ember_chamber"
+    assert snap["party"]["Aldric"]["hp"] == "7/24"           # current, not stale
+    assert snap["party"]["Aldric"]["conditions"] == ["poisoned"]
+    assert snap["npcs"]["Grik"]["hp"] == "5/18"
+    assert snap["quest_flags"]["door_open"] is True
+    assert "combat" not in snap                              # not in combat
+
+
+def test_tool_results_present_in_context_during_execute_loop():
+    """Within a single turn's tool-use loop, the tool_result from the first API
+    call must be present in the messages passed to the second API call.
+    The between-turn context reset must NOT strip mid-turn results."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric")
+
+    # Call 1 (_execute): model calls get_state
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"; tool_block.id = "t1"
+    tool_block.name = "get_state"; tool_block.input = {}
+    exec_resp1 = MagicMock()
+    exec_resp1.stop_reason = "tool_use"; exec_resp1.content = [tool_block]
+
+    # Call 2 (_execute loop): model sees result and stops
+    stop_block = MagicMock(); stop_block.type = "text"; stop_block.text = ""
+    exec_resp2 = MagicMock()
+    exec_resp2.stop_reason = "end_turn"; exec_resp2.content = [stop_block]
+
+    # Call 3 (_narrate)
+    narr_block = MagicMock(); narr_block.type = "text"; narr_block.text = "Done."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp1, exec_resp2, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    agent.take_turn("Aldric looks around")
+
+    # The second call (execute loop continuation) must carry the tool_result.
+    call2_msgs = fake_client.messages.create.call_args_list[1][1]["messages"]
+    tool_result_present = any(
+        isinstance(m["content"], list) and
+        any(isinstance(c, dict) and c.get("type") == "tool_result" for c in m["content"])
+        for m in call2_msgs if m["role"] == "user"
+    )
+    assert tool_result_present, "tool_result must survive the within-turn loop — context reset is between turns only"
+
+
 def test_npc_turns_batched_into_single_narration_call():
     """A cycle resolving [player, npc_A, npc_B, next_player] must produce exactly
     two narration API calls — one for the player action, one batched call carrying

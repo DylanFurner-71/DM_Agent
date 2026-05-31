@@ -11,6 +11,7 @@ The model never sees more than one action per narration call, so it cannot reord
 
 from __future__ import annotations
 
+import json
 import os
 
 from anthropic import Anthropic
@@ -19,7 +20,8 @@ from . import tools
 
 # NOTE: confirm the current model string at https://docs.anthropic.com/en/docs/about-claude/models
 MODEL = "claude-sonnet-4-6"
-MAX_TOOL_HOPS = 12  # safety cap on tool calls per _execute call
+MAX_TOOL_HOPS = 12      # safety cap on tool calls per _execute call
+NARRATION_WINDOW = 4    # past (player_input, narration) pairs kept in model context
 
 SYSTEM_PROMPT = """\
 You are the Dungeon Master for a single-session tabletop RPG. You narrate vividly \
@@ -90,22 +92,62 @@ class DMAgent:
         self.messages: list[dict] = []
         self.tool_trace: list[dict] = []  # tool calls from the last turn; read by debug mode
         self.full_trace: list[dict] = []  # cumulative [{turn, calls}] across all turns; read by /trace
+        self.narration_history: list[tuple[str, str]] = []  # rolling (player_input, narration) window
 
-    def _scene_preamble(self) -> str:
-        party = ", ".join(
-            f"{c.name} (HP {c.hp}/{c.max_hp})" for c in self.state.party.values()
-        )
-        lines = [
-            f"[Location: {self.state.location}]",
-            f"[Party: {party}]",
-            f"[Scene: {self.state.scene}]",
-        ]
-        if self.state.combat_round > 0:
-            all_actors = {**self.state.party, **self.state.npcs}
-            active_key = self.state.combat_order[self.state.combat_index]
-            active_name = all_actors[active_key].name if active_key in all_actors else active_key
-            lines.append(f"[Combat: Round {self.state.combat_round} — {active_name}'s turn]")
-        return "\n".join(lines)
+    def _state_snapshot(self) -> str:
+        """Compact JSON of current game state for injection into each turn's prompt.
+
+        Reads directly from self.state so it always reflects the latest HP, slots,
+        combat order, and scene — not whatever was true N turns ago.
+        """
+        s = self.state
+        party = {}
+        for c in s.party.values():
+            entry: dict = {"hp": f"{c.hp}/{c.max_hp}"}
+            if c.spell_slots:
+                entry["spell_slots"] = c.spell_slots
+            if c.conditions:
+                entry["conditions"] = c.conditions
+            if c.inventory:
+                entry["inventory"] = c.inventory
+            if c.spells:
+                entry["spells"] = c.spells
+            party[c.name] = entry
+
+        snap: dict = {
+            "location": s.location,
+            "party": party,
+        }
+        if s.npcs:
+            snap["npcs"] = {
+                n.name: {"hp": f"{n.hp}/{n.max_hp}", "hostile": n.hostile}
+                for n in s.npcs.values()
+            }
+        if s.current_scene:
+            snap["current_scene"] = s.current_scene
+        if s.quest_flags:
+            snap["quest_flags"] = s.quest_flags
+        if s.combat_round > 0:
+            all_actors = {**s.party, **s.npcs}
+            snap["combat"] = {
+                "round": s.combat_round,
+                "turn_order": [all_actors[k].name for k in s.combat_order if k in all_actors],
+                "active": all_actors[s.combat_order[s.combat_index]].name,
+            }
+        return json.dumps(snap, indent=2)
+
+    def _build_turn_context(self) -> list[dict]:
+        """Fresh bounded message list for the start of a new turn.
+
+        Contains only the last NARRATION_WINDOW (player_input, narration) pairs —
+        no tool_use/tool_result blocks from prior turns, no stale state. The state
+        snapshot and current player input are added by take_turn via _execute.
+        """
+        messages: list[dict] = []
+        for player_inp, narration in self.narration_history[-NARRATION_WINDOW:]:
+            messages.append({"role": "user", "content": f"Player: {player_inp}"})
+            messages.append({"role": "assistant", "content": narration})
+        return messages
 
     def _execute(self, prompt: str) -> None:
         """Tool-use phase for one action. Runs the loop; state mutates; no narration."""
@@ -210,28 +252,35 @@ class DMAgent:
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
-        Narration is split into two phases to minimise model round-trips:
-          1. Player's action — dedicated _narrate_for call (unchanged coverage guarantee).
-          2. All NPC actions this cycle — a single _narrate_npc_batch call that receives
-             the full ordered list and writes exactly one beat per action.
-        Mechanical resolution is untouched: each NPC still gets its own _execute call,
-        its own next_turn, and all existing guards (turn ownership, action economy).
-        Returns all narration beats joined, ending with the engine-sourced player prompt.
+        Context is rebuilt fresh each turn from a bounded narration window plus a
+        live state snapshot — old tool_use/tool_result blocks are not carried forward
+        because their effects are already encoded in self.state. Within this turn's
+        _execute loops the tool results accumulate as normal so the agent can finish
+        the multi-hop resolution coherently.
+
+        Narration uses two calls per turn cycle:
+          1. Player's action — dedicated _narrate_for (coverage guarantee, unchanged).
+          2. All NPC actions — single _narrate_npc_batch in resolution order.
+        Returns narration beats joined with the engine-sourced closing prompt.
         """
         self.tool_trace = []
         self.state.turn += 1
-        narrations = []
+
+        # Reset to a fresh bounded context; _execute will append this turn's messages.
+        self.messages = self._build_turn_context()
 
         # --- Player's action ---
         player_prompt = (
-            f"{self._scene_preamble()}\n\n"
+            f"[Current state]\n{self._state_snapshot()}\n\n"
             f"Player: {player_input}\n\n"
             f"[Tool-use phase] Call the appropriate tools to resolve this action. "
             f"Write no prose — narration is requested separately."
         )
         trace_len = len(self.tool_trace)
         self._execute(player_prompt)
-        narrations.append(self._narrate_for(trace_len))
+
+        narration_beats: list[str] = []
+        narration_beats.append(self._narrate_for(trace_len))
 
         # --- NPC turns (only while combat is active) ---
         # Accumulate (actor_name, round) for every resolved NPC action; a single
@@ -280,24 +329,29 @@ class DMAgent:
         # Single batched narration call for all NPC actions this cycle.
         if npc_beats:
             if combat_ended_in_npc_phase:
-                narrations.append(self._narrate_combat_over())
+                narration_beats.append(self._narrate_combat_over())
             else:
-                narrations.append(self._narrate_npc_batch(npc_beats))
+                narration_beats.append(self._narrate_npc_batch(npc_beats))
+
+        # Persist narration (not the closing prompt) to the rolling window.
+        combined = "\n\n".join(n for n in narration_beats if n)
+        self.narration_history.append((player_input, combined))
+        if len(self.narration_history) > NARRATION_WINDOW:
+            self.narration_history = self.narration_history[-NARRATION_WINDOW:]
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 
-        # Engine-sourced closing prompt: only prompt a live (non-downed) combatant.
+        # Engine-sourced closing prompt: kept separate so it's not stored in history.
+        output = list(narration_beats)
         if self.state.combat_order and self.state.combat_round > 0:
             all_actors = {**self.state.party, **self.state.npcs}
             active_key = self.state.combat_order[self.state.combat_index]
             actor = all_actors.get(active_key)
             if actor and not actor.is_down:
-                narrations.append(f"{actor.name}, what do you do?")
+                output.append(f"{actor.name}, what do you do?")
 
-        return "\n\n".join(n for n in narrations if n)
+        return "\n\n".join(n for n in output if n)
 
 
 def _json(obj) -> str:
-    import json
-
     return json.dumps(obj)
