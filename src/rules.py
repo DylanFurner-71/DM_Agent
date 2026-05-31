@@ -236,16 +236,16 @@ def roll_initiative(combatants: dict) -> list[str]:
     return [key for key, _, _ in entries]
 
 
-# Canonical damage expression for each known damaging spell, keyed by slot level.
-# Always a complete NdX+M expression so the engine rolls exactly one expression
-# and that total is the HP delta — no manual modifier is ever added by the model.
-SPELL_DAMAGE: dict[str, dict[int, str]] = {
+SPELLS: dict[str, dict] = {
     "magic_missile": {
-        1: "3d4+3",   # 3 missiles × (1d4+1)
-        2: "4d4+4",
-        3: "5d4+5",
-        4: "6d4+6",
-        5: "7d4+7",
+        "name": "Magic Missile",
+        "level": 1,
+        "tradition": "arcane",
+        "resolution": "auto_hit",
+        "effect": "damage",
+        "damage_type": "force",
+        "by_slot": {1: "3d4+3", 2: "4d4+4", 3: "5d4+5"},
+        "target": "single",
     },
 }
 
@@ -253,27 +253,37 @@ SPELL_DAMAGE: dict[str, dict[int, str]] = {
 def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> dict:
     """Consume a spell slot and apply spell damage atomically.
 
-    The engine owns both the roll and the HP change — the model supplies only the
-    spell name, caster, target, and slot level. rolled == applied is the invariant.
+    Validates before consuming anything:
+      (a) caster knows the spell (spell_id in caster.spells, when attribute present)
+      (b) caster has a slot of the required level (delegated to cast_spell)
+
+    The engine owns both the roll and the HP change. rolled == applied is the invariant.
     """
+    spell_key = spell_name.strip().lower().replace(" ", "_")
+
+    # (a) Knowledge check — before cast_spell so nothing is consumed on failure.
+    known = getattr(caster, "spells", None)
+    if known is not None and spell_key not in known:
+        return {"ok": False, "reason": f"{caster.name} does not know {spell_name}"}
+
+    # (b) Slot check + consumption — returns ok=False without consuming if empty.
     slot_res = cast_spell(caster, spell_level)
     if not slot_res["ok"]:
         return slot_res
 
-    spell_key = spell_name.strip().lower().replace(" ", "_")
-    level_map = SPELL_DAMAGE.get(spell_key)
-    if level_map is None:
+    spell = SPELLS.get(spell_key)
+    if spell is None:
         return {
             **slot_res,
             "damage_applied": False,
             "note": (
-                f"No damage table for {spell_name!r}. "
-                "Slot consumed; describe the effect narratively or add it to SPELL_DAMAGE."
+                f"No spell entry for {spell_name!r}. "
+                "Slot consumed; describe the effect narratively or add it to SPELLS."
             ),
         }
 
-    # Clamp to the highest known level if the slot exceeds the table.
-    dice_expr = level_map.get(spell_level, level_map[max(level_map)])
+    by_slot = spell["by_slot"]
+    dice_expr = by_slot.get(spell_level, by_slot[max(by_slot)])
     dmg = roll(dice_expr)
     dealt = apply_damage(target, dmg.total)
 
@@ -283,7 +293,7 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
         "spell": spell_name,
         "spell_level": spell_level,
         "slots_remaining": slot_res["slots_remaining"],
-        "auto_hit": True,
+        "auto_hit": spell["resolution"] == "auto_hit",
         "damage": dmg.total,
         "damage_detail": dmg.describe(),
         "target": target.name,

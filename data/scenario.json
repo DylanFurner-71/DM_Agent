@@ -12,7 +12,9 @@
       "spell_slots": {"1": 2},
       "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
       "inventory": ["mace", "holy symbol", "torch"],
-      "conditions": []
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": []
     },
     "wisp": {
       "name": "Wisp",
@@ -24,7 +26,9 @@
       "spell_slots": {"1": 1, "2": 0},
       "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
       "inventory": ["dagger", "spellbook", "50ft rope"],
-      "conditions": []
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile"]
     }
   },
   "npcs": {

@@ -30,6 +30,8 @@ class Character:
     ability_modifiers: dict[str, int] = field(default_factory=dict)
     inventory: list[str] = field(default_factory=list)
     conditions: list[str] = field(default_factory=list)  # e.g. "unconscious", "prone"
+    spellcasting_ability: str = ""  # ability modifier key used for spell attack/save, e.g. "int", "wis"
+    spells: list[str] = field(default_factory=list)  # known spell ids, e.g. ["magic_missile"]
 
     @property
     def is_down(self) -> bool:

@@ -213,7 +213,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         if err:
             return err
         res = rules.attack(attacker, defender, args.get("weapon"))
-        state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
+        if res["ok"]:
+            state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
         return res
 
     if name == "cast_spell":
@@ -236,7 +237,8 @@ def dispatch(name: str, args: dict, state) -> dict:
                 state.record(f"{caster.name} tried to cast {spell_name}: {res.get('reason', res.get('error'))}")
         else:
             res = rules.cast_spell(caster, int(args["spell_level"]))
-            state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
+            if res["ok"]:
+                state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
         return res
 
     if name == "modify_hp":
@@ -321,7 +323,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         if err:
             return err
         res = rules.skill_check(character, args["ability"], int(args["dc"]))
-        state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
+        if res["ok"]:
+            state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
         return res
 
     if name == "lookup_rule":

@@ -222,7 +222,8 @@ def test_combat_defaults_to_not_in_combat():
 def _make_combat_state():
     gs = GameState(location="Arena")
     gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    gs.party["wisp"] = Character(name="Wisp", ability_modifiers={"dex": 2})
+    gs.party["wisp"] = Character(name="Wisp", ability_modifiers={"dex": 2},
+                                 spells=["magic_missile"])
     gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 1})
     return gs
 
@@ -316,6 +317,91 @@ def test_damaging_spell_no_slot_fails():
     }, gs)
     assert res["ok"] is False
     assert gs.npcs["snik"].hp == snik_hp_before  # no HP change on failed cast
+
+
+def test_cast_damaging_spell_known_slot_applies_by_slot():
+    """Known spell, slot available: by_slot[level] expression is rolled and applied exactly.
+    No modifier may be added by the caller — rolled == applied is the invariant."""
+    rules.seed(7)
+    caster = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"])
+    target = NPC(name="Goblin", max_hp=30, hp=30)  # high HP so no overkill clamping
+    hp_before = target.hp
+    res = rules.cast_damaging_spell(caster, target, "magic_missile", 1)
+    assert res["ok"] is True
+    assert "3d4+3" in res["damage_detail"]           # by_slot[1] expression used
+    assert target.hp == hp_before - res["damage"]    # applied == rolled exactly
+    assert res["slots_remaining"] == 1               # one slot consumed from two
+
+
+def test_cast_damaging_spell_unknown_to_caster_fails():
+    """Spell not in caster.spells: ok=False before consuming slot or touching HP."""
+    caster = Character(name="Wisp", spell_slots={3: 2}, spells=["magic_missile"])
+    target = NPC(name="Goblin", max_hp=10, hp=10)
+    res = rules.cast_damaging_spell(caster, target, "fireball", 3)
+    assert res["ok"] is False
+    assert "Wisp" in res["reason"]
+    assert "fireball" in res["reason"]
+    assert target.hp == 10              # HP untouched
+    assert caster.spell_slots == {3: 2} # slot untouched
+
+
+def test_cast_damaging_spell_no_slot_fails():
+    """No slot of the required level: ok=False, slots and target HP unchanged."""
+    caster = Character(name="Wisp", spell_slots={1: 0}, spells=["magic_missile"])
+    target = NPC(name="Goblin", max_hp=10, hp=10)
+    res = rules.cast_damaging_spell(caster, target, "magic_missile", 1)
+    assert res["ok"] is False
+    assert "level-1" in res["reason"]
+    assert target.hp == 10              # HP untouched
+    assert caster.spell_slots == {1: 0} # slot untouched
+
+
+# --- legacy: kept for dispatch-layer coverage --------------------------------
+
+def test_damaging_spell_unknown_to_caster_fails():
+    """cast_damaging_spell rejects a spell the caster does not know,
+    leaving spell slots and target HP unchanged."""
+    wisp = Character(name="Wisp", spell_slots={3: 2}, spells=["magic_missile"])
+    goblin = NPC(name="Goblin", max_hp=10, hp=10)
+    res = rules.cast_damaging_spell(wisp, goblin, "fireball", 3)
+    assert res["ok"] is False
+    assert "Wisp" in res["reason"]
+    assert "fireball" in res["reason"]
+    assert goblin.hp == 10             # HP untouched
+    assert wisp.spell_slots == {3: 2}  # slot untouched
+
+
+# --- dispatch-level rejection safety (no crash, state unchanged) -------------
+
+def test_dispatch_attack_unowned_weapon_no_crash():
+    """dispatch('attack') with a weapon not in the attacker's inventory must return
+    ok=False without raising KeyError and leave the defender's HP unchanged."""
+    gs = _make_combat_state()
+    # Aldric carries nothing — dagger is a known weapon but not in his inventory.
+    hp_before = gs.npcs["snik"].hp
+    log_len = len(gs.log)
+    res = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik", "weapon": "dagger"}, gs)
+    assert res["ok"] is False
+    assert gs.npcs["snik"].hp == hp_before  # HP untouched
+    assert len(gs.log) == log_len           # no log entry written for a rejection
+
+
+def test_dispatch_cast_unknown_spell_no_crash():
+    """dispatch('cast_spell') for a spell not in the caster's spells list must return
+    ok=False without raising and leave slots and target HP unchanged."""
+    gs = _make_combat_state()
+    gs.party["wisp"].spell_slots = {3: 2}
+    hp_before = gs.npcs["snik"].hp
+    log_len = len(gs.log)
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "fireball",
+        "target": "Snik",
+        "spell_level": 3,
+    }, gs)
+    assert res["ok"] is False
+    assert gs.npcs["snik"].hp == hp_before           # HP untouched
+    assert gs.party["wisp"].spell_slots == {3: 2}    # slot untouched
 
 
 def test_turn_guard_blocks_non_active_attacker():
