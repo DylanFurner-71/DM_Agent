@@ -181,7 +181,7 @@ class DMAgent:
                 self._execute(npc_exec_prompt)
                 narrations.append(self._narrate())
 
-        self.full_trace.append({"turn": self.state.turn, "calls": list(self.tool_trace)})
+        self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 
         # Engine-sourced closing prompt: only prompt a live (non-downed) combatant.
         if self.state.combat_order and self.state.combat_round > 0:
