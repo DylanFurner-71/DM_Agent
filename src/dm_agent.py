@@ -68,14 +68,21 @@ prevailed" or "…has fallen"), write the single paragraph asked for. The sessio
 there — no prompts, no further turns, no improvised continuation.
 - Stay in the fiction. Never expose raw tool JSON, internal reasoning, process notes, \
 or meta-commentary.
-- QUEST FLAGS — durable narrative facts: When you establish a fact in narration that must \
-survive across turns (a clue discovered, a door unlocked, a promise made, an NPC's \
-disposition changed, a secret revealed with no dedicated field), record it immediately \
-with set_quest_flag. Read quest_flags in your context each turn and stay consistent with \
-what they say. quest_flags is for narrative and progress facts ONLY — never mechanical \
-values (HP, slots, AC, damage), which go through their real tools. Prefer a dedicated \
-home when one exists: real items belong in inventory, NPC hostility belongs in its hostile \
-field. Use quest_flags only for facts with no dedicated home so it never becomes a junk drawer.
+- QUEST FLAGS — rare, durable facts only. Before recording ANY flag, apply this test: would a \
+LATER turn contradict itself, or the player be surprised, if you forgot this? If forgetting it \
+costs nothing, do NOT flag it. Flags are the exception, never routine bookkeeping — when in \
+doubt, set none. \
+Flag ONLY a persistent discovery, world-change, or commitment that has no dedicated home and \
+that future turns must stay consistent with: a clue or password learned, a door unlocked or a \
+lever thrown, a promise made, an NPC spared or won over, a secret revealed. \
+Do NOT flag routine actions or momentary events — approaching, attacking, moving, searching, \
+casting, taking a hit, an NPC dying. Those are actions, not facts, and anything that matters \
+about them already lives in state (HP, who is down, location, inventory, current scene). \
+'approached_snik', 'attacked_goblin', 'searched_room' are exactly the junk-drawer entries to \
+avoid. If a fact already has a home — HP, slots, conditions, inventory, an NPC's hostile field, \
+the scene — it is NOT a flag. \
+Read quest_flags in your context each turn and stay consistent with them. Never store mechanical \
+values (HP, slots, AC, damage); those go through their real tools.
 - A PC at 0 HP is unconscious and dying; they cannot act. The engine rolls their death \
 saves automatically at their turn — never roll one yourself, never have a dying PC \
 attack/cast/move, never prompt them. Healing a dying or stable PC brings them back and \
