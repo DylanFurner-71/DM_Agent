@@ -114,11 +114,6 @@ TOOLS = [
         },
     },
     {
-        "name": "next_turn",
-        "description": "Advance to the next combatant in initiative order. Automatically increments the round counter when the order wraps. The engine calls this between turns — do NOT call it yourself during narration.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
         "name": "end_combat",
         "description": "Clear all combat state (turn order, pointer, round counter). Call when the fight is over — enemies defeated, fled, or parley reached.",
         "input_schema": {"type": "object", "properties": {}},

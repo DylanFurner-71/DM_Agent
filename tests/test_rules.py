@@ -278,6 +278,59 @@ def test_turn_guard_blocks_cast_spell_out_of_turn():
         assert "Wisp" in result["error"]
 
 
+def test_combat_loop_halts_at_player_no_skip():
+    """No-API round-loop test.
+
+    Scenario: initiative order Aldric (player) → Snik (NPC) → Wisp (player).
+    After Aldric acts, the engine must:
+      - advance to Snik and resolve his NPC turn (exactly one next_turn call)
+      - advance to Wisp and halt (exactly one more next_turn call)
+      - leave combat_index pointing at Wisp with combat_round still 1
+    No extra next_turn that would push Wisp's slot into round 2.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    # Extreme Dex values guarantee the order regardless of dice.
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
+    gs.npcs["snik"]   = NPC(name="Snik", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+    gs.party["wisp"]  = Character(name="Wisp", ability_modifiers={"dex": -100})
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "snik", "wisp"]}, gs)
+    assert res["combat_order"] == ["aldric", "snik", "wisp"], "precondition: known order"
+
+    # Fake client always returns a plain text response — no tool calls, no API hit.
+    fake_block = MagicMock()
+    fake_block.type = "text"
+    fake_block.text = "Narration."
+    fake_resp = MagicMock()
+    fake_resp.stop_reason = "end_turn"
+    fake_resp.content = [fake_block]
+    fake_client = MagicMock()
+    fake_client.messages.create.return_value = fake_resp
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric swings at Snik")
+
+    # Engine pointer must be on Wisp, still in round 1.
+    assert gs.combat_order[gs.combat_index] == "wisp", (
+        f"expected pointer on wisp, got {gs.combat_order[gs.combat_index]} "
+        f"(round {gs.combat_round})"
+    )
+    assert gs.combat_round == 1, "extra next_turn pushed engine into round 2"
+
+    # Authoritative turn line must name the engine's active combatant.
+    assert "[Wisp's turn" in narration, "engine-sourced turn line missing or wrong name"
+
+    # Exactly two next_turn advances: Aldric→Snik, Snik→Wisp.
+    next_turns = [c for c in agent.tool_trace if c["name"] == "next_turn"]
+    assert len(next_turns) == 2, f"expected 2 next_turn calls, got {len(next_turns)}"
+    assert next_turns[0]["result"]["active"] == "snik"
+    assert next_turns[1]["result"]["active"] == "wisp"
+
+
 def test_end_combat_clears_state():
     rules.seed(0)
     gs = _make_combat_state()

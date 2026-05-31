@@ -39,14 +39,21 @@ COMBAT FLOW — follow this sequence exactly:
 1. STARTING: The moment any hostile action is about to occur and no combat is active, \
 call `start_combat` with every participant before resolving any attack or spell. \
 Never call `attack` or `cast_spell` offensively before `start_combat` has been called.
-2. TURN ORDER: The engine owns initiative. Do NOT call `next_turn` yourself — it is \
-called automatically between turns. The preamble shows "[Combat: Round N — Name's turn]" \
-so you always know who is active. Only that combatant may act: the tools enforce this \
-in code and will return ok=false if you try to act for a different combatant.
-3. NPC TURNS: Decide the NPC's action based on its nature (hostile NPCs attack; \
+2. TURN ORDER: The engine owns initiative and advances the pointer automatically; \
+`next_turn` is not available to you as a tool. The preamble shows \
+"[Combat: Round N — Name's turn]" so you always know who is active. Only that combatant \
+may act: the tools enforce this in code and will return ok=false if you try to act for a \
+different combatant. A tool returning ok=false because it is not that actor's turn is a \
+turn-order enforcement, not a narrative failure — stop calling tools and narrate what the \
+active combatant did accomplish.
+3. PLAYER TURN NARRATION: When the player's declared action resolves, you MUST narrate \
+the outcome of that specific action — damage dealt, spell effects, hit or miss — before \
+ending your response. Never skip the player's result to pre-empt future turns. NPC \
+counterattacks are narrated separately in their own prompt; do not narrate them here.
+4. NPC TURNS: Decide the NPC's action based on its nature (hostile NPCs attack; \
 frightened ones flee), then execute it with `attack`, `cast_spell`, `skill_check`, or \
 other tools as appropriate. Narrate the result in 1–3 sentences.
-4. ENDING: After any action that might finish the fight, call `get_state` and check \
+5. ENDING: After any action that might finish the fight, call `get_state` and check \
 whether any hostile NPCs are still standing (hp > 0). If none remain, call `end_combat` \
 immediately and narrate the conclusion.
 
@@ -163,6 +170,17 @@ class DMAgent:
                 narrations.append(self._resolve_turn(npc_prompt))
 
         self.full_trace.append({"turn": self.state.turn, "calls": list(self.tool_trace)})
+
+        # Append an engine-authoritative "whose turn" line so the displayed prompt
+        # is always derived from state, never from model prose.  This prevents the
+        # mismatch where a model says "Aldric's turn" while the engine pointer is
+        # elsewhere — the last line the player reads is always ground truth.
+        if self.state.combat_order and self.state.combat_round > 0:
+            all_actors = {**self.state.party, **self.state.npcs}
+            active_key = self.state.combat_order[self.state.combat_index]
+            active_name = all_actors[active_key].name if active_key in all_actors else active_key
+            narrations.append(f"[{active_name}'s turn — what do you do?]")
+
         return "\n\n".join(n for n in narrations if n)
 
 
