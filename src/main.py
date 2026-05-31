@@ -148,6 +148,14 @@ def print_full_trace(full_trace: list) -> None:
         for call in entry["calls"]:
             result_summary = {k: v for k, v in call["result"].items() if k != "state"}
             print(f"    {call['name']}({call['input']}) -> {result_summary}")
+        for ac in entry.get("api_calls", []):
+            u = ac["usage"]
+            tokens = f"in={u['input']} out={u['output']}"
+            if u.get("cache_read"):
+                tokens += f" cache_read={u['cache_read']}"
+            if u.get("cache_write"):
+                tokens += f" cache_write={u['cache_write']}"
+            print(f"    api:{ac['phase']} {ac['elapsed']:.1f}s | {tokens}")
     print()
 
 

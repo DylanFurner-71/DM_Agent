@@ -155,6 +155,26 @@ Keep the player's agency central: present situations, then react to what they ch
 _SYSTEM = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
 _TOOLS_CACHED = [*tools.TOOLS[:-1], {**tools.TOOLS[-1], "cache_control": {"type": "ephemeral"}}]
 
+def _usage_dict(usage) -> dict:
+    d: dict = {"input": usage.input_tokens, "output": usage.output_tokens}
+    cr = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cw = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    if cr:
+        d["cache_read"] = cr
+    if cw:
+        d["cache_write"] = cw
+    return d
+
+
+def _usage_str(usage) -> str:
+    parts = [f"in={usage.input_tokens}", f"out={usage.output_tokens}"]
+    if getattr(usage, "cache_read_input_tokens", 0):
+        parts.append(f"cache_read={usage.cache_read_input_tokens}")
+    if getattr(usage, "cache_creation_input_tokens", 0):
+        parts.append(f"cache_write={usage.cache_creation_input_tokens}")
+    return " ".join(parts)
+
+
 _NARRATE_ONLY = (
     "Narrate what just happened in 1–3 sentences of in-world prose. "
     "No tool calls. No prompts. No 'what do you do'. No meta-commentary."
@@ -194,8 +214,9 @@ class DMAgent:
         self.client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.model = model
         self.messages: list[dict] = []
-        self.tool_trace: list[dict] = []  # tool calls from the last turn; read by debug mode
-        self.full_trace: list[dict] = []  # cumulative [{turn, calls}] across all turns; read by /trace
+        self.tool_trace: list[dict] = []  # tool calls from the last turn
+        self.api_stats: list[dict] = []   # per-API-call timing/usage for the current turn
+        self.full_trace: list[dict] = []  # cumulative [{turn, calls, api_calls}] across all turns; read by /trace
         self.narration_history: list[tuple[str, str]] = []  # rolling (player_input, narration) window
         # Seed the rolling window from the transcript tail so a resumed session
         # starts with the same recent-narrative context as a live one.
@@ -286,7 +307,9 @@ class DMAgent:
                 tools=_TOOLS_CACHED,
                 messages=self.messages,
             )
-            print(f"  [thinking done — {time.monotonic() - _t0:.1f}s]", flush=True)
+            _elapsed = time.monotonic() - _t0
+            print(f"  [thinking done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
+            self.api_stats.append({"phase": "thinking", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
             if resp.stop_reason != "tool_use":
                 break
@@ -314,7 +337,9 @@ class DMAgent:
             system=_SYSTEM,
             messages=self.messages,  # no tools= → text only
         )
-        print(f"  [narrating done — {time.monotonic() - _t0:.1f}s]", flush=True)
+        _elapsed = time.monotonic() - _t0
+        print(f"  [narrating done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
+        self.api_stats.append({"phase": "narrating", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -345,7 +370,9 @@ class DMAgent:
             system=_SYSTEM,
             messages=self.messages,
         )
-        print(f"  [narrating combat close done — {time.monotonic() - _t0:.1f}s]", flush=True)
+        _elapsed = time.monotonic() - _t0
+        print(f"  [narrating combat close done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
+        self.api_stats.append({"phase": "narrating_combat_close", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -390,7 +417,9 @@ class DMAgent:
             system=_SYSTEM,
             messages=self.messages,
         )
-        print(f"  [narrating {n} combat beat(s) done — {time.monotonic() - _t0:.1f}s]", flush=True)
+        _elapsed = time.monotonic() - _t0
+        print(f"  [narrating {n} combat beat(s) done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
+        self.api_stats.append({"phase": f"narrating_combat_{n}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -449,7 +478,9 @@ class DMAgent:
             system=_SYSTEM,
             messages=self.messages,
         )
-        print(f"  [narrating epilogue done — {time.monotonic() - _t0:.1f}s]", flush=True)
+        _elapsed = time.monotonic() - _t0
+        print(f"  [narrating epilogue done — {_elapsed:.1f}s | {_usage_str(resp.usage)}]", flush=True)
+        self.api_stats.append({"phase": "narrating_epilogue", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -506,6 +537,7 @@ class DMAgent:
         Returns narration beats joined with the engine-sourced closing prompt.
         """
         self.tool_trace = []
+        self.api_stats = []
         self.state.turn += 1
         self.state.combat_starting = False  # clear any stale barrier from a prior turn
 
@@ -532,7 +564,7 @@ class DMAgent:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
             _record_turn(self.state, player_input, epilogue)
             self.state.narrative.append({"turn": self.state.turn, "text": epilogue})
-            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
+            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
             return epilogue
 
         narration_beats: list[str] = []
@@ -620,7 +652,7 @@ class DMAgent:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
             _record_turn(self.state, player_input, combined)
             self.state.narrative.append({"turn": self.state.turn, "text": combined})
-            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
+            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
             return combined
 
         # Single batched narration call for all combat beats this cycle.
@@ -638,7 +670,7 @@ class DMAgent:
         _record_turn(self.state, player_input, combined)
         self.state.narrative.append({"turn": self.state.turn, "text": combined})
 
-        self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
+        self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
 
         # Engine-sourced closing prompt: kept separate so it's not stored in history.
         output = list(narration_beats)
