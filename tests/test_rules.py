@@ -533,6 +533,74 @@ def test_end_combat_triggers_post_combat_narration():
     assert "Snik, what do you do?" not in narration
 
 
+def test_agent_re_prompts_after_failed_cast_not_success():
+    """When cast_spell returns ok=False (no slots), the agent must feed the failure
+    result back to the model before requesting narration — never silently succeeding.
+
+    Structural assertions:
+    - Engine did not apply damage (HP unchanged).
+    - Tool trace records ok=False.
+    - The second API call (execute-loop continuation) carries a tool_result whose
+      JSON content contains 'ok': false — proving the agent re-prompted with the failure.
+    - Exactly three API calls: two for the execute phase, one for narration.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Dungeon")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 0})  # no slots remaining
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10)
+
+    # Call 1 (_execute): model tries cast_spell
+    cs_block = MagicMock()
+    cs_block.type = "tool_use"; cs_block.id = "t1"
+    cs_block.name = "cast_spell"
+    cs_block.input = {"caster": "Wisp", "spell_level": 1, "spell_name": "magic_missile", "target": "Snik"}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [cs_block]
+
+    # Call 2 (_execute loop): model sees ok=False result, stops
+    stop_block = MagicMock(); stop_block.type = "text"; stop_block.text = ""
+    stop_resp = MagicMock(); stop_resp.stop_reason = "end_turn"; stop_resp.content = [stop_block]
+
+    # Call 3 (_narrate): model narrates the fizzle (content doesn't affect assertions)
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "Wisp reaches for the magic but finds only silence — the spell fizzles."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, stop_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    agent.take_turn("Wisp casts magic missile at Snik")
+
+    # Engine enforced the failure — no HP change.
+    assert gs.npcs["snik"].hp == 10
+
+    # Tool trace records ok=False.
+    cast_calls = [c for c in agent.tool_trace if c["name"] == "cast_spell"]
+    assert len(cast_calls) == 1
+    assert cast_calls[0]["result"]["ok"] is False
+
+    # The second API call must carry the tool_result with the ok=False payload.
+    # This is the "re-prompt": the agent fed the failure back before asking for narration.
+    call2_msgs = fake_client.messages.create.call_args_list[1][1]["messages"]
+    tool_result_content = next(
+        (c["content"]
+         for m in call2_msgs if m["role"] == "user" and isinstance(m["content"], list)
+         for c in m["content"] if isinstance(c, dict) and c.get("type") == "tool_result"),
+        None,
+    )
+    assert tool_result_content is not None, "agent must feed tool_result back before narrating"
+    assert '"ok": false' in tool_result_content, (
+        f"tool_result must contain ok=false, got: {tool_result_content!r}"
+    )
+
+    # Two-phase protocol: 2 execute calls + 1 narrate call.
+    assert fake_client.messages.create.call_count == 3
+
+
 def test_next_turn_skips_downed_combatant():
     """next_turn must skip any combatant at 0 HP and land on the next live one."""
     rules.seed(0)
