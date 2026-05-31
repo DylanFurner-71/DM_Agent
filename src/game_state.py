@@ -22,7 +22,8 @@ class Character:
     max_hp: int = 10
     hp: int = 10
     ac: int = 12
-    attack_bonus: int = 4
+    attack_bonus: int = 4   # used only for unarmed / NPC fallback
+    proficiency_bonus: int = 2
     # Spell slots by spell level, e.g. {1: 2, 2: 0}. Decremented on cast.
     spell_slots: dict[int, int] = field(default_factory=dict)
     # Ability modifiers (not scores), e.g. {"str": 1, "dex": 2, "con": 0, "int": 3, "wis": 1, "cha": 0}

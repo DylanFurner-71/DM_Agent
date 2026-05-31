@@ -87,23 +87,101 @@ def heal(target, amount: int) -> dict:
     return {"ok": True, "target": target.name, "healed": amount, "hp": target.hp}
 
 
-def attack(attacker, defender, damage_dice: str = "1d6") -> dict:
+# Canonical weapon table: damage die, damage type, optional finesse flag.
+# Finesse weapons may use the higher of Str or Dex for damage.
+WEAPONS: dict[str, dict] = {
+    "dagger":         {"dice": "1d4",  "type": "piercing",     "finesse": True},
+    "shortsword":     {"dice": "1d6",  "type": "piercing",     "finesse": True},
+    "rapier":         {"dice": "1d8",  "type": "piercing",     "finesse": True},
+    "handaxe":        {"dice": "1d6",  "type": "slashing"},
+    "longsword":      {"dice": "1d8",  "type": "slashing"},
+    "greataxe":       {"dice": "1d12", "type": "slashing"},
+    "mace":           {"dice": "1d6",  "type": "bludgeoning"},
+    "quarterstaff":   {"dice": "1d6",  "type": "bludgeoning"},
+    "greatclub":      {"dice": "1d8",  "type": "bludgeoning"},
+    "shortbow":       {"dice": "1d6",  "type": "piercing"},
+    "longbow":        {"dice": "1d8",  "type": "piercing"},
+    "light crossbow": {"dice": "1d8",  "type": "piercing"},
+    "spear":          {"dice": "1d6",  "type": "piercing"},
+}
+
+
+def _weapon_modifier(character, finesse: bool) -> tuple[str, int]:
+    """Return (ability_name, modifier) to add to damage rolls.
+
+    Finesse weapons use whichever of Str or Dex is higher; all others use Str.
+    Missing modifiers default to 0.
+    """
+    mods = getattr(character, "ability_modifiers", {})
+    str_mod = mods.get("str", 0)
+    dex_mod = mods.get("dex", 0)
+    if finesse and dex_mod > str_mod:
+        return "dex", dex_mod
+    return "str", str_mod
+
+
+def attack(attacker, defender, weapon: str | None = None) -> dict:
     """Resolve a single attack: d20 + bonus vs AC, then damage on a hit.
-    A natural 20 always hits; a natural 1 always misses."""
+
+    With a weapon name: validates the attacker's inventory, looks up the WEAPONS
+    table for the damage die and type, computes to-hit bonus from ability_mod +
+    proficiency_bonus, and damage expression from ability_mod alone (proficiency
+    does not add to damage in 5e SRD).
+
+    Without a weapon (NPC / unarmed fallback): uses attacker.attack_bonus and 1d6.
+
+    A natural 20 always hits; a natural 1 always misses.
+    """
+    weapon_name: str | None = None
+    damage_type: str | None = None
+    damage_dice = "1d6"
+    to_hit_bonus = attacker.attack_bonus  # NPC / unarmed fallback
+
+    if weapon is not None:
+        weapon_key = weapon.strip().lower()
+        entry = WEAPONS.get(weapon_key)
+        if entry is None:
+            return {
+                "ok": False,
+                "error": f"Unknown weapon {weapon!r}. Known: {', '.join(WEAPONS)}.",
+            }
+        raw_inventory = getattr(attacker, "inventory", [])
+        inventory = [i.strip().lower() for i in raw_inventory]
+        if weapon_key not in inventory:
+            available = [i for i in raw_inventory if i.strip().lower() in WEAPONS]
+            avail_str = ", ".join(available) if available else "none"
+            return {
+                "ok": False,
+                "error": f"{attacker.name} has no {weapon}; available: {avail_str}",
+            }
+
+        _, ability_mod = _weapon_modifier(attacker, entry.get("finesse", False))
+        proficiency = getattr(attacker, "proficiency_bonus", 0)
+        to_hit_bonus = ability_mod + proficiency
+
+        base = entry["dice"]
+        damage_dice = f"{base}+{ability_mod}" if ability_mod > 0 else (f"{base}{ability_mod}" if ability_mod < 0 else base)
+        weapon_name = weapon
+        damage_type = entry["type"]
+
     d20 = roll("1d20")
     nat = d20.rolls[0]
-    to_hit = nat + attacker.attack_bonus
+    to_hit = nat + to_hit_bonus
     hit = nat == 20 or (nat != 1 and to_hit >= defender.ac)
     result = {
         "ok": True,
         "attacker": attacker.name,
         "defender": defender.name,
         "to_hit_roll": nat,
+        "to_hit_bonus": to_hit_bonus,
         "to_hit_total": to_hit,
         "defender_ac": defender.ac,
         "hit": hit,
         "critical": nat == 20,
     }
+    if weapon_name:
+        result["weapon"] = weapon_name
+        result["damage_type"] = damage_type
     if hit:
         dmg = roll(damage_dice)
         if nat == 20:  # crit: double the dice

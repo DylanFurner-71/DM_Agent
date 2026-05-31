@@ -22,13 +22,20 @@ TOOLS = [
     },
     {
         "name": "attack",
-        "description": "Resolve an attack of one actor against another: rolls to hit vs AC and applies damage on a hit.",
+        "description": (
+            "Resolve a weapon attack. Specify the attacker, defender, and the weapon "
+            "the attacker is using (must be in their inventory). The engine validates "
+            "the inventory, looks up the damage die from the WEAPONS table, and derives "
+            "the to-hit bonus (ability_mod + proficiency) and damage modifier (ability_mod) "
+            "automatically — never supply dice or modifiers yourself. "
+            "Omit weapon only for NPC unarmed strikes; the engine uses attack_bonus + 1d6."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "attacker": {"type": "string", "description": "Name of the attacking actor"},
                 "defender": {"type": "string", "description": "Name of the defending actor"},
-                "damage_dice": {"type": "string", "description": "Damage dice notation, e.g. '1d8+2'", "default": "1d6"},
+                "weapon":   {"type": "string", "description": "Weapon name, e.g. 'mace', 'dagger', 'longsword'. Must be in the attacker's inventory."},
             },
             "required": ["attacker", "defender"],
         },
@@ -205,7 +212,7 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(attacker.name, state) or _action_guard(state)
         if err:
             return err
-        res = rules.attack(attacker, defender, args.get("damage_dice", "1d6"))
+        res = rules.attack(attacker, defender, args.get("weapon"))
         state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
         return res
 

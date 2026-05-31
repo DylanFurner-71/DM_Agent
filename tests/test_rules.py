@@ -46,6 +46,88 @@ def test_heal_clamps_to_max_and_revives():
     assert "unconscious" not in c.conditions
 
 
+def test_weapon_resolves_damage_and_to_hit():
+    """Naming a weapon derives dice, damage_type, and to-hit from inventory + stats."""
+    rules.seed(0)
+    atk = Character(name="A", attack_bonus=0, inventory=["mace"],
+                    ability_modifiers={"str": 3}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=30, max_hp=30)
+    res = rules.attack(atk, dfn, weapon="mace")
+    assert res["ok"] is True
+    assert res["weapon"] == "mace"
+    assert res["damage_type"] == "bludgeoning"
+    assert res["to_hit_bonus"] == 5          # str(3) + proficiency(2)
+    if res["hit"]:
+        assert "1d6+3" in res["damage_detail"]  # damage = ability_mod only
+
+
+def test_finesse_weapon_uses_dex_when_higher():
+    """Finesse weapon (rapier) uses Dex for both to-hit and damage when Dex > Str."""
+    rules.seed(0)
+    atk = Character(name="Rogue", attack_bonus=0, inventory=["rapier"],
+                    ability_modifiers={"str": 1, "dex": 5}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=30, max_hp=30)
+    res = rules.attack(atk, dfn, weapon="rapier")
+    assert res["weapon"] == "rapier"
+    assert res["damage_type"] == "piercing"
+    assert res["to_hit_bonus"] == 7          # dex(5) + proficiency(2)
+    if res["hit"]:
+        assert "1d8+5" in res["damage_detail"]
+
+
+def test_finesse_weapon_uses_str_when_str_higher():
+    """Finesse weapon falls back to Str when Str >= Dex."""
+    rules.seed(0)
+    atk = Character(name="A", attack_bonus=0, inventory=["dagger"],
+                    ability_modifiers={"str": 4, "dex": 1}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(atk, dfn, weapon="dagger")
+    assert res["to_hit_bonus"] == 6          # str(4) + proficiency(2)
+    if res["hit"]:
+        assert "1d4+4" in res["damage_detail"]
+
+
+def test_no_weapon_arg_uses_attack_bonus_fallback():
+    """No weapon argument → falls back to attack_bonus + 1d6 (NPC / unarmed path)."""
+    rules.seed(0)
+    atk = Character(name="A", attack_bonus=3)
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(atk, dfn)
+    assert "weapon" not in res
+    assert res["to_hit_bonus"] == 3
+    if res["hit"]:
+        assert res["damage_detail"].startswith("1d6")
+
+
+def test_attack_rejects_weapon_not_in_inventory():
+    """ok=False with the requested weapon AND the attacker's actual weapons listed."""
+    atk = Character(name="Wisp", attack_bonus=0, inventory=["dagger"])
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(atk, dfn, weapon="mace")
+    assert res["ok"] is False
+    assert "mace" in res["error"]       # requested weapon named
+    assert "Wisp" in res["error"]       # attacker named
+    assert "dagger" in res["error"]     # available weapon listed
+
+
+def test_attack_rejects_weapon_not_in_inventory_no_weapons():
+    """When the attacker carries no weapons at all the error says 'available: none'."""
+    atk = Character(name="Wisp", attack_bonus=0, inventory=["rope", "torch"])
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(atk, dfn, weapon="mace")
+    assert res["ok"] is False
+    assert "none" in res["error"]
+
+
+def test_attack_rejects_unknown_weapon():
+    """Specifying a weapon name absent from WEAPONS returns ok=False."""
+    atk = Character(name="A", attack_bonus=0, inventory=["banana"])
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(atk, dfn, weapon="banana")
+    assert res["ok"] is False
+    assert "banana" in res["error"]
+
+
 def test_attack_respects_ac_deterministically():
     rules.seed(1)  # fixed rolls for reproducibility
     atk = Character(name="A", attack_bonus=0)
