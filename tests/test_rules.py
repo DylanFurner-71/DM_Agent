@@ -2858,6 +2858,110 @@ def test_take_turn_start_combat_defers_attack():
     assert "you're up" in narration
 
 
+def test_start_combat_resolves_no_actions():
+    """start_combat rolls initiative and establishes order but must never change any
+    combatant's HP and must never set action_used — it only initialises the round."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=16, hp=16, ability_modifiers={"dex": 2})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 1})
+
+    hp_before = {k: c.hp for d in (gs.party, gs.npcs) for k, c in d.items()}
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+
+    assert res["ok"] is True
+    assert gs.combat_round == 1
+    assert res["active"] == gs.combat_order[0]
+    for key, hp in hp_before.items():
+        actor = gs.party.get(key) or gs.npcs.get(key)
+        assert actor.hp == hp, f"{key} HP changed during start_combat"
+    assert gs.action_used is False
+
+
+def test_action_denied_during_combat_start():
+    """With combat_starting=True (as if start_combat just fired this take_turn), both
+    attack and cast_spell must be denied: ok=False, reason='combat_starting', defender HP
+    unchanged, slots unchanged, and action_used stays False for both."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"],
+                                   ability_modifiers={"dex": 100}, proficiency_bonus=2)
+    gs.party["wisp"]   = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"],
+                                   ability_modifiers={"dex": 0})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    # combat_starting is True — both PCs attempt to act before the engine clears the barrier
+
+    hp_before    = gs.npcs["snik"].hp
+    slots_before = gs.party["wisp"].spell_slots[1]
+
+    atk = tools.dispatch("attack", {
+        "attacker": "Aldric", "defender": "Snik", "weapon": "mace",
+    }, gs)
+    assert atk["ok"] is False
+    assert atk["reason"] == "combat_starting"
+    assert gs.npcs["snik"].hp == hp_before
+    assert gs.action_used is False
+
+    cast = tools.dispatch("cast_spell", {
+        "caster": "Wisp", "spell_level": 1, "spell_name": "magic_missile", "target": "Snik",
+    }, gs)
+    assert cast["ok"] is False
+    assert cast["reason"] == "combat_starting"
+    assert gs.npcs["snik"].hp == hp_before          # still unchanged after both attempts
+    assert gs.party["wisp"].spell_slots[1] == slots_before
+
+
+def test_first_pc_not_skipped():
+    """When start_combat resolves and the first combatant in initiative order is a PC,
+    the NPC loop must halt immediately — next_turn is never called, the combat pointer
+    stays on that PC, and the engine emits the 'you're up' closing prompt."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})  # wins initiative
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12, ability_modifiers={"dex": 0})
+
+    # Model calls start_combat only, then stops — no attack attempt.
+    sc_block = MagicMock()
+    sc_block.type = "tool_use"; sc_block.id = "t1"
+    sc_block.name = "start_combat"; sc_block.input = {"combatants": ["aldric", "snik"]}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [sc_block]
+
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp  = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"; narr_block.text = "Swords are drawn — combat begins."
+    narr_resp  = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("we approach the goblin")
+
+    # Aldric (dex=100) is first in initiative order.
+    assert gs.combat_order[0] == "aldric"
+
+    # NPC loop: first combatant is a PC → break on i=0, next_turn never fired.
+    next_turns = [c for c in agent.tool_trace if c["name"] == "next_turn"]
+    assert next_turns == [], f"next_turn called {len(next_turns)} time(s) — first PC was skipped"
+
+    # Combat pointer unchanged; still round 1.
+    assert gs.combat_order[gs.combat_index] == "aldric"
+    assert gs.combat_round == 1
+
+    # Engine issues the initiative-announcing closing prompt.
+    assert "Aldric" in narration
+    assert "you're up" in narration
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
