@@ -277,6 +277,35 @@ class DMAgent:
             return True
         return False
 
+    def _closing_prompt(self) -> str | None:
+        """Engine-sourced closing prompt for the active combatant.
+
+        Returns None when not in combat or the active combatant is down.
+        If this turn's tool_trace contains an ambiguous_target rejection, names
+        the candidates: "<Name>, name your target — A or B?" (2 candidates) or
+        "<Name>, name your target — A, B, or C?" (3+). Otherwise returns the
+        generic "<Name>, what do you do?".
+        """
+        if not self.state.combat_order or self.state.combat_round == 0:
+            return None
+        all_actors = {**self.state.party, **self.state.npcs}
+        active_key = self.state.combat_order[self.state.combat_index]
+        actor = all_actors.get(active_key)
+        if not actor or actor.is_down:
+            return None
+        name = actor.name
+        for call in self.tool_trace:
+            result = call.get("result", {})
+            if not result.get("ok") and result.get("reason") == "ambiguous_target":
+                candidates = result.get("candidates", [])
+                if candidates:
+                    if len(candidates) == 2:
+                        targets = f"{candidates[0]} or {candidates[1]}"
+                    else:
+                        targets = ", ".join(candidates[:-1]) + f", or {candidates[-1]}"
+                    return f"{name}, name your target — {targets}?"
+        return f"{name}, what do you do?"
+
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
@@ -373,12 +402,9 @@ class DMAgent:
 
         # Engine-sourced closing prompt: kept separate so it's not stored in history.
         output = list(narration_beats)
-        if self.state.combat_order and self.state.combat_round > 0:
-            all_actors = {**self.state.party, **self.state.npcs}
-            active_key = self.state.combat_order[self.state.combat_index]
-            actor = all_actors.get(active_key)
-            if actor and not actor.is_down:
-                output.append(f"{actor.name}, what do you do?")
+        closing = self._closing_prompt()
+        if closing:
+            output.append(closing)
 
         return "\n\n".join(n for n in output if n)
 

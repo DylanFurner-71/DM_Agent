@@ -2271,6 +2271,189 @@ def test_maybe_end_combat_noop_when_enemies_alive():
     assert agent.tool_trace == []     # nothing appended
 
 
+# --- _closing_prompt ---------------------------------------------------------
+
+def _agent_with_trace(gs, trace_calls):
+    """Return a DMAgent whose tool_trace is pre-populated with trace_calls."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+    agent = DMAgent(gs, client=MagicMock())
+    agent.tool_trace = trace_calls
+    return agent
+
+
+def test_closing_prompt_names_targets_after_ambiguous():
+    """Wisp is active; trace has ambiguous_target with Grik + Narl; prompt addresses
+    Wisp and names both candidates — not the generic 'what do you do?'."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["wisp"].ability_modifiers["dex"] = 100  # Wisp wins initiative → active
+    tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
+    assert gs.combat_order[0] == "wisp"
+
+    trace = [{"name": "cast_spell", "input": {}, "result": {
+        "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    prompt = agent._closing_prompt()
+
+    assert prompt is not None
+    assert "Wisp" in prompt
+    assert "Grik" in prompt
+    assert "Narl" in prompt
+    assert "what do you do?" not in prompt
+
+
+def test_closing_prompt_generic_on_normal_turn():
+    """Wisp active, no ambiguous_target in trace → 'Wisp, what do you do?'."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["wisp"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["wisp", "snik"]}, gs)
+    assert gs.combat_order[0] == "wisp"
+
+    agent = _agent_with_trace(gs, [])
+    assert agent._closing_prompt() == "Wisp, what do you do?"
+
+
+def test_closing_prompt_none_when_not_in_combat():
+    """Not in combat (combat_round == 0) → None."""
+    gs = _make_combat_state()
+    agent = _agent_with_trace(gs, [])
+    assert agent._closing_prompt() is None
+
+
+def test_closing_prompt_generic_in_combat():
+    """Active combatant up, no ambiguous_target in trace → generic prompt."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    agent = _agent_with_trace(gs, [])
+    assert agent._closing_prompt() == "Aldric, what do you do?"
+
+
+def test_closing_prompt_none_outside_combat():
+    """Not in combat → None."""
+    gs = _make_combat_state()
+    agent = _agent_with_trace(gs, [])
+    assert agent._closing_prompt() is None
+
+
+def test_closing_prompt_none_when_active_is_down():
+    """Active combatant at 0 HP → None (no prompt for a downed actor)."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.party["aldric"].hp = 0
+
+    agent = _agent_with_trace(gs, [])
+    assert agent._closing_prompt() is None
+
+
+def test_closing_prompt_two_candidates():
+    """ambiguous_target with 2 candidates → '<Name>, name your target — A or B?'"""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    trace = [{"name": "attack", "input": {}, "result": {
+        "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    assert agent._closing_prompt() == "Aldric, name your target — Grik or Narl?"
+
+
+def test_closing_prompt_three_candidates():
+    """ambiguous_target with 3 candidates → '<Name>, name your target — A, B, or C?'"""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    trace = [{"name": "attack", "input": {}, "result": {
+        "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl", "Ugor"],
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    assert agent._closing_prompt() == "Aldric, name your target — Grik, Narl, or Ugor?"
+
+
+def test_closing_prompt_ambiguous_only_when_active_is_up():
+    """ambiguous_target in trace but active combatant is down → None, not the target prompt."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.party["aldric"].hp = 0
+
+    trace = [{"name": "attack", "input": {}, "result": {
+        "ok": False, "reason": "ambiguous_target", "candidates": ["Grik", "Narl"],
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    assert agent._closing_prompt() is None
+
+
+def test_closing_prompt_ok_false_non_ambiguous_gives_generic():
+    """ok=false with a different reason (e.g. 'no_target') → generic prompt, not target prompt."""
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    trace = [{"name": "attack", "input": {}, "result": {
+        "ok": False, "reason": "no_target", "error": "No living hostile targets present.",
+    }}]
+    agent = _agent_with_trace(gs, trace)
+    assert agent._closing_prompt() == "Aldric, what do you do?"
+
+
+def test_take_turn_emits_ambiguous_target_prompt():
+    """End-to-end: when attack returns ambiguous_target, take_turn's output contains
+    the candidate-naming prompt rather than the generic 'what do you do?' prompt."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100},
+                                   inventory=["mace"], proficiency_bonus=2)
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True, ability_modifiers={"dex": 0})
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12, hostile=True, ability_modifiers={"dex": -50})
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "grik", "narl"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    # Model calls attack without naming a defender → engine returns ambiguous_target.
+    atk_block = MagicMock()
+    atk_block.type = "tool_use"; atk_block.id = "t1"
+    atk_block.name = "attack"
+    atk_block.input = {"attacker": "Aldric", "weapon": "mace"}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [atk_block]
+
+    stop_block = MagicMock(); stop_block.type = "text"; stop_block.text = ""
+    stop_resp = MagicMock(); stop_resp.stop_reason = "end_turn"; stop_resp.content = [stop_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"; narr_block.text = "There are two enemies before you."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, stop_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric attacks")
+
+    assert "Aldric, name your target" in narration
+    assert "Grik" in narration
+    assert "Narl" in narration
+    assert "Aldric, what do you do?" not in narration
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
