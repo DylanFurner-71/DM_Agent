@@ -2962,6 +2962,239 @@ def test_first_pc_not_skipped():
     assert "you're up" in narration
 
 
+# --- set_quest_flag validation -----------------------------------------------
+
+def _flag_state():
+    gs = GameState(location="Test")
+    return gs
+
+
+def test_set_flag_normalizes_spaces_and_case():
+    gs = _flag_state()
+    res = tools.dispatch("set_quest_flag", {"flag": "Met The Oracle", "value": True}, gs)
+    assert res["ok"] is True
+    assert res["flag"] == "met_the_oracle"
+    assert "met_the_oracle" in gs.quest_flags
+
+
+def test_set_flag_normalizes_hyphens():
+    gs = _flag_state()
+    res = tools.dispatch("set_quest_flag", {"flag": "hero-reborn", "value": True}, gs)
+    assert res["ok"] is True
+    assert res["flag"] == "hero_reborn"
+
+
+def test_set_flag_strips_illegal_chars():
+    """Chars outside [a-z0-9_] are removed; the remainder is stored."""
+    gs = _flag_state()
+    res = tools.dispatch("set_quest_flag", {"flag": "door.opened!", "value": True}, gs)
+    assert res["ok"] is True
+    assert res["flag"] == "dooropened"
+
+
+def test_set_flag_rejects_empty_after_normalization():
+    """A key that normalizes to empty must return ok=False, reason bad_flag_key,
+    and must not write anything to quest_flags."""
+    for bad in ("", "   ", "!!!", "..."):
+        gs = _flag_state()
+        res = tools.dispatch("set_quest_flag", {"flag": bad, "value": True}, gs)
+        assert res["ok"] is False, f"expected rejection for {bad!r}"
+        assert res["reason"] == "bad_flag_key"
+        assert gs.quest_flags == {}
+
+
+def test_set_flag_rejects_reserved_keys():
+    """Engine-owned keys must be rejected with reason reserved_flag_key."""
+    for key in ("hp", "max_hp", "ac", "spell_slots", "damage", "initiative"):
+        gs = _flag_state()
+        res = tools.dispatch("set_quest_flag", {"flag": key, "value": True}, gs)
+        assert res["ok"] is False, f"expected reserved rejection for {key!r}"
+        assert res["reason"] == "reserved_flag_key"
+        assert gs.quest_flags == {}
+
+
+def test_set_flag_reserved_key_checked_after_normalization():
+    """'HP' and 'Max-HP' normalize to reserved keys and must also be rejected."""
+    for raw in ("HP", "Max-HP", "SPELL_SLOTS"):
+        gs = _flag_state()
+        res = tools.dispatch("set_quest_flag", {"flag": raw, "value": True}, gs)
+        assert res["ok"] is False, f"expected reserved rejection for {raw!r}"
+        assert res["reason"] == "reserved_flag_key"
+
+
+def test_set_flag_accepts_all_primitive_value_types():
+    """bool, str, int, float, and None must all be accepted."""
+    primitives = [True, False, "slain", 42, 3.14, None]
+    for val in primitives:
+        gs = _flag_state()
+        res = tools.dispatch("set_quest_flag", {"flag": "story_event", "value": val}, gs)
+        assert res["ok"] is True, f"primitive {val!r} rejected unexpectedly"
+        assert gs.quest_flags["story_event"] == val
+
+
+def test_set_flag_rejects_non_primitive_value():
+    """Lists and dicts are not JSON primitives and must be rejected."""
+    for bad_val in ([], {}, [1, 2], {"a": 1}):
+        gs = _flag_state()
+        res = tools.dispatch("set_quest_flag", {"flag": "event", "value": bad_val}, gs)
+        assert res["ok"] is False, f"expected rejection for value {bad_val!r}"
+        assert res["reason"] == "bad_flag_value"
+        assert gs.quest_flags == {}
+
+
+def test_set_flag_default_value_is_true():
+    """Omitting value must store True (not raise)."""
+    gs = _flag_state()
+    res = tools.dispatch("set_quest_flag", {"flag": "door_open"}, gs)
+    assert res["ok"] is True
+    assert gs.quest_flags["door_open"] is True
+
+
+def test_set_flag_overwrites_existing():
+    """Setting the same key twice keeps only the latest value."""
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "stage", "value": 1}, gs)
+    tools.dispatch("set_quest_flag", {"flag": "stage", "value": 2}, gs)
+    assert gs.quest_flags["stage"] == 2
+
+
+def test_set_flag_stored_key_is_normalized():
+    """The stored key in quest_flags is always the normalized form."""
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "Found The Key"}, gs)
+    assert "found_the_key" in gs.quest_flags
+    assert "Found The Key" not in gs.quest_flags
+
+
+# --- clear_quest_flag --------------------------------------------------------
+
+def test_clear_flag_removes_existing_key():
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "door_open", "value": True}, gs)
+    res = tools.dispatch("clear_quest_flag", {"flag": "door_open"}, gs)
+    assert res["ok"] is True
+    assert res["removed"] is True
+    assert res["flag"] == "door_open"
+    assert "door_open" not in gs.quest_flags
+
+
+def test_clear_flag_no_op_on_missing_key():
+    gs = _flag_state()
+    res = tools.dispatch("clear_quest_flag", {"flag": "nonexistent"}, gs)
+    assert res["ok"] is True
+    assert res["removed"] is False
+    assert gs.quest_flags == {}
+
+
+def test_clear_flag_normalizes_key():
+    """Key normalization must match set_quest_flag so the same flag is targeted."""
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "met_the_oracle", "value": True}, gs)
+    res = tools.dispatch("clear_quest_flag", {"flag": "Met The Oracle"}, gs)
+    assert res["ok"] is True
+    assert res["removed"] is True
+    assert "met_the_oracle" not in gs.quest_flags
+
+
+def test_clear_flag_rejects_empty_key():
+    gs = _flag_state()
+    res = tools.dispatch("clear_quest_flag", {"flag": "!!!"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "bad_flag_key"
+
+
+def test_clear_flag_missing_key_does_not_crash():
+    """No-op on a missing key must not raise and must leave quest_flags unchanged."""
+    gs = _flag_state()
+    gs.quest_flags["existing"] = True
+    res = tools.dispatch("clear_quest_flag", {"flag": "does_not_exist"}, gs)
+    assert res["ok"] is True
+    assert res["removed"] is False
+    assert gs.quest_flags == {"existing": True}  # untouched
+
+
+# --- quest_flag canonical tests (items 4–5 spec) ----------------------------
+
+def test_set_and_overwrite():
+    """set True → ok=True, flag is True; set same key to False → overwrites; exactly one key."""
+    gs = _flag_state()
+    res1 = tools.dispatch("set_quest_flag", {"flag": "door_unlocked", "value": True}, gs)
+    assert res1["ok"] is True
+    assert gs.quest_flags["door_unlocked"] is True
+
+    res2 = tools.dispatch("set_quest_flag", {"flag": "door_unlocked", "value": False}, gs)
+    assert res2["ok"] is True
+    assert gs.quest_flags["door_unlocked"] is False
+    assert len(gs.quest_flags) == 1   # overwrite, not append
+
+
+def test_key_normalization():
+    """'Door Unlocked' and 'door-unlocked' both normalize to 'door_unlocked'; only one key stored."""
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "Door Unlocked", "value": True}, gs)
+    tools.dispatch("set_quest_flag", {"flag": "door-unlocked", "value": True}, gs)
+    assert len(gs.quest_flags) == 1
+    assert "door_unlocked" in gs.quest_flags
+
+
+def test_roundtrip_safe():
+    """After several valid sets json.dumps(quest_flags) must succeed without raising."""
+    import json as _json
+    gs = _flag_state()
+    for flag, val in [
+        ("clue_found", True),
+        ("npc_disposition", "friendly"),
+        ("secret_level", 3),
+        ("completion_ratio", 0.5),
+        ("unused_slot", None),
+    ]:
+        tools.dispatch("set_quest_flag", {"flag": flag, "value": val}, gs)
+    assert _json.dumps(gs.quest_flags)  # must not raise
+
+
+def test_clear():
+    """clear removes an existing flag (removed=True); clearing a missing key is a no-op (removed=False)."""
+    gs = _flag_state()
+    tools.dispatch("set_quest_flag", {"flag": "door_unlocked", "value": True}, gs)
+
+    res_remove = tools.dispatch("clear_quest_flag", {"flag": "door_unlocked"}, gs)
+    assert res_remove["ok"] is True
+    assert res_remove["removed"] is True
+    assert "door_unlocked" not in gs.quest_flags
+
+    res_noop = tools.dispatch("clear_quest_flag", {"flag": "door_unlocked"}, gs)
+    assert res_noop["ok"] is True
+    assert res_noop["removed"] is False
+
+
+def test_snapshot_surfaces_flags():
+    """_state_snapshot includes quest_flags for the model; print_state (/state) omits them."""
+    import io, contextlib, json as _json
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+    from src.main import print_state
+
+    gs = GameState(location="Test Hall")
+    gs.party["aldric"] = Character(name="Aldric")
+    tools.dispatch("set_quest_flag", {"flag": "lever_pulled", "value": True}, gs)
+    tools.dispatch("set_quest_flag", {"flag": "oracle_spoke", "value": "warned"}, gs)
+
+    agent = DMAgent(gs, client=MagicMock())
+    snap = _json.loads(agent._state_snapshot())
+
+    # Model's per-turn context must contain both flags.
+    assert snap["quest_flags"]["lever_pulled"] is True
+    assert snap["quest_flags"]["oracle_spoke"] == "warned"
+
+    # Player-facing /state must not expose any quest flag (flags may be DM-secrets).
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        print_state(gs)
+    player_view = buf.getvalue()
+    assert "lever_pulled" not in player_view
+    assert "oracle_spoke" not in player_view
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

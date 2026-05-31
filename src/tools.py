@@ -8,8 +8,26 @@ only *request* an action, which the deterministic code below grants or denies.
 
 from __future__ import annotations
 
+import re
+
 from . import rules
 from .game_state import NPC, expand_npc_entry
+
+# Keys the model must not use as quest flags — these name engine-owned fields.
+_RESERVED_FLAG_KEYS = frozenset({
+    "hp", "max_hp", "ac", "spell_slots", "damage", "initiative",
+})
+
+
+def _normalize_flag_key(raw: str) -> str | None:
+    """Normalize a quest flag key; return None if the result is empty.
+
+    Pipeline: strip → lowercase → spaces/hyphens → underscores →
+    remove chars outside [a-z0-9_].
+    """
+    key = raw.strip().lower().replace(" ", "_").replace("-", "_")
+    key = re.sub(r"[^a-z0-9_]", "", key)
+    return key or None
 
 TOOLS = [
     {
@@ -113,12 +131,35 @@ TOOLS = [
     },
     {
         "name": "set_quest_flag",
-        "description": "Record a story milestone as a boolean flag (e.g. 'met_the_oracle').",
+        "description": (
+            "Record a named story flag with a value. "
+            "flag is normalized: stripped, lowercased, spaces/hyphens → underscores, "
+            "restricted to [a-z0-9_]; empty-after-normalization is rejected. "
+            "value must be a JSON primitive (bool, string, int, float, or null); "
+            "omit to default to true. "
+            "Reserved engine keys (hp, max_hp, ac, spell_slots, damage, initiative) "
+            "are rejected — flags are not a backdoor to mechanical state."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "flag": {"type": "string"},
-                "value": {"type": "boolean", "default": True},
+                "flag": {"type": "string", "description": "Flag name; normalized to snake_case."},
+                "value": {"description": "A JSON primitive — bool, string, int, float, or null. Defaults to true."},
+            },
+            "required": ["flag"],
+        },
+    },
+    {
+        "name": "clear_quest_flag",
+        "description": (
+            "Remove a quest flag. flag is normalized the same way as set_quest_flag "
+            "(stripped, lowercased, spaces/hyphens → underscores, [a-z0-9_] only). "
+            "If the key is absent the call is a no-op (ok=True, removed=False, no crash)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "flag": {"type": "string", "description": "Flag name to remove; normalized to snake_case."},
             },
             "required": ["flag"],
         },
@@ -430,9 +471,48 @@ def dispatch(name: str, args: dict, state) -> dict:
         }
 
     if name == "set_quest_flag":
-        state.quest_flags[args["flag"]] = bool(args.get("value", True))
-        state.record(f"flag {args['flag']} = {state.quest_flags[args['flag']]}")
-        return {"ok": True, "flag": args["flag"], "value": state.quest_flags[args["flag"]]}
+        raw_key = args.get("flag", "")
+        key = _normalize_flag_key(raw_key)
+        if not key:
+            return {
+                "ok": False,
+                "reason": "bad_flag_key",
+                "error": f"Flag key {raw_key!r} normalizes to empty; use letters, digits, or underscores.",
+            }
+        if key in _RESERVED_FLAG_KEYS:
+            return {
+                "ok": False,
+                "reason": "reserved_flag_key",
+                "error": f"{key!r} is reserved for engine mechanics; choose a different flag name.",
+            }
+        value = args.get("value", True)
+        if not (value is None or isinstance(value, (bool, str, int, float))):
+            return {
+                "ok": False,
+                "reason": "bad_flag_value",
+                "error": (
+                    f"Flag value must be a JSON primitive (bool, str, int, float, or null), "
+                    f"got {type(value).__name__}."
+                ),
+            }
+        state.quest_flags[key] = value
+        state.record(f"flag {key} = {value!r}")
+        return {"ok": True, "flag": key, "value": value}
+
+    if name == "clear_quest_flag":
+        raw_key = args.get("flag", "")
+        key = _normalize_flag_key(raw_key)
+        if not key:
+            return {
+                "ok": False,
+                "reason": "bad_flag_key",
+                "error": f"Flag key {raw_key!r} normalizes to empty; use letters, digits, or underscores.",
+            }
+        removed = key in state.quest_flags
+        if removed:
+            del state.quest_flags[key]
+            state.record(f"flag {key} cleared")
+        return {"ok": True, "flag": key, "removed": removed}
 
     if name == "move_scene":
         if state.scenes:
