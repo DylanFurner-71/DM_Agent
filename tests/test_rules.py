@@ -3282,6 +3282,187 @@ def test_new_uses_scene_intro():
     assert gs.scene == scene           # scene text is what main() displays for new games
 
 
+# --- Stage 1: death saves -------------------------------------------------------
+
+def _make_roll_result(n: int):
+    from src.rules import RollResult
+    return RollResult("1d20", [n], 0, n)
+
+
+def test_death_save_properties_healthy():
+    c = Character(name="Hero", max_hp=10, hp=10)
+    assert c.is_dying is False
+    assert c.is_stable is False
+    assert c.is_dead is False
+    assert c.is_down is False
+
+
+def test_death_save_properties_fresh_down():
+    c = Character(name="Hero", max_hp=10, hp=0)
+    assert c.is_down is True
+    assert c.is_dying is True
+    assert c.is_stable is False
+    assert c.is_dead is False
+
+
+def test_death_save_properties_stable():
+    c = Character(name="Hero", max_hp=10, hp=0, stable=True)
+    assert c.is_stable is True
+    assert c.is_dying is False
+
+
+def test_death_save_properties_dead():
+    c = Character(name="Hero", max_hp=10, hp=0, dead=True)
+    assert c.is_dead is True
+    assert c.is_dying is False
+
+
+def test_death_save_nat20_revives():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, conditions=["unconscious"],
+                  death_save_failures=2, death_save_successes=1)
+    with patch.object(rules, "roll", return_value=_make_roll_result(20)):
+        res = rules.roll_death_save(c)
+    assert res["ok"] is True
+    assert res["result_kind"] == "revived"
+    assert res["hp"] == 1
+    assert c.hp == 1
+    assert res["successes"] == 0
+    assert res["failures"] == 0
+    assert c.death_save_successes == 0
+    assert c.death_save_failures == 0
+    assert "unconscious" not in c.conditions
+
+
+def test_death_save_nat1_adds_two_failures():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=0)
+    with patch.object(rules, "roll", return_value=_make_roll_result(1)):
+        res = rules.roll_death_save(c)
+    assert res["ok"] is True
+    assert res["result_kind"] == "failure"
+    assert res["failures"] == 2
+    assert c.death_save_failures == 2
+
+
+def test_death_save_nat1_caps_at_three_and_dies():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=2)
+    with patch.object(rules, "roll", return_value=_make_roll_result(1)):
+        res = rules.roll_death_save(c)
+    assert res["result_kind"] == "dead"
+    assert c.dead is True
+    assert res["failures"] == 3
+
+
+def test_death_save_low_roll_adds_one_failure():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=0)
+    with patch.object(rules, "roll", return_value=_make_roll_result(5)):
+        res = rules.roll_death_save(c)
+    assert res["result_kind"] == "failure"
+    assert res["failures"] == 1
+    assert c.death_save_failures == 1
+
+
+def test_death_save_mid_roll_adds_one_success():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_successes=0)
+    with patch.object(rules, "roll", return_value=_make_roll_result(15)):
+        res = rules.roll_death_save(c)
+    assert res["result_kind"] == "success"
+    assert res["successes"] == 1
+    assert c.death_save_successes == 1
+
+
+def test_death_save_three_successes_stabilizes():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_successes=2)
+    with patch.object(rules, "roll", return_value=_make_roll_result(15)):
+        res = rules.roll_death_save(c)
+    assert res["result_kind"] == "stabilized"
+    assert c.stable is True
+    assert c.death_save_successes == 0
+    assert c.death_save_failures == 0
+
+
+def test_death_save_three_failures_kills():
+    from unittest.mock import patch
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=2)
+    with patch.object(rules, "roll", return_value=_make_roll_result(5)):
+        res = rules.roll_death_save(c)
+    assert res["result_kind"] == "dead"
+    assert c.dead is True
+
+
+def test_death_save_refuses_conscious_pc():
+    c = Character(name="Hero", max_hp=20, hp=10)
+    res = rules.roll_death_save(c)
+    assert res["ok"] is False
+    assert res["reason"] == "not_dying"
+
+
+def test_death_save_refuses_stable_pc():
+    c = Character(name="Hero", max_hp=20, hp=0, stable=True)
+    res = rules.roll_death_save(c)
+    assert res["ok"] is False
+    assert res["reason"] == "not_dying"
+
+
+def test_death_save_refuses_dead_pc():
+    c = Character(name="Hero", max_hp=20, hp=0, dead=True)
+    res = rules.roll_death_save(c)
+    assert res["ok"] is False
+    assert res["reason"] == "not_dying"
+
+
+def test_heal_resets_death_save_state():
+    c = Character(name="Hero", max_hp=20, hp=0,
+                  death_save_failures=2, death_save_successes=1,
+                  stable=False, conditions=["unconscious"])
+    res = rules.heal(c, 5)
+    assert res["ok"] is True
+    assert c.hp == 5
+    assert c.death_save_successes == 0
+    assert c.death_save_failures == 0
+    assert c.stable is False
+    assert "unconscious" not in c.conditions
+
+
+def test_heal_dead_pc_is_noop():
+    c = Character(name="Hero", max_hp=20, hp=0, dead=True)
+    res = rules.heal(c, 10)
+    assert res["ok"] is True
+    assert res["healed"] == 0
+    assert res["hp"] == 0
+    assert c.hp == 0
+    assert c.dead is True
+    assert "note" in res
+
+
+def test_heal_npc_unaffected_by_death_save_fields():
+    """NPC heal still works; NPCs have no death_save_failures attr."""
+    npc = NPC(name="Goblin", max_hp=12, hp=0)
+    res = rules.heal(npc, 5)
+    assert res["ok"] is True
+    assert npc.hp == 5
+    assert not hasattr(npc, "death_save_failures")
+
+
+def test_character_death_save_fields_round_trip():
+    gs = GameState(location="Test")
+    c = Character(name="Hero", max_hp=20, hp=0,
+                  death_save_successes=2, death_save_failures=1,
+                  dead=False, stable=False)
+    gs.party["hero"] = c
+    restored = GameState.from_dict(gs.to_dict())
+    rc = restored.party["hero"]
+    assert rc.death_save_successes == 2
+    assert rc.death_save_failures == 1
+    assert rc.dead is False
+    assert rc.stable is False
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

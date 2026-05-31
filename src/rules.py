@@ -81,10 +81,81 @@ def apply_damage(target, amount: int) -> dict:
 
 def heal(target, amount: int) -> dict:
     amount = max(0, int(amount))
+    # Dead PCs cannot be revived by healing.
+    if hasattr(target, "death_save_failures") and target.dead:
+        return {"ok": True, "target": target.name, "healed": 0, "hp": 0, "note": "cannot heal the dead"}
     target.hp = min(target.max_hp, target.hp + amount)
     if target.hp > 0 and hasattr(target, "conditions") and "unconscious" in target.conditions:
         target.conditions.remove("unconscious")
+    if target.hp > 0 and hasattr(target, "death_save_failures"):
+        target.death_save_successes = 0
+        target.death_save_failures = 0
+        target.stable = False
     return {"ok": True, "target": target.name, "healed": amount, "hp": target.hp}
+
+
+def roll_death_save(character) -> dict:
+    """Roll a death saving throw for a dying PC (hp <= 0, not dead, not stable).
+
+    Nat 20: revive at 1 HP, reset all counters.
+    Nat 1:  two failures.
+    2-9:    one failure.
+    10-19:  one success.
+    3 successes -> stable.
+    3 failures  -> dead.
+    """
+    if not (hasattr(character, "death_save_failures") and character.is_dying):
+        return {"ok": False, "reason": "not_dying", "character": character.name}
+
+    nat = roll("1d20").rolls[0]
+
+    if nat == 20:
+        character.hp = 1
+        character.death_save_successes = 0
+        character.death_save_failures = 0
+        character.stable = False
+        character.dead = False
+        if hasattr(character, "conditions") and "unconscious" in character.conditions:
+            character.conditions.remove("unconscious")
+        return {
+            "ok": True,
+            "character": character.name,
+            "roll": nat,
+            "result_kind": "revived",
+            "successes": 0,
+            "failures": 0,
+            "hp": 1,
+        }
+
+    if nat == 1:
+        character.death_save_failures = min(3, character.death_save_failures + 2)
+    elif nat <= 9:
+        character.death_save_failures = min(3, character.death_save_failures + 1)
+    else:  # 10-19
+        character.death_save_successes = min(3, character.death_save_successes + 1)
+
+    if character.death_save_successes >= 3:
+        character.stable = True
+        character.death_save_successes = 0
+        character.death_save_failures = 0
+        result_kind = "stabilized"
+    elif character.death_save_failures >= 3:
+        character.dead = True
+        result_kind = "dead"
+    elif nat <= 9:
+        result_kind = "failure"
+    else:
+        result_kind = "success"
+
+    return {
+        "ok": True,
+        "character": character.name,
+        "roll": nat,
+        "result_kind": result_kind,
+        "successes": character.death_save_successes,
+        "failures": character.death_save_failures,
+        "hp": character.hp,
+    }
 
 
 # Canonical weapon table: damage die, damage type, optional finesse flag.

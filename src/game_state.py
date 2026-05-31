@@ -50,10 +50,26 @@ class Character:
     conditions: list[str] = field(default_factory=list)  # e.g. "unconscious", "prone"
     spellcasting_ability: str = ""  # ability modifier key used for spell attack/save, e.g. "int", "wis"
     spells: list[str] = field(default_factory=list)  # known spell ids, e.g. ["magic_missile"]
+    death_save_successes: int = 0
+    death_save_failures: int = 0
+    dead: bool = False
+    stable: bool = False
 
     @property
     def is_down(self) -> bool:
         return self.hp <= 0
+
+    @property
+    def is_dead(self) -> bool:
+        return self.dead
+
+    @property
+    def is_stable(self) -> bool:
+        return self.stable
+
+    @property
+    def is_dying(self) -> bool:
+        return self.hp <= 0 and not self.dead and not self.stable
 
 
 @dataclass
