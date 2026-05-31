@@ -9,6 +9,7 @@ only *request* an action, which the deterministic code below grants or denies.
 from __future__ import annotations
 
 from . import rules
+from .game_state import NPC
 
 TOOLS = [
     {
@@ -147,6 +148,28 @@ TOOLS = [
             "required": ["topic"],
         },
     },
+    {
+        "name": "add_npc",
+        "description": (
+            "Instantiate a new NPC from a canonical monster template and add it to the roster. "
+            "Available templates: goblin, orc, skeleton. "
+            "instance_id is the unique state key (e.g. 'goblin_two'); it must not already exist. "
+            "name overrides the display name (optional). "
+            "Outside combat: NPC is added to the roster and can be named in start_combat. "
+            "During combat (reinforcements): the engine rolls the NPC's initiative and inserts "
+            "it into the turn order at the correct sorted slot; the active combatant is unchanged. "
+            "Returns ok=false for an unknown template or a duplicate instance_id."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "template":    {"type": "string", "description": "Monster template id: 'goblin', 'orc', or 'skeleton'"},
+                "instance_id": {"type": "string", "description": "Unique state key for this NPC, e.g. 'goblin_two'"},
+                "name":        {"type": "string", "description": "Optional display name override"},
+            },
+            "required": ["template", "instance_id"],
+        },
+    },
 ]
 
 
@@ -278,8 +301,9 @@ def dispatch(name: str, args: dict, state) -> dict:
         unknown = [k for k in combatant_keys if k not in all_actors]
         if unknown:
             return {"ok": False, "error": f"Unknown combatant key(s) {unknown}; call get_state to see valid keys."}
-        ordered = rules.roll_initiative({k: all_actors[k] for k in combatant_keys})
+        ordered, initiatives = rules.roll_initiative({k: all_actors[k] for k in combatant_keys})
         state.combat_order = ordered
+        state.combat_initiatives = initiatives
         state.combat_index = 0
         state.combat_round = 1
         state.action_used = False
@@ -316,6 +340,7 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "end_combat":
         state.combat_order = []
+        state.combat_initiatives = {}
         state.combat_index = 0
         state.combat_round = 0
         state.record("combat ended")
@@ -335,5 +360,70 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "lookup_rule":
         return rules.lookup_rule(args["topic"])
+
+    if name == "add_npc":
+        template = args.get("template", "").strip().lower()
+        instance_id = args.get("instance_id", "").strip()
+        display_name = args.get("name")
+
+        if template not in rules.MONSTERS:
+            return {
+                "ok": False,
+                "error": f"Unknown template {template!r}. Known: {', '.join(sorted(rules.MONSTERS))}.",
+            }
+        if instance_id in state.npcs or instance_id in state.party:
+            return {"ok": False, "error": f"instance_id {instance_id!r} already exists."}
+
+        npc = NPC(**rules.spawn_npc(template, display_name))
+        state.npcs[instance_id] = npc
+
+        if state.combat_round > 0:
+            # Roll initiative and find the correct sorted insertion slot.
+            dex = npc.ability_modifiers.get("dex", 0)
+            new_init = rules.roll("1d20").total + dex
+            state.combat_initiatives[instance_id] = new_init
+
+            all_actors = {**state.party, **state.npcs}
+            insert_pos = len(state.combat_order)
+            for i, key in enumerate(state.combat_order):
+                existing_init = state.combat_initiatives.get(key, 0)
+                existing_actor = all_actors.get(key)
+                existing_dex = existing_actor.ability_modifiers.get("dex", 0) if existing_actor else 0
+                if new_init > existing_init or (new_init == existing_init and dex > existing_dex):
+                    insert_pos = i
+                    break
+
+            state.combat_order.insert(insert_pos, instance_id)
+            # Shift the pointer so the same combatant stays active.
+            if insert_pos <= state.combat_index:
+                state.combat_index += 1
+
+            state.record(
+                f"add_npc {instance_id} ({npc.name}) from {template}: "
+                f"initiative {new_init}, inserted at position {insert_pos}"
+            )
+            return {
+                "ok": True,
+                "instance_id": instance_id,
+                "name": npc.name,
+                "template": template,
+                "hp": npc.hp,
+                "ac": npc.ac,
+                "combat": True,
+                "initiative": new_init,
+                "position": insert_pos,
+                "combat_order": state.combat_order,
+            }
+
+        state.record(f"add_npc {instance_id} ({npc.name}) from {template}")
+        return {
+            "ok": True,
+            "instance_id": instance_id,
+            "name": npc.name,
+            "template": template,
+            "hp": npc.hp,
+            "ac": npc.ac,
+            "combat": False,
+        }
 
     return {"ok": False, "error": f"Unknown tool {name!r}"}

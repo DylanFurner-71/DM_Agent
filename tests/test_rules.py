@@ -250,9 +250,10 @@ def test_roll_initiative_returns_all_keys_including_npcs():
     rules.seed(0)
     a = Character(name="Aldric", ability_modifiers={"dex": 0})
     b = NPC(name="Snik")  # no ability_modifiers → dex treated as 0
-    result = rules.roll_initiative({"aldric": a, "snik": b})
-    assert sorted(result) == ["aldric", "snik"]
-    assert len(result) == 2
+    order, initiatives = rules.roll_initiative({"aldric": a, "snik": b})
+    assert sorted(order) == ["aldric", "snik"]
+    assert len(order) == 2
+    assert set(initiatives) == {"aldric", "snik"}
 
 
 def test_roll_initiative_highest_total_first():
@@ -260,8 +261,8 @@ def test_roll_initiative_highest_total_first():
     # +100 dex → total ≥ 101; -100 dex → total ≤ -80. No overlap possible.
     fast = Character(name="Fast", ability_modifiers={"dex": 100})
     slow = Character(name="Slow", ability_modifiers={"dex": -100})
-    result = rules.roll_initiative({"fast": fast, "slow": slow})
-    assert result == ["fast", "slow"]
+    order, _ = rules.roll_initiative({"fast": fast, "slow": slow})
+    assert order == ["fast", "slow"]
 
 
 def test_roll_initiative_dex_breaks_total_tie():
@@ -277,8 +278,8 @@ def test_roll_initiative_dex_breaks_total_tie():
     rules.seed(77)
     ca = Character(name="A", ability_modifiers={"dex": dex_a})
     cb = Character(name="B", ability_modifiers={"dex": dex_b})
-    result = rules.roll_initiative({"a": ca, "b": cb})
-    assert result[0] == expected_first
+    order, _ = rules.roll_initiative({"a": ca, "b": cb})
+    assert order[0] == expected_first
 
 
 def test_combat_defaults_to_not_in_combat():
@@ -1024,6 +1025,199 @@ def test_skill_check_case_insensitive():
     rules.seed(1)
     res = rules.skill_check(c, "WIS", dc=1)
     assert res["modifier"] == 3
+
+
+# --- add_npc dispatch tests ---------------------------------------------------
+
+def test_add_npc_unknown_template_rejected():
+    gs = GameState(location="Test")
+    res = tools.dispatch("add_npc", {"template": "dragon", "instance_id": "dragon_one"}, gs)
+    assert res["ok"] is False
+    assert "dragon" in res["error"]
+    assert gs.npcs == {}
+
+
+def test_add_npc_duplicate_npc_key_rejected():
+    gs = GameState(location="Test")
+    tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+    res = tools.dispatch("add_npc", {"template": "orc", "instance_id": "grix"}, gs)
+    assert res["ok"] is False
+    assert "grix" in res["error"]
+    assert gs.npcs["grix"].name == "Goblin"  # original untouched
+
+
+def test_add_npc_duplicate_party_key_rejected():
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric")
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "aldric"}, gs)
+    assert res["ok"] is False
+    assert "aldric" in res["error"]
+
+
+def test_add_npc_correct_stats_and_name_override():
+    gs = GameState(location="Test")
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix", "name": "Grix"}, gs)
+    assert res["ok"] is True
+    assert res["combat"] is False
+    npc = gs.npcs["grix"]
+    assert npc.name == "Grix"
+    assert npc.max_hp == 12
+    assert npc.hp == 12       # full HP on spawn
+    assert npc.ac == 13
+    assert "shortsword" in npc.inventory
+    assert "shortbow" in npc.inventory
+
+
+def test_add_npc_not_in_combat_no_order_change():
+    gs = GameState(location="Test")
+    res = tools.dispatch("add_npc", {"template": "orc", "instance_id": "ugor"}, gs)
+    assert res["ok"] is True
+    assert gs.combat_order == []
+    assert gs.combat_round == 0
+    assert "ugor" in gs.npcs
+
+
+def test_add_npc_serializes_through_save_load():
+    gs = GameState(location="Test")
+    tools.dispatch("add_npc", {"template": "orc", "instance_id": "ugor"}, gs)
+    restored = GameState.from_dict(gs.to_dict())
+    assert "ugor" in restored.npcs
+    assert restored.npcs["ugor"].max_hp == 15       # orc stat block
+    assert restored.npcs["ugor"].hp == 15
+    assert "greataxe" in restored.npcs["ugor"].inventory
+
+
+def test_add_npc_in_combat_npc_enters_order_and_pointer_stable():
+    """Adding an NPC during combat must insert it into combat_order and leave
+    the active combatant (by key) unchanged."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    active_before = gs.combat_order[gs.combat_index]
+
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+
+    assert res["ok"] is True
+    assert res["combat"] is True
+    assert "grix" in gs.combat_order
+    assert len(gs.combat_order) == 3
+    assert gs.combat_order[gs.combat_index] == active_before  # pointer stable
+
+
+def test_add_npc_in_combat_initiative_stored():
+    """The new NPC's initiative total is stored in combat_initiatives."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
+
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+
+    assert res["ok"] is True
+    assert "grix" in gs.combat_initiatives
+    assert gs.combat_initiatives["grix"] == res["initiative"]
+
+
+def test_add_npc_in_combat_order_is_sorted_by_initiative():
+    """After insertion the combat_order must be non-increasing by stored initiative."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.party["wisp"] = Character(name="Wisp", ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+
+    tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+
+    order = gs.combat_order
+    for i in range(len(order) - 1):
+        assert gs.combat_initiatives.get(order[i], 0) >= gs.combat_initiatives.get(order[i + 1], 0)
+
+
+def test_add_npc_in_combat_before_active_shifts_pointer():
+    """If the NPC is inserted before the active slot, combat_index increments so
+    the same combatant remains active."""
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 0})
+    # Manually craft known combat state: aldric first, snik second; pointer on snik.
+    gs.combat_order = ["aldric", "snik"]
+    gs.combat_index = 1          # pointer on snik
+    gs.combat_round = 1
+    gs.combat_initiatives = {"aldric": 10, "snik": 5}
+
+    # Goblin has dex +2; with a d20 roll of any value ≥ 9 its initiative > 10+0=10
+    # and it slots at position 0, before aldric, before snik.
+    # Force that: set combat_initiatives["aldric"]=1 so any goblin roll beats it.
+    gs.combat_initiatives = {"aldric": 1, "snik": 0}
+
+    # seed so d20=20 → goblin initiative = 20+2=22, always first
+    rules.seed(0)  # just need any roll > 1; verify pointer shifts
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+    assert res["ok"] is True
+    grix_init = gs.combat_initiatives["grix"]
+    grix_pos = gs.combat_order.index("grix")
+    if grix_pos <= 1:   # inserted at or before old combat_index (1)
+        assert gs.combat_order[gs.combat_index] == "snik"   # pointer followed
+    else:               # inserted after → pointer unchanged at 1
+        assert gs.combat_index == 1
+
+
+def test_add_npc_in_combat_cleared_by_end_combat():
+    """end_combat must clear combat_initiatives so no stale entries remain."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
+    tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+    assert gs.combat_initiatives != {}
+
+    tools.dispatch("end_combat", {}, gs)
+    assert gs.combat_initiatives == {}
+
+
+def test_from_dict_expands_template_npc():
+    """NPC entries with a 'template' key are expanded via spawn_npc at load time."""
+    d = {
+        "location": "Test",
+        "npcs": {"snik": {"template": "goblin", "name": "Snik", "hostile": True}},
+    }
+    gs = GameState.from_dict(d)
+    npc = gs.npcs["snik"]
+    assert npc.name == "Snik"
+    assert npc.max_hp == 12
+    assert npc.hp == 12
+    assert npc.ac == 13
+    assert npc.hostile is True
+    assert "shortsword" in npc.inventory
+
+
+def test_scenario2_loads_correctly():
+    """scenario2.json (template-based NPCs) must load without error."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "scenario2.json")
+    gs = GameState.load(path)
+    assert "snik" in gs.npcs
+    npc = gs.npcs["snik"]
+    assert npc.name == "Snik"
+    assert npc.max_hp == 12
+    assert npc.hp == 12
+    assert npc.ac == 13
+    assert "shortsword" in npc.inventory
+
+
+def test_add_npc_combat_initiatives_round_trips_through_json():
+    """combat_initiatives is preserved across save/load."""
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
+    tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.combat_initiatives == gs.combat_initiatives
+    assert "grix" in restored.combat_initiatives
 
 
 if __name__ == "__main__":

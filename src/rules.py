@@ -212,10 +212,12 @@ def skill_check(character, ability: str, dc: int) -> dict:
     }
 
 
-def roll_initiative(combatants: dict) -> list[str]:
-    """Return combatant keys sorted by initiative (d20 + Dex modifier), highest first.
+def roll_initiative(combatants: dict) -> tuple[list[str], dict[str, int]]:
+    """Return (ordered_keys, {key: initiative_total}), highest initiative first.
 
     The model must never decide turn order — this function is the sole authority.
+    Returning the totals alongside the order lets callers (e.g. add_npc) splice
+    a new combatant into the correct slot without re-rolling everyone.
 
     Tie-breaking (fully deterministic):
       1. Higher Dex modifier wins (quicker reflexes edge out the slower combatant).
@@ -225,15 +227,17 @@ def roll_initiative(combatants: dict) -> list[str]:
 
     Missing "dex" in ability_modifiers is treated as 0.
     """
-    entries = []
+    entries: list[tuple[str, int, int]] = []
+    initiatives: dict[str, int] = {}
     for key, c in combatants.items():
         dex = c.ability_modifiers.get("dex", 0)
         total = roll("1d20").total + dex
+        initiatives[key] = total
         entries.append((key, total, dex))
     # Negate both keys so the highest values sort first; stable sort preserves
     # insertion order when both keys are equal.
     entries.sort(key=lambda e: (-e[1], -e[2]))
-    return [key for key, _, _ in entries]
+    return [key for key, _, _ in entries], initiatives
 
 
 SPELLS: dict[str, dict] = {

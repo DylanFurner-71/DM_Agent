@@ -14,6 +14,8 @@ import json
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
+from . import rules
+
 
 @dataclass
 class Character:
@@ -68,6 +70,7 @@ class GameState:
     combat_index: int = 0    # index into combat_order for the active combatant
     combat_round: int = 0    # increments each time the order wraps; 0 = not in combat
     action_used: bool = False  # True after the active combatant uses an action; reset by next_turn
+    combat_initiatives: dict[str, int] = field(default_factory=dict)  # {key: initiative_total}
 
     # --- lookup helpers -------------------------------------------------
     def find_actor(self, name: str):
@@ -98,6 +101,7 @@ class GameState:
             "combat_index": self.combat_index,
             "combat_round": self.combat_round,
             "action_used": self.action_used,
+            "combat_initiatives": self.combat_initiatives,
         }
 
     def save(self, path: str) -> None:
@@ -116,6 +120,7 @@ class GameState:
             combat_index=d.get("combat_index", 0),
             combat_round=d.get("combat_round", 0),
             action_used=d.get("action_used", False),
+            combat_initiatives=d.get("combat_initiatives", {}),
         )
         for k, v in d.get("party", {}).items():
             # JSON keys are strings; spell_slots keys must be ints.
@@ -123,7 +128,15 @@ class GameState:
             v["spell_slots"] = {int(lvl): n for lvl, n in v.get("spell_slots", {}).items()}
             gs.party[k] = Character(**v)
         for k, v in d.get("npcs", {}).items():
-            gs.npcs[k] = NPC(**v)
+            if "template" in v:
+                kwargs = rules.spawn_npc(v["template"], v.get("name"))
+                # Layer any explicit overrides from the scenario entry on top.
+                for field_name, val in v.items():
+                    if field_name not in ("template", "name"):
+                        kwargs[field_name] = val
+                gs.npcs[k] = NPC(**kwargs)
+            else:
+                gs.npcs[k] = NPC(**v)
         return gs
 
     @classmethod

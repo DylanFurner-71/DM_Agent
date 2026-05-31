@@ -31,7 +31,11 @@ def print_state(state: GameState) -> None:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
             print(f"    Spells{ability}: {', '.join(c.spells)}")
     for n in state.npcs.values():
-        print(f"  {n.name} (NPC): HP {n.hp}/{n.max_hp}{' [down]' if n.is_down else ''}")
+        disposition = "hostile" if n.hostile else "friendly"
+        status = " [down]" if n.is_down else ""
+        print(f"  {n.name} (NPC){status}: HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}")
+        if n.inventory:
+            print(f"    Inventory: {', '.join(n.inventory)}")
     if state.combat_round > 0:
         all_actors = {**state.party, **state.npcs}
         order = " → ".join(

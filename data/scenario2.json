@@ -32,14 +32,7 @@
     }
   },
   "npcs": {
-    "snik": {
-      "name": "Snik",
-      "max_hp": 12,
-      "hp": 12,
-      "ac": 13,
-      "attack_bonus": 4,
-      "hostile": true
-    }
+    "snik": { "template": "goblin", "name": "Snik", "hostile": true }
   },
   "quest_flags": {},
   "turn": 0,
