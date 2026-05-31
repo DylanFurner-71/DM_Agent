@@ -322,7 +322,7 @@ def test_combat_loop_halts_at_player_no_skip():
     assert gs.combat_round == 1, "extra next_turn pushed engine into round 2"
 
     # Authoritative turn line must name the engine's active combatant.
-    assert "[Wisp's turn" in narration, "engine-sourced turn line missing or wrong name"
+    assert "Wisp, what do you do?" in narration, "engine-sourced closing prompt missing or wrong name"
 
     # Exactly two next_turn advances: Aldric→Snik, Snik→Wisp.
     next_turns = [c for c in agent.tool_trace if c["name"] == "next_turn"]
