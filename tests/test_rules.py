@@ -474,6 +474,65 @@ def test_loop_halts_at_first_player_when_input_names_another(first_key, second_k
     assert next_turns == [], f"next_turn must not be called when active player hasn't acted; got {next_turns}"
 
 
+def test_end_combat_triggers_post_combat_narration():
+    """When end_combat fires during _execute, take_turn must:
+    - call _narrate_combat_over (not _narrate) for that action
+    - leave combat state cleared (combat_round == 0)
+    - NOT append a combat-turn prompt
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = _make_combat_state()
+    gs.party["aldric"].ability_modifiers["dex"] = 100
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.action_used = True  # Aldric has acted
+
+    # API call sequence:
+    # 1. _execute: model calls end_combat tool
+    ec_block = MagicMock()
+    ec_block.type = "tool_use"; ec_block.id = "t1"
+    ec_block.name = "end_combat"; ec_block.input = {}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [ec_block]
+
+    # 2. _execute loop: model returns end_turn (no more tools)
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp = MagicMock()
+    done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    # 3. _narrate_combat_over: post-combat prose
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "The goblin crumples. Silence falls over the chamber. The passage yawns ahead. What do you do?"
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric finishes the goblin")
+
+    # Combat state cleared
+    assert gs.combat_round == 0
+    assert gs.combat_order == []
+
+    # Post-combat narration was produced (contains the exploration prompt)
+    assert "What do you do?" in narration
+
+    # _narrate_combat_over was used: its prompt contains "Combat is over"
+    third_call_messages = fake_client.messages.create.call_args_list[2][1]["messages"]
+    last_user_content = next(
+        m["content"] for m in reversed(third_call_messages) if m["role"] == "user"
+    )
+    assert "Combat is over" in str(last_user_content)
+
+    # No combat-turn prompt appended after end_combat
+    assert "Aldric, what do you do?" not in narration
+    assert "Snik, what do you do?" not in narration
+
+
 def test_next_turn_skips_downed_combatant():
     """next_turn must skip any combatant at 0 HP and land on the next live one."""
     rules.seed(0)

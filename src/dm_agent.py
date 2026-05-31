@@ -58,6 +58,12 @@ stop immediately without attempting the named action.
 frightened ones flee) and execute it with `attack`, `cast_spell`, `skill_check`, etc.
 4. ENDING: After any action that might finish the fight, call `get_state` to check \
 whether any hostile NPCs remain (hp > 0). If none do, call `end_combat`.
+5. POST-COMBAT BEAT: When `end_combat` fires, the engine requests a two-paragraph \
+closing beat — (1) the finishing blow and its immediate aftermath; (2) brief stock of \
+the party (wounds, spent slots, the body, the sudden silence), then re-orient to the \
+surroundings (exits, what lies ahead, any points of interest) and close with ONE open \
+exploration prompt to the whole party, e.g. "The passage yawns ahead. What do you do?" \
+Never use a "<Name>, what do you do?" combat-turn prompt here.
 
 Keep the player's agency central: present situations, then react to what they choose.
 """
@@ -131,6 +137,40 @@ class DMAgent:
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
+    def _narrate_combat_over(self) -> str:
+        """Post-combat narration: finishing blow, party stock, exploration prompt."""
+        party_summary = "; ".join(
+            f"{c.name} HP {c.hp}/{c.max_hp}"
+            + (f" [slots: {', '.join(f'L{l}:{n}' for l, n in sorted(c.spell_slots.items()))}]"
+               if c.spell_slots else "")
+            for c in self.state.party.values()
+        )
+        prompt = (
+            "Combat is over — the fight has just ended. "
+            "Write two short paragraphs:\n"
+            "1. The finishing blow and its immediate aftermath.\n"
+            f"2. Brief stock of the party ({party_summary}) — wounds, spent resources, "
+            "the body, the sudden silence. Re-orient to the surroundings: exits, what "
+            "lies ahead, any points of interest. Close with one open exploration prompt "
+            "to the whole party, e.g. 'The passage yawns ahead into the dark. What do "
+            "you do?' — not a combat-turn prompt."
+        )
+        self.messages.append({"role": "user", "content": prompt})
+        resp = self.client.messages.create(
+            model=self.model,
+            max_tokens=400,
+            system=SYSTEM_PROMPT,
+            messages=self.messages,
+        )
+        self.messages.append({"role": "assistant", "content": resp.content})
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
+
+    def _narrate_for(self, trace_len: int) -> str:
+        """Pick regular or post-combat narration based on calls added since trace_len."""
+        if any(c["name"] == "end_combat" for c in self.tool_trace[trace_len:]):
+            return self._narrate_combat_over()
+        return self._narrate()
+
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
@@ -149,8 +189,9 @@ class DMAgent:
             f"[Tool-use phase] Call the appropriate tools to resolve this action. "
             f"Write no prose — narration is requested separately."
         )
+        trace_len = len(self.tool_trace)
         self._execute(player_prompt)
-        narrations.append(self._narrate())
+        narrations.append(self._narrate_for(trace_len))
 
         # --- NPC turns (only while combat is active) ---
         if self.state.combat_order and self.state.combat_round > 0:
@@ -184,8 +225,11 @@ class DMAgent:
                     f"Decide {active_name}'s action and execute it with the appropriate tool(s). "
                     f"Write no prose — narration is requested separately."
                 )
+                trace_len = len(self.tool_trace)
                 self._execute(npc_exec_prompt)
-                narrations.append(self._narrate())
+                narrations.append(self._narrate_for(trace_len))
+                if self.state.combat_round == 0:  # end_combat fired; don't advance
+                    break
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
 
