@@ -242,6 +242,32 @@ def main() -> None:
             print_state(state)
         if state.game_over:
             print("— The End —")
+            try:
+                answer = input("  Save this run? (Y/N): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                answer = "n"
+            if answer == "y":
+                try:
+                    raw = input("  Save as: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    raw = ""
+                if raw:
+                    status, val = _do_save(state, raw)
+                    if status == "saved":
+                        print(f"  Saved to {val}")
+                    elif status == "exists":
+                        try:
+                            confirm = input(f"  {val} exists — overwrite? (y/N): ").strip().lower()
+                        except (EOFError, KeyboardInterrupt):
+                            print()
+                            confirm = "n"
+                        if confirm == "y":
+                            status2, val2 = _do_save(state, raw, overwrite=True)
+                            print(f"  {'Saved to ' + val2 if status2 == 'saved' else val2}")
+                    else:
+                        print(f"  {val}")
             break
 
 
