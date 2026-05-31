@@ -47,7 +47,8 @@ def _do_save(
     raw: str,
     base_dir: Path = SAVE_DIR,
     overwrite: bool = False,
-    trace: list | None = None,
+    *,
+    trace: list,
 ) -> tuple:
     """Resolve path and write state; return (status, path_or_message).
 
@@ -69,7 +70,7 @@ def _do_save(
         game_state.save(str(path))
     except Exception as e:
         return ("error", str(e))
-    if trace is not None:
+    if trace:
         sidecar = path.with_suffix(".trace.jsonl")
         try:
             with open(sidecar, "w") as _f:
@@ -161,13 +162,7 @@ def main() -> None:
         default=DEFAULT_SCENARIO,
         help="path to a scenario or saved-game JSON (default: data/scenario.json)",
     )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="print tool trace and state after each turn",
-    )
     args = parser.parse_args()
-    debug = args.debug
     state = GameState.load(args.scenario)
     agent = DMAgent(state)
 
@@ -237,9 +232,6 @@ def main() -> None:
 
         narration = agent.take_turn(player)
         print(f"\n{narration}\n")
-        if debug:
-            print_tool_trace(agent.tool_trace)
-            print_state(state)
         if state.game_over:
             print("— The End —")
             try:
@@ -254,7 +246,12 @@ def main() -> None:
                     print()
                     raw = ""
                 if raw:
-                    status, val = _do_save(state, raw)
+                    end_trace = [
+                        {"turn": entry["turn"], **call}
+                        for entry in agent.full_trace
+                        for call in entry["calls"]
+                    ]
+                    status, val = _do_save(state, raw, trace=end_trace)
                     if status == "saved":
                         print(f"  Saved to {val}")
                     elif status == "exists":
@@ -264,7 +261,7 @@ def main() -> None:
                             print()
                             confirm = "n"
                         if confirm == "y":
-                            status2, val2 = _do_save(state, raw, overwrite=True)
+                            status2, val2 = _do_save(state, raw, overwrite=True, trace=end_trace)
                             print(f"  {'Saved to ' + val2 if status2 == 'saved' else val2}")
                     else:
                         print(f"  {val}")

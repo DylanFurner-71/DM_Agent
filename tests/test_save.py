@@ -65,7 +65,7 @@ def test_resolve_creates_base_dir(tmp_path):
 
 def test_do_save_writes_chosen_path(tmp_path):
     gs = _simple_state()
-    status, path = _do_save(gs, "slot1", base_dir=tmp_path)
+    status, path = _do_save(gs, "slot1", base_dir=tmp_path, trace=[])
     assert status == "saved"
     assert path.exists()
     data = json.loads(path.read_text())
@@ -79,7 +79,7 @@ def test_do_save_no_clobber_without_flag(tmp_path):
     target = tmp_path / "slot1.json"
     original = b'{"original": true}'
     target.write_bytes(original)
-    status, val = _do_save(gs, "slot1", base_dir=tmp_path, overwrite=False)
+    status, val = _do_save(gs, "slot1", base_dir=tmp_path, overwrite=False, trace=[])
     assert status == "exists"
     assert val == target
     assert target.read_bytes() == original  # file untouched
@@ -89,7 +89,7 @@ def test_do_save_overwrites_when_flag_set(tmp_path):
     gs = _simple_state()
     target = tmp_path / "slot1.json"
     target.write_bytes(b'{"stale": true}')
-    status, path = _do_save(gs, "slot1", base_dir=tmp_path, overwrite=True)
+    status, path = _do_save(gs, "slot1", base_dir=tmp_path, overwrite=True, trace=[])
     assert status == "saved"
     data = json.loads(path.read_text())
     assert "party" in data  # new content, not the stale stub
@@ -102,7 +102,7 @@ def test_do_save_error_does_not_raise(tmp_path, monkeypatch):
         raise OSError("disk full")
 
     monkeypatch.setattr(gs, "save", raise_disk_full)
-    status, val = _do_save(gs, "slot1", base_dir=tmp_path)
+    status, val = _do_save(gs, "slot1", base_dir=tmp_path, trace=[])
     assert status == "error"
     assert isinstance(val, str)
     assert "disk full" in val
@@ -158,16 +158,16 @@ def test_sidecar_failure_does_not_affect_save(tmp_path, monkeypatch):
     assert (tmp_path / "slot1.json").exists()
 
 
-def test_no_sidecar_when_trace_is_none(tmp_path):
-    """When trace=None (default), no sidecar file must be created."""
+def test_no_sidecar_when_trace_is_empty(tmp_path):
+    """When trace=[], no sidecar file must be created."""
     gs = _simple_state()
-    _do_save(gs, "slot1", base_dir=tmp_path)  # trace omitted
+    _do_save(gs, "slot1", base_dir=tmp_path, trace=[])
     assert not (tmp_path / "slot1.trace.jsonl").exists()
 
 
 def test_do_save_empty_name_returns_error(tmp_path):
     gs = _simple_state()
-    status, val = _do_save(gs, "", base_dir=tmp_path)
+    status, val = _do_save(gs, "", base_dir=tmp_path, trace=[])
     assert status == "error"
     assert isinstance(val, str)
     assert list(tmp_path.iterdir()) == []  # nothing written
