@@ -78,6 +78,11 @@ in a unit test.
 
 ## One-week plan
 
+tools.use_item to be implemented later: 
+  Self-use by a conscious character only for now. (Extension to note, not build: administering a
+  potion to a DOWNED ally — the ally spends their action, target is the downed PC, and the heal
+  path already revives + resets death saves. Leave it out of v1.)
+
 - **Day 1 — skeleton (this scaffold).** State model, rules engine, tool dispatch,
   agent loop, passing tests. Already done here.
 - **Day 2 — make it play well.** Tune the system prompt, tighten narration length,

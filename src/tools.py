@@ -647,6 +647,11 @@ def dispatch(name: str, args: dict, state) -> dict:
                 if state.current_scene else {}
             )
             d["exits"] = exits  # {player-facing label: target scene_key}
+            loot: dict = (
+                state.scenes.get(state.current_scene, {}).get("loot", [])
+                if state.current_scene else {}
+            )
+            d["loot"] = loot
         return {"ok": True, "state": d}
 
     if name == "start_combat":

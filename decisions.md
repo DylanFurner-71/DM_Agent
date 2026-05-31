@@ -145,3 +145,26 @@ so the prior has nowhere to leak in.
 violation — that rule protects the player's stated intent. An NPC's weapon is engine-owned
 statblock data, not the player's choice, so the model has no standing to pick it; the
 entity whose choice matters still gets respected.
+
+
+
+To be decided upon: 
+────────────────────────────────────────────────────────────────────────
+STEP 1 — consumables catalog + effect application (rules.py)
+────────────────────────────────────────────────────────────────────────
+- Add a CONSUMABLES table alongside WEAPONS/SPELLS/MONSTERS. The engine owns effects — the model
+  must never invent what an item does. Start small:
+    "healing_potion":  {"name": "Potion of Healing",  "effect": "heal", "dice": "2d4+2"}
+    "greater_healing":  {"name": "Potion of Greater Healing", "effect": "heal", "dice": "4d4+4"}
+    "pearl_of_power":  {"name": "Pearl of Power", "effect": "restore_slot", "level": 1}
+- rules.apply_consumable(character, item_id) -> dict. Validates item_id in CONSUMABLES (ok=False
+  "unknown_consumable" otherwise). Applies the effect through EXISTING engine paths:
+    "heal":         roll the dice, then rules.heal(character, rolled.total) — rolled == applied,
+                    same invariant as apply_dice; return rolled amount + resulting hp.
+    "restore_slot": character.spell_slots[level] = character.spell_slots.get(level, 0) + 1;
+                    return the new count.
+  This function applies the EFFECT only — it does NOT touch inventory (the tool does that), the
+  same way rules.attack/heal stay separate from dispatch.
+- NOTE (your call, flag in DECISIONS.md): there is no max-spell-slot field, so restore_slot can't
+  cap at a character's starting maximum. For rare single-use items a simple +1 is fine; if you'd
+  rather cap it, add max_spell_slots to Character and clamp. Recommend uncapped +1 for now.
