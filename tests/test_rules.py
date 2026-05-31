@@ -2118,6 +2118,125 @@ def test_engine_auto_ends_combat_when_last_enemy_downed():
     assert "Snik, what do you do?" not in narration
 
 
+def test_maybe_end_combat_clears_when_last_hostile_down():
+    """Sole hostile already at 0 HP → returns True, combat_round cleared to 0."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=0)  # already downed
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_round == 1
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0
+    assert gs.combat_order == []
+
+
+def test_maybe_end_combat_continues_with_living_hostile():
+    """Two hostiles, one downed — one still alive → returns False, combat unchanged."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=0)    # downed
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12)   # alive
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik", "narl"]}, gs)
+    round_before = gs.combat_round
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is False
+    assert gs.combat_round == round_before
+    assert agent.tool_trace == []
+
+
+def test_maybe_end_combat_ends_on_party_wipe():
+    """All PCs at 0 HP with a hostile still alive → returns True, combat ends (symmetric defeat)."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=0, ability_modifiers={"dex": 0})
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=16, hp=0, ability_modifiers={"dex": 0})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12)
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    assert gs.combat_round == 1
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0
+    assert gs.combat_order == []
+
+
+def test_player_kills_last_enemy_ends_combat():
+    """take_turn whose player action downs the sole hostile: combat_round==0, end_combat in
+    trace, post-combat wrap-up used, no '<Name>, what do you do?' prompt appended."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12)
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    # Model calls modify_hp(-12) — no dice needed, cleanly downs Snik.
+    hp_block = MagicMock()
+    hp_block.type = "tool_use"; hp_block.id = "t1"
+    hp_block.name = "modify_hp"
+    hp_block.input = {"target": "Snik", "amount": -12}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [hp_block]
+
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "Snik crumples. Silence falls. The passage yawns ahead. What do you do?"
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric finishes Snik")
+
+    assert gs.npcs["snik"].hp == 0
+
+    # Engine ended combat automatically
+    assert gs.combat_round == 0
+    assert gs.combat_order == []
+
+    # end_combat is in the tool trace
+    ec_calls = [c for c in agent.tool_trace if c["name"] == "end_combat"]
+    assert len(ec_calls) == 1
+
+    # Post-combat wrap-up prompt used (not the regular narrate)
+    third_call_msgs = fake_client.messages.create.call_args_list[2][1]["messages"]
+    last_user_content = next(
+        m["content"] for m in reversed(third_call_msgs) if m["role"] == "user"
+    )
+    assert "Combat is over" in str(last_user_content)
+
+    # No combat-turn prompt appended
+    assert "Aldric, what do you do?" not in narration
+    assert "Snik, what do you do?" not in narration
+
+
 def test_maybe_end_combat_noop_outside_combat():
     """_maybe_end_combat is idempotent — no-op and no trace entry when not in combat."""
     from unittest.mock import MagicMock

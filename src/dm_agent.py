@@ -260,19 +260,22 @@ class DMAgent:
         self.messages.append({"role": "assistant", "content": resp.content})
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
-    def _maybe_end_combat(self) -> None:
+    def _maybe_end_combat(self) -> bool:
         """End combat automatically when one side is entirely down.
 
         Fires end_combat via dispatch so _narrate_for routes to the post-combat
         wrap-up narration. Idempotent — no-op when not in combat.
+        Returns True if combat was ended, False otherwise.
         """
         if self.state.combat_round == 0:
-            return
+            return False
         living_hostiles = any(n.hostile and not n.is_down for n in self.state.npcs.values())
         living_party = any(not c.is_down for c in self.state.party.values())
         if not living_hostiles or not living_party:
             result = tools.dispatch("end_combat", {}, self.state)
             self.tool_trace.append({"name": "end_combat", "input": {}, "result": result})
+            return True
+        return False
 
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
