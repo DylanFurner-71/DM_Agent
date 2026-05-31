@@ -69,14 +69,39 @@ def cast_spell(caster, spell_level: int) -> dict:
     return {"ok": True, "reason": "slot expended", "slots_remaining": available - 1}
 
 
-def apply_damage(target, amount: int) -> dict:
+def apply_damage(target, amount: int, from_crit: bool = False) -> dict:
     amount = max(0, int(amount))
+    was_down = target.hp <= 0
     target.hp = max(0, target.hp - amount)
     downed = target.hp <= 0
-    if downed and "unconscious" not in getattr(target, "conditions", []):
-        if hasattr(target, "conditions"):
-            target.conditions.append("unconscious")
-    return {"ok": True, "target": target.name, "damage": amount, "hp": target.hp, "downed": downed}
+    result = {"ok": True, "target": target.name, "damage": amount, "hp": target.hp, "downed": downed}
+
+    is_pc = hasattr(target, "death_save_failures")
+    if is_pc and not target.dead:
+        if was_down:
+            # Damage while already at 0 HP: add failure(s), possibly kill.
+            if target.stable:
+                target.stable = False  # re-enters dying
+            target.death_save_failures = min(3, target.death_save_failures + (2 if from_crit else 1))
+            if target.death_save_failures >= 3:
+                target.dead = True
+            result.update({
+                "death_save_failure": True,
+                "death_save_failures": target.death_save_failures,
+                "dead": target.dead,
+            })
+        elif downed:
+            # Conscious → 0 HP: start dying, no failure.
+            if "unconscious" not in target.conditions:
+                target.conditions.append("unconscious")
+    elif not is_pc:
+        # NPC: original unconscious-on-down behavior.
+        if downed and "unconscious" not in getattr(target, "conditions", []):
+            if hasattr(target, "conditions"):
+                target.conditions.append("unconscious")
+    # Dead PC: no additional action.
+
+    return result
 
 
 def heal(target, amount: int) -> dict:
@@ -278,7 +303,7 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
         dmg = roll(damage_dice)
         if nat == 20:  # crit: double the dice
             dmg = RollResult(damage_dice, dmg.rolls * 2, dmg.modifier, sum(dmg.rolls * 2) + dmg.modifier)
-        dealt = apply_damage(defender, dmg.total)
+        dealt = apply_damage(defender, dmg.total, from_crit=(nat == 20))
         result.update({"damage": dmg.total, "damage_detail": dmg.describe(), "defender_hp": dealt["hp"], "downed": dealt["downed"]})
     return result
 
@@ -446,7 +471,7 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
     else:
         dmg = roll(dice_expr)
 
-    dealt = apply_damage(target, dmg.total)
+    dealt = apply_damage(target, dmg.total, from_crit=result.get("critical", False))
     result.update({
         "damage": dmg.total,
         "damage_detail": dmg.describe(),
