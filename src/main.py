@@ -56,7 +56,7 @@ def print_full_trace(full_trace: list) -> None:
         print("  No tool calls recorded yet.\n")
         return
     for entry in full_trace:
-        print(f"  [Turn {entry['turn']}]")
+        print(f"  [Turn {entry['turn']}] > {entry.get('input', '')}")
         if not entry["calls"]:
             print("    (no tool calls)")
         for call in entry["calls"]:
