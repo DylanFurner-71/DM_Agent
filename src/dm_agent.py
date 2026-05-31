@@ -60,7 +60,9 @@ Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only r
 ONLY paths that exist — narrate only declared exits, never invent a passage, door, fork, \
 or room that isn't listed. When the player moves, match their intent to a declared exit \
 and call `move_scene` with that exit's scene_key. A scene whose exits map is empty (or \
-absent) is a dead end; tell the player there is nowhere further to go.
+absent) is a dead end; tell the player there is nowhere further to go. When combat ends \
+in a terminal scene the engine closes the run and requests a closing epilogue — write it \
+and stop; never call `move_scene` to fabricate an exit that was not listed.
 - When the engine requests a closing epilogue ("The adventure is over — the party has \
 prevailed" or "…has fallen"), write the single paragraph asked for. The session ends \
 there — no prompts, no further turns, no improvised continuation.
@@ -293,6 +295,17 @@ class DMAgent:
             if not living_party:  # party wipe — defeat takes precedence over mutual kill
                 self.state.game_over = True
                 self.state.game_outcome = "defeat"
+            else:
+                # Victory: if the current scene is terminal (no exits) the run is over.
+                # Covers single-scene scenarios (no scenes dict) and named terminal scenes.
+                s = self.state
+                current_exits = (
+                    s.scenes.get(s.current_scene, {}).get("exits", {})
+                    if s.scenes else {}
+                )
+                if not current_exits:
+                    s.game_over = True
+                    s.game_outcome = "victory"
             return True
         return False
 

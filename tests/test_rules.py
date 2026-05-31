@@ -2056,12 +2056,17 @@ def test_attack_ambiguous_target_asks():
 
 def test_engine_auto_ends_combat_when_last_enemy_downed():
     """Player attack downs the last hostile → _maybe_end_combat fires, combat_round=0,
-    _narrate_for routes to post-combat wrap-up, no combat-turn closing prompt emitted."""
+    _narrate_for routes to post-combat wrap-up, no combat-turn closing prompt emitted.
+    Scene has exits so the run does not end here (game_over stays False)."""
     from unittest.mock import MagicMock, patch
     from src.dm_agent import DMAgent
 
     rules.seed(0)
-    gs = GameState(location="Arena")
+    gs = GameState(location="Arena", current_scene="arena")
+    gs.scenes = {
+        "arena": {"location": "Arena", "exits": {"the vault ahead": "vault"}},
+        "vault": {"location": "The Vault", "exits": {}},
+    }
     gs.party["aldric"] = Character(
         name="Aldric",
         ability_modifiers={"str": 5, "dex": 100},
@@ -2183,12 +2188,17 @@ def test_maybe_end_combat_ends_on_party_wipe():
 
 def test_player_kills_last_enemy_ends_combat():
     """take_turn whose player action downs the sole hostile: combat_round==0, end_combat in
-    trace, post-combat wrap-up used, no '<Name>, what do you do?' prompt appended."""
+    trace, post-combat wrap-up used, no '<Name>, what do you do?' prompt appended.
+    Scene has exits so the run continues (game_over stays False, post-combat beat fires)."""
     from unittest.mock import MagicMock
     from src.dm_agent import DMAgent
 
     rules.seed(0)
-    gs = GameState(location="Arena")
+    gs = GameState(location="Arena", current_scene="arena")
+    gs.scenes = {
+        "arena": {"location": "Arena", "exits": {"the vault ahead": "vault"}},
+        "vault": {"location": "The Vault", "exits": {}},
+    }
     gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
     gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12)
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
@@ -2535,12 +2545,17 @@ def test_party_wipe_sets_defeat():
 
 
 def test_combat_victory_no_game_over():
-    """All hostiles down, party alive: combat ends, game_over stays False."""
+    """All hostiles down, party alive in a scene WITH exits: combat ends, game_over stays
+    False — the run may have more scenes to visit."""
     from unittest.mock import MagicMock
     from src.dm_agent import DMAgent
 
     rules.seed(0)
-    gs = GameState(location="Arena")
+    gs = GameState(location="Arena", current_scene="arena")
+    gs.scenes = {
+        "arena": {"location": "Arena", "exits": {"the vault ahead": "vault"}},
+        "vault": {"location": "The Vault", "exits": {}},
+    }
     gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ability_modifiers={"dex": 0})
     gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=0)  # already downed
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
@@ -2552,6 +2567,28 @@ def test_combat_victory_no_game_over():
     assert gs.combat_round == 0
     assert gs.game_over is False
     assert gs.game_outcome == ""
+
+
+def test_combat_victory_in_terminal_scene_ends_run():
+    """All hostiles down, party alive in a terminal scene (no exits): _maybe_end_combat
+    ends combat AND sets game_over=True / game_outcome='victory' — no move_scene needed.
+    Covers single-scene scenarios (no scenes dict) and named terminal scenes."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Final Chamber")   # no scenes dict — terminal by definition
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ability_modifiers={"dex": 0})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=0)  # already downed
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
 
 
 def test_game_over_roundtrips():
