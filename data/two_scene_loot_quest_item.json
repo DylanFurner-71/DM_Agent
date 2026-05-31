@@ -25,9 +25,13 @@
         "narl": { "template": "goblin", "name": "Narl", "hostile": true, "alertness_dc": 12 }
       },
       "loot": ["healing_potion"],
-      "exits": {},
-      "exit_requires": "iron_door_password",
-      "exit_denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
+      "exits": {
+  "the iron door, banded and glyph-marked": {
+    "to": "iron_chamber",
+    "requires_answer": "ashfall",
+    "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
+  }
+}
     }
   },
   "party": {

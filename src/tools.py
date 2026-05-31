@@ -25,12 +25,12 @@ def _target(exit_val) -> str:
 
 
 def _exits_for_model(exits: dict) -> dict:
-    """Return exits with 'denied' stripped — only 'to' and 'requires' are surfaced.
+    """Return exits with sensitive fields stripped — safe for model context.
 
-    The 'denied' message is the engine's rejection copy; not shown to the model
-    in advance so it can't echo it before the gate actually fires.
-    Extension point: allow "requires": {"flag": x, "equals": v} for value matching.
-    MVP is truthiness: state.quest_flags.get(flag).
+    'denied' is stripped so the model can't echo it before the gate fires.
+    'requires_answer' is replaced with answer_required: true — the literal
+    password is never surfaced to the model as structured state.
+    Builds a copy; never mutates state.scenes.
     """
     result = {}
     for label, val in exits.items():
@@ -38,6 +38,8 @@ def _exits_for_model(exits: dict) -> dict:
             entry: dict = {"to": val["to"]}
             if "requires" in val:
                 entry["requires"] = val["requires"]
+            if "requires_answer" in val:
+                entry["answer_required"] = True
             result[label] = entry
         else:
             result[label] = val
@@ -53,6 +55,15 @@ def _normalize_flag_key(raw: str) -> str | None:
     key = raw.strip().lower().replace(" ", "_").replace("-", "_")
     key = re.sub(r"[^a-z0-9_]", "", key)
     return key or None
+
+
+def _normalize_answer(s: str) -> str:
+    """Normalize a spoken password: strip surrounding whitespace/punctuation, lowercase, collapse spaces."""
+    s = s.strip()
+    s = re.sub(r"^[^\w]+|[^\w]+$", "", s)  # strip surrounding non-word chars (punctuation etc.)
+    s = s.lower()
+    s = re.sub(r"\s+", " ", s)
+    return s
 
 TOOLS = [
     {
@@ -209,6 +220,7 @@ TOOLS = [
                 "scene_key": {"type": "string", "description": "A scene_key that appears as a VALUE in the current scene's exits map, e.g. 'ember_chamber'."},
                 "location":  {"type": "string", "description": "Free-form location name. Use when no named scenes are defined."},
                 "scene":     {"type": "string", "description": "Free-form scene description. Optional companion to location."},
+                "answer":    {"type": "string", "description": "Spoken word or phrase at an answer_required exit. Relay EXACTLY what the player said — do not translate, complete, or correct it."},
             },
         },
     },
@@ -745,6 +757,14 @@ def dispatch(name: str, args: dict, state) -> dict:
                         "ok": False,
                         "reason": "locked",
                         "required_flag": req,
+                        "error": exit_val.get("denied", "That way is barred."),
+                    }
+            if isinstance(exit_val, dict) and "requires_answer" in exit_val:
+                answer_arg = (args.get("answer") or "").strip()
+                if not answer_arg or _normalize_answer(answer_arg) != _normalize_answer(exit_val["requires_answer"]):
+                    return {
+                        "ok": False,
+                        "reason": "locked",
                         "error": exit_val.get("denied", "That way is barred."),
                     }
             scene_data = state.scenes.get(scene_key)

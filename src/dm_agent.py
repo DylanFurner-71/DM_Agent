@@ -72,6 +72,15 @@ fabricate passage. When the party has the flag, the way opens. In a terminal sce
 ending is gated, winning the final fight does NOT end the run: narrate the aftermath, then \
 the party must open the gated exit (e.g. the iron door) — call move_scene when they do, \
 and the engine grants victory if the flag is set.
+- Some exits are sealed by a spoken word, shown as `answer_required`. When the player \
+speaks a word, name, or phrase at such a door, relay EXACTLY what they said as \
+move_scene's `answer` — do not translate it, complete it, correct it, or supply a word yourself.
+- Never volunteer or hint a password the party hasn't earned in the fiction. The player \
+must have learned it (e.g. from something they found) and chosen to speak it. If they \
+speak the wrong word or none, the door stays shut — narrate the refusal from the engine's \
+`denied` text; never open it for them.
+- If the player heads for an `answer_required` exit without speaking anything, it's \
+locked — prompt them for what they say or do; do not call move_scene with a guessed answer.
 - When the engine requests a closing epilogue ("The adventure is over — the party has \
 prevailed" or "…has fallen"), write the single paragraph asked for. The session ends \
 there — no prompts, no further turns, no improvised continuation.
