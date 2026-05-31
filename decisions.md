@@ -126,3 +126,22 @@ context stays bounded as history grows and always contains the latest snapshot.
 **Reversibility.** Localized to the context-builder in `dm_agent.py` — easy to widen
 the window, revert to full history, or later add a running "adventure so far" summary
 for long-range callbacks (at the cost of one extra maintenance call). Low lock-in.
+
+## 4. NPC weapons are engine-selected, not model-named
+
+**Decision.** For NPC attacks, the engine picks the weapon from the NPC's statblock
+(the first melee weapon in its inventory); the model names only attacker and defender,
+never the weapon. PC attacks are unchanged — the player names the weapon, validated
+against inventory.
+
+**Why.** The model has strong D&D priors and will supply a plausible weapon whenever it's
+left to name one. A goblin whose defined inventory was shortsword/shortbow was attacked
+with a "scimitar" — the canonical 5e goblin weapon, pulled from the model's training,
+present in neither the statblock nor the WEAPONS table. Plausible and even rules-correct,
+but data the engine never authorized. Taking the naming away from the model closes the gap
+so the prior has nowhere to leak in.
+
+**Distinction.** Overriding the model's NPC-weapon guess is *not* a "no silent substitution"
+violation — that rule protects the player's stated intent. An NPC's weapon is engine-owned
+statblock data, not the player's choice, so the model has no standing to pick it; the
+entity whose choice matters still gets respected.

@@ -1516,6 +1516,78 @@ def test_add_npc_combat_initiatives_round_trips_through_json():
     assert "grix" in restored.combat_initiatives
 
 
+# --- start_combat / add_npc identifier resolution ---------------------------
+
+def _make_named_state():
+    """State with display names that differ in case from dict keys."""
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
+    gs.party["wisp"]   = Character(name="Wisp",   ability_modifiers={"dex": 2})
+    gs.npcs["grik"]    = NPC(name="Grik",          ability_modifiers={"dex": 1})
+    return gs
+
+
+def test_start_combat_accepts_display_names():
+    """start_combat(['Aldric','Wisp','Grik']) resolves to canonical lowercase keys."""
+    rules.seed(42)
+    gs = _make_named_state()
+    res = tools.dispatch("start_combat", {"combatants": ["Aldric", "Wisp", "Grik"]}, gs)
+    assert res["ok"] is True
+    assert set(res["combat_order"]) == {"aldric", "wisp", "grik"}
+
+
+def test_start_combat_display_names_and_keys_produce_same_order():
+    """Display names and dict keys resolve to the same canonical combat_order
+    when the RNG is seeded identically."""
+    gs1 = _make_named_state()
+    rules.seed(42)
+    res1 = tools.dispatch("start_combat", {"combatants": ["Aldric", "Wisp", "Grik"]}, gs1)
+
+    gs2 = _make_named_state()
+    rules.seed(42)
+    res2 = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "grik"]}, gs2)
+
+    assert res1["ok"] is True
+    assert res2["ok"] is True
+    assert res1["combat_order"] == res2["combat_order"]
+
+
+def test_start_combat_rejects_unknown_identifier():
+    """An identifier that matches neither a key nor a display name returns ok=False."""
+    gs = _make_named_state()
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "nobody"]}, gs)
+    assert res["ok"] is False
+    assert "nobody" in res["error"]
+
+
+def test_start_combat_mixed_case_keys_accepted():
+    """Identifiers like 'ALDRIC' or 'wiSP' still resolve to canonical keys."""
+    rules.seed(0)
+    gs = _make_named_state()
+    res = tools.dispatch("start_combat", {"combatants": ["ALDRIC", "wiSP"]}, gs)
+    assert res["ok"] is True
+    assert set(res["combat_order"]) == {"aldric", "wisp"}
+
+
+def test_add_npc_duplicate_check_is_case_insensitive():
+    """instance_id 'Grix' is rejected when 'grix' already exists as an NPC key."""
+    gs = GameState(location="Test")
+    tools.dispatch("add_npc", {"template": "goblin", "instance_id": "grix"}, gs)
+    res = tools.dispatch("add_npc", {"template": "orc", "instance_id": "Grix"}, gs)
+    assert res["ok"] is False
+    assert "Grix" in res["error"]
+    assert gs.npcs["grix"].name == "Goblin"  # original untouched
+
+
+def test_add_npc_duplicate_check_rejects_party_key_case_insensitive():
+    """instance_id 'Aldric' is rejected when party key 'aldric' already exists."""
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric")
+    res = tools.dispatch("add_npc", {"template": "goblin", "instance_id": "Aldric"}, gs)
+    assert res["ok"] is False
+    assert "Aldric" in res["error"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

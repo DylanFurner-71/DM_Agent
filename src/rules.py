@@ -103,6 +103,7 @@ WEAPONS: dict[str, dict] = {
     "longbow":        {"dice": "1d8",  "type": "piercing"},
     "light crossbow": {"dice": "1d8",  "type": "piercing"},
     "spear":          {"dice": "1d6",  "type": "piercing"},
+    
 }
 
 
@@ -123,19 +124,30 @@ def _weapon_modifier(character, finesse: bool) -> tuple[str, int]:
 def attack(attacker, defender, weapon: str | None = None) -> dict:
     """Resolve a single attack: d20 + bonus vs AC, then damage on a hit.
 
-    With a weapon name: validates the attacker's inventory, looks up the WEAPONS
-    table for the damage die and type, computes to-hit bonus from ability_mod +
-    proficiency_bonus, and damage expression from ability_mod alone (proficiency
-    does not add to damage in 5e SRD).
+    PC attacker: must name their weapon; validated against inventory, to-hit =
+    ability_mod + proficiency_bonus, damage = weapon dice + ability_mod.
 
-    Without a weapon (NPC / unarmed fallback): uses attacker.attack_bonus and 1d6.
+    NPC attacker with no weapon named: auto-picks the first WEAPONS-table item
+    from the NPC's inventory so the stat block's actual weapon is used. To-hit
+    uses attacker.attack_bonus (the stat block's pre-computed total); damage =
+    weapon dice + ability_mod.
+
+    NPC attacker with no inventory weapons (or unarmed): falls back to
+    attack_bonus + 1d6.
 
     A natural 20 always hits; a natural 1 always misses.
     """
     weapon_name: str | None = None
     damage_type: str | None = None
     damage_dice = "1d6"
-    to_hit_bonus = attacker.attack_bonus  # NPC / unarmed fallback
+    to_hit_bonus = attacker.attack_bonus  # stat-block fallback
+
+    # NPCs with no weapon arg auto-equip their first valid inventory weapon.
+    # PCs must always name their weapon explicitly.
+    is_npc = not hasattr(attacker, "proficiency_bonus")
+    if weapon is None and is_npc:
+        raw_inv = getattr(attacker, "inventory", [])
+        weapon = next((w for w in raw_inv if w.strip().lower() in WEAPONS), None)
 
     if weapon is not None:
         weapon_key = weapon.strip().lower()
@@ -156,8 +168,11 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
             }
 
         _, ability_mod = _weapon_modifier(attacker, entry.get("finesse", False))
-        proficiency = getattr(attacker, "proficiency_bonus", 0)
-        to_hit_bonus = ability_mod + proficiency
+        if is_npc:
+            # NPC attack_bonus already encodes proficiency; derive damage mod only.
+            to_hit_bonus = attacker.attack_bonus
+        else:
+            to_hit_bonus = ability_mod + attacker.proficiency_bonus
 
         base = entry["dice"]
         damage_dice = f"{base}+{ability_mod}" if ability_mod > 0 else (f"{base}{ability_mod}" if ability_mod < 0 else base)

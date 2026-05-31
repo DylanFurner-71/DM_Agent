@@ -24,12 +24,13 @@ TOOLS = [
     {
         "name": "attack",
         "description": (
-            "Resolve a weapon attack. Specify the attacker, defender, and the weapon "
-            "the attacker is using (must be in their inventory). The engine validates "
-            "the inventory, looks up the damage die from the WEAPONS table, and derives "
-            "the to-hit bonus (ability_mod + proficiency) and damage modifier (ability_mod) "
-            "automatically — never supply dice or modifiers yourself. "
-            "Omit weapon only for NPC unarmed strikes; the engine uses attack_bonus + 1d6."
+            "Resolve a weapon attack. For PC attackers, always supply weapon (validated "
+            "against inventory). For NPC attackers, weapon is optional — omit it and the "
+            "engine auto-equips the NPC's first inventory weapon from the WEAPONS table "
+            "(e.g. 'Grik attacks Wisp' resolves Grik's shortsword automatically). "
+            "Falls back to attack_bonus + 1d6 only if the NPC carries no known weapon. "
+            "The engine derives to-hit bonus and damage modifier automatically — never "
+            "supply dice or modifiers yourself."
         ),
         "input_schema": {
             "type": "object",
@@ -225,6 +226,23 @@ def _turn_guard(actor_name: str, state) -> dict | None:
     return None
 
 
+def _resolve_actor_key(identifier: str, state) -> str | None:
+    """Resolve a combatant identifier to its canonical dict key.
+
+    Tries in order: case-insensitive key match, then case-insensitive display-name
+    match. Returns None when nothing matches.
+    """
+    ident_lower = identifier.strip().lower()
+    all_actors = {**state.party, **state.npcs}
+    for key in all_actors:
+        if key.lower() == ident_lower:
+            return key
+    for key, actor in all_actors.items():
+        if actor.name.lower() == ident_lower:
+            return key
+    return None
+
+
 def dispatch(name: str, args: dict, state) -> dict:
     """Execute one tool call against the live state. Returns a JSON-able dict."""
     if name == "roll_dice":
@@ -336,13 +354,23 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "start_combat":
         all_actors = {**state.party, **state.npcs}
-        combatant_keys = args.get("combatants", [])
-        if not combatant_keys:
+        combatant_ids = args.get("combatants", [])
+        if not combatant_ids:
             return {"ok": False, "error": "combatants list is empty."}
-        unknown = [k for k in combatant_keys if k not in all_actors]
-        if unknown:
-            return {"ok": False, "error": f"Unknown combatant key(s) {unknown}; call get_state to see valid keys."}
-        ordered, initiatives = rules.roll_initiative({k: all_actors[k] for k in combatant_keys})
+        canonical_keys: list[str] = []
+        seen: set[str] = set()
+        unresolved: list[str] = []
+        for ident in combatant_ids:
+            key = _resolve_actor_key(ident, state)
+            if key is None:
+                unresolved.append(ident)
+            elif key not in seen:
+                canonical_keys.append(key)
+                seen.add(key)
+        if unresolved:
+            valid = ", ".join(f"{k} ({a.name})" for k, a in all_actors.items())
+            return {"ok": False, "error": f"Unknown combatant(s) {unresolved}. Valid actors: {valid}."}
+        ordered, initiatives = rules.roll_initiative({k: all_actors[k] for k in canonical_keys})
         state.combat_order = ordered
         state.combat_initiatives = initiatives
         state.combat_index = 0
@@ -412,7 +440,8 @@ def dispatch(name: str, args: dict, state) -> dict:
                 "ok": False,
                 "error": f"Unknown template {template!r}. Known: {', '.join(sorted(rules.MONSTERS))}.",
             }
-        if instance_id in state.npcs or instance_id in state.party:
+        instance_id_lower = instance_id.lower()
+        if any(k.lower() == instance_id_lower for k in {**state.npcs, **state.party}):
             return {"ok": False, "error": f"instance_id {instance_id!r} already exists."}
 
         npc = NPC(**rules.spawn_npc(template, display_name))
