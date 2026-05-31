@@ -30,11 +30,12 @@ TOOLS = [
     {
         "name": "attack",
         "description": (
-            "Resolve a weapon attack. For PC attackers, always supply weapon (validated "
-            "against inventory). For NPC attackers, weapon is optional — omit it and the "
-            "engine auto-equips the NPC's first inventory weapon from the WEAPONS table "
-            "(e.g. 'Grik attacks Wisp' resolves Grik's shortsword automatically). "
-            "Falls back to attack_bonus + 1d6 only if the NPC carries no known weapon. "
+            "Resolve a weapon attack. defender is optional: omit it and the engine "
+            "auto-selects the sole living hostile (ok=false with reason 'ambiguous_target' "
+            "if multiple are present, 'no_target' if none). Explicit naming always wins. "
+            "For PC attackers, always supply weapon (validated against inventory). "
+            "For NPC attackers, weapon is optional — engine auto-equips the first inventory "
+            "weapon from the WEAPONS table. "
             "The engine derives to-hit bonus and damage modifier automatically — never "
             "supply dice or modifiers yourself."
         ),
@@ -42,18 +43,21 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "attacker": {"type": "string", "description": "Name of the attacking actor"},
-                "defender": {"type": "string", "description": "Name of the defending actor"},
+                "defender": {"type": "string", "description": "Name of the defending actor. Omit to auto-select the sole living hostile."},
                 "weapon":   {"type": "string", "description": "Weapon name, e.g. 'mace', 'dagger', 'longsword'. Must be in the attacker's inventory."},
             },
-            "required": ["attacker", "defender"],
+            "required": ["attacker"],
         },
     },
     {
         "name": "cast_spell",
         "description": (
-            "Cast a spell. For damaging spells (e.g. 'magic_missile'), supply spell_name "
-            "and target — the engine rolls the full damage expression and applies it "
-            "atomically; do NOT call roll_dice or modify_hp for the damage afterward. "
+            "Cast a spell. For damaging spells (e.g. 'magic_missile'), supply spell_name; "
+            "target is optional — omit it and the engine auto-selects the sole living hostile "
+            "(ok=false with reason 'ambiguous_target' listing candidates if multiple are "
+            "present; 'no_target' if none). Explicit naming always wins and may be any actor. "
+            "The engine rolls and applies damage atomically; do NOT call roll_dice or "
+            "modify_hp for the damage afterward. "
             "For utility or buff spells, omit spell_name/target; only the slot is consumed. "
             "Returns ok=false if no slot of that level remains."
         ),
@@ -63,7 +67,7 @@ TOOLS = [
                 "caster": {"type": "string", "description": "Name of the casting character"},
                 "spell_level": {"type": "integer", "description": "Slot level (0 for a cantrip)"},
                 "spell_name": {"type": "string", "description": "Spell name, e.g. 'magic_missile'. Required for damaging spells."},
-                "target": {"type": "string", "description": "Target name. Required for damaging spells."},
+                "target": {"type": "string", "description": "Target name. Omit to auto-select the sole living hostile."},
             },
             "required": ["caster", "spell_level"],
         },
@@ -272,6 +276,48 @@ def _resolve_actor_key(identifier: str, state) -> str | None:
     return None
 
 
+def _resolve_offensive_target(target_arg: str, state) -> tuple:
+    """Resolve a target for an offensive action (attack or damaging spell).
+
+    Returns (target, None, auto_selected) on success, or (None, error_dict, False) on failure.
+    auto_selected is True when no name was given and the engine picked the sole living hostile.
+
+    Named target:  resolve via find_actor; error if unknown. No restriction to hostiles —
+                   targeting an ally is legal.
+    No target:     candidates = hostile NPCs that are alive; during combat, restricted to
+                   those in combat_order.
+                     0  → ok=false, reason "no_target"
+                     1  → auto-resolve; caller should surface auto_target in the result
+                    >1  → ok=false, reason "ambiguous_target", candidates list
+    """
+    target_arg = (target_arg or "").strip()
+
+    if target_arg:
+        target = state.find_actor(target_arg)
+        if not target:
+            return None, {"ok": False, "error": f"Unknown target {target_arg!r}; call get_state."}, False
+        return target, None, False
+
+    candidates = [
+        npc for key, npc in state.npcs.items()
+        if npc.hostile and not npc.is_down
+        and (state.combat_round == 0 or key in state.combat_order)
+    ]
+
+    if not candidates:
+        return None, {"ok": False, "reason": "no_target", "error": "No living hostile targets present."}, False
+
+    if len(candidates) == 1:
+        return candidates[0], None, True
+
+    return None, {
+        "ok": False,
+        "reason": "ambiguous_target",
+        "error": "Multiple living targets — name one explicitly.",
+        "candidates": [npc.name for npc in candidates],
+    }, False
+
+
 def dispatch(name: str, args: dict, state) -> dict:
     """Execute one tool call against the live state. Returns a JSON-able dict."""
     if name == "roll_dice":
@@ -283,15 +329,20 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "attack":
         attacker = state.find_actor(args["attacker"])
-        defender = state.find_actor(args["defender"])
-        if not attacker or not defender:
-            return {"ok": False, "error": "Unknown attacker or defender; call get_state to see valid names."}
+        if not attacker:
+            return {"ok": False, "error": "Unknown attacker; call get_state to see valid names."}
         err = _turn_guard(attacker.name, state) or _action_guard(state)
         if err:
             return err
-        res = rules.attack(attacker, defender, args.get("weapon"))
+        target, err, auto_selected = _resolve_offensive_target(args.get("defender", ""), state)
+        if err:
+            state.action_used = False
+            return err
+        res = rules.attack(attacker, target, args.get("weapon"))
         if res["ok"]:
-            state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
+            state.record(f"{attacker.name} attacks {target.name}: {'hit' if res['hit'] else 'miss'}")
+            if auto_selected:
+                res["auto_target"] = target.name
         else:
             state.action_used = False  # invalid action — undo guard; character stays active
         return res
@@ -304,15 +355,16 @@ def dispatch(name: str, args: dict, state) -> dict:
         if err:
             return err
         spell_name = args.get("spell_name", "").strip()
-        target_name = args.get("target", "").strip()
-        if spell_name and target_name:
-            target = state.find_actor(target_name)
-            if not target:
-                state.action_used = False  # invalid action — undo guard
-                return {"ok": False, "error": f"Unknown target {target_name!r}; call get_state."}
+        if spell_name:
+            target, err, auto_selected = _resolve_offensive_target(args.get("target", ""), state)
+            if err:
+                state.action_used = False
+                return err
             res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]))
             if res["ok"]:
                 state.record(f"{caster.name} casts {spell_name} at {target.name}: {res.get('damage_detail', 'no damage table')}")
+                if auto_selected:
+                    res["auto_target"] = target.name
             else:
                 state.action_used = False  # invalid action — undo guard; character stays active
                 state.record(f"{caster.name} tried to cast {spell_name}: {res.get('reason', res.get('error'))}")

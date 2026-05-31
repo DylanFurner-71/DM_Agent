@@ -41,6 +41,10 @@ mace. What does Aldric do?" The engine keeps that character's turn alive; do NOT
 this as a turn change. Never silently substitute a different weapon or spell, and never \
 fabricate a success. (This is distinct from a turn-guard rejection — "it is not X's turn" \
 — which is the engine enforcing order and does advance the pointer.)
+- When an action tool returns ok=false with reason "ambiguous_target", the result includes \
+a candidates list — ask the player which target they meant by naming every candidate, \
+and re-prompt that same character without advancing the turn. Never choose a target on \
+the player's behalf.
 - Any roll that changes tracked state (HP, slots, or conditions) MUST use the tool that \
 rolls AND applies atomically. Weapon damage → `attack`. Spell damage → `cast_spell`. \
 Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only randomness \

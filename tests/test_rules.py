@@ -1897,6 +1897,160 @@ def test_roll_dice_applies_nothing():
     assert gs.npcs["goblin"].hp == 12
 
 
+# --- offensive target auto-resolution ----------------------------------------
+
+def test_spell_auto_targets_sole_enemy():
+    """No target named, one living hostile → auto-resolves, damage applied, slot consumed once."""
+    rules.seed(7)
+    gs = GameState(location="Test")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"])
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=30, hp=30)
+    snik_hp_before = gs.npcs["snik"].hp
+    slots_before = gs.party["wisp"].spell_slots[1]
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is True
+    assert res["auto_target"] == "Snik"
+    assert gs.party["wisp"].spell_slots[1] == slots_before - 1   # slot consumed
+    assert gs.npcs["snik"].hp < snik_hp_before                    # damage applied
+    assert snik_hp_before - gs.npcs["snik"].hp == res["damage"]   # rolled == applied
+
+
+def test_spell_ambiguous_target_asks():
+    """Two living hostiles, no target → ok=false, reason ambiguous_target, nothing spent, turn stays."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"],
+                                 ability_modifiers={"dex": 100})
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12, hostile=True)
+    grik_hp = gs.npcs["grik"].hp
+    narl_hp = gs.npcs["narl"].hp
+    slots_before = gs.party["wisp"].spell_slots[1]
+
+    tools.dispatch("start_combat", {"combatants": ["wisp", "grik", "narl"]}, gs)
+    assert gs.combat_order[0] == "wisp"
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "ambiguous_target"
+    assert set(res["candidates"]) == {"Grik", "Narl"}
+    assert gs.party["wisp"].spell_slots[1] == slots_before   # slot NOT consumed
+    assert gs.npcs["grik"].hp == grik_hp                     # no damage
+    assert gs.npcs["narl"].hp == narl_hp                     # no damage
+    assert gs.action_used is False                           # turn stays alive
+
+
+def test_spell_explicit_target_with_multiple_enemies():
+    """Two living hostiles, explicit target Grik → Grik takes damage, Narl untouched."""
+    rules.seed(7)
+    gs = GameState(location="Test")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"])
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=30, hp=30, hostile=True)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=30, hp=30, hostile=True)
+    narl_hp = gs.npcs["narl"].hp
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "target": "Grik",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is True
+    assert gs.npcs["narl"].hp == narl_hp   # Narl untouched
+    assert gs.npcs["grik"].hp < 30         # Grik takes damage
+
+
+def test_spell_no_valid_target():
+    """All hostiles downed → ok=false reason no_target, slot NOT consumed."""
+    gs = GameState(location="Test")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"])
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=0, hostile=True)  # already down
+    slots_before = gs.party["wisp"].spell_slots[1]
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "no_target"
+    assert gs.party["wisp"].spell_slots[1] == slots_before   # slot NOT consumed
+
+
+def test_spell_explicit_target_allows_ally():
+    """Naming a party member as target is honored — explicit targeting is permissive."""
+    rules.seed(7)
+    gs = GameState(location="Test")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 2}, spells=["magic_missile"])
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=12, hp=12, hostile=True)
+    snik_hp_before = gs.npcs["snik"].hp
+    aldric_hp_before = gs.party["aldric"].hp
+
+    res = tools.dispatch("cast_spell", {
+        "caster": "Wisp",
+        "spell_name": "magic_missile",
+        "target": "Aldric",
+        "spell_level": 1,
+    }, gs)
+
+    assert res["ok"] is True
+    assert gs.npcs["snik"].hp == snik_hp_before        # enemy untouched
+    assert gs.party["aldric"].hp < aldric_hp_before    # ally takes damage
+
+
+def test_attack_auto_targets_sole_enemy():
+    """No defender named, one living hostile → auto-resolves, attack resolves, auto_target surfaced."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"],
+                                   ability_modifiers={"str": 3}, proficiency_bonus=2)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=20, hp=20, hostile=True, ac=1)
+
+    res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
+
+    assert res["ok"] is True
+    assert res["auto_target"] == "Snik"
+    assert "hit" in res
+
+
+def test_attack_ambiguous_target_asks():
+    """Two living hostiles, no defender → ok=false, reason ambiguous_target, action_used reset."""
+    rules.seed(0)
+    gs = GameState(location="Test")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100},
+                                   inventory=["mace"], proficiency_bonus=2)
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True)
+    gs.npcs["narl"] = NPC(name="Narl", max_hp=12, hp=12, hostile=True)
+    grik_hp = gs.npcs["grik"].hp
+    narl_hp = gs.npcs["narl"].hp
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "grik", "narl"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    res = tools.dispatch("attack", {"attacker": "Aldric", "weapon": "mace"}, gs)
+
+    assert res["ok"] is False
+    assert res["reason"] == "ambiguous_target"
+    assert set(res["candidates"]) == {"Grik", "Narl"}
+    assert gs.npcs["grik"].hp == grik_hp   # no damage
+    assert gs.npcs["narl"].hp == narl_hp   # no damage
+    assert gs.action_used is False          # turn stays alive
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
