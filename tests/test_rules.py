@@ -1588,6 +1588,212 @@ def test_add_npc_duplicate_check_rejects_party_key_case_insensitive():
     assert "Aldric" in res["error"]
 
 
+# --- roll extremes: crit, fumble, auto-hit -----------------------------------
+
+def test_weapon_crit_doubles_dice_not_modifier():
+    """Nat 20 with mace (1d6+str): dice list doubled, modifier added exactly once.
+
+    damage_dice = '1d6+2'; roll yields [3] → crit makes [3, 3]; total = 6 + 2 = 8.
+    If the modifier were doubled the total would be 10; if dice not doubled it would be 5.
+    """
+    from unittest.mock import patch
+    atk = Character(
+        name="A", proficiency_bonus=2, inventory=["mace"],
+        ability_modifiers={"str": 2},
+    )
+    dfn = NPC(name="D", ac=10, hp=30, max_hp=30)
+
+    # randint calls in order: d20=20 (crit hit), then 1d6=3 (damage)
+    with patch.object(rules._rng, "randint", side_effect=[20, 3]):
+        res = rules.attack(atk, dfn, weapon="mace")
+
+    assert res["to_hit_roll"] == 20
+    assert res["critical"] is True
+    assert res["hit"] is True
+    assert res["damage"] == 3 * 2 + 2   # dice doubled (6), modifier once (+2) = 8
+    assert 30 - dfn.hp == res["damage"]  # applied == rolled
+
+
+def test_weapon_nat1_auto_miss():
+    """Nat 1 misses unconditionally, even against AC 1. Defender HP unchanged."""
+    from unittest.mock import patch
+    atk = Character(
+        name="A", proficiency_bonus=2, inventory=["mace"],
+        ability_modifiers={"str": 5},
+    )
+    dfn = NPC(name="D", ac=1, hp=20, max_hp=20)  # AC so low any real roll would hit
+
+    # Only the d20 fires; no damage roll on a miss.
+    with patch.object(rules._rng, "randint", side_effect=[1]):
+        res = rules.attack(atk, dfn, weapon="mace")
+
+    assert res["to_hit_roll"] == 1
+    assert res["hit"] is False
+    assert res["critical"] is False
+    assert dfn.hp == 20  # untouched
+
+
+def test_spell_attack_crit_doubles_dice():
+    """Nat 20 on guiding_bolt (4d6): dice list doubled to 8 values; damage applied == rolled;
+    slot consumed."""
+    from unittest.mock import patch
+    caster = Character(
+        name="C", level=3, proficiency_bonus=2,
+        spellcasting_ability="wis",
+        ability_modifiers={"wis": 3},
+        spell_slots={1: 1},
+        spells=["guiding_bolt"],
+    )
+    target = NPC(name="T", ac=10, hp=40, max_hp=40)
+
+    # d20=20 (crit), then 4d6=[2,3,4,5]; crit doubles to [2,3,4,5,2,3,4,5] → 28
+    with patch.object(rules._rng, "randint", side_effect=[20, 2, 3, 4, 5]):
+        res = rules.cast_damaging_spell(caster, target, "guiding_bolt", 1)
+
+    assert res["to_hit_roll"] == 20
+    assert res["critical"] is True
+    assert res["hit"] is True
+    assert res["damage"] == (2 + 3 + 4 + 5) * 2   # 28 — four dice values each doubled
+    assert 40 - target.hp == res["damage"]
+    assert res["slots_remaining"] == 0
+
+
+def test_spell_attack_nat1_auto_miss():
+    """Nat 1 on guiding_bolt misses even against AC 1; slot consumed, no damage applied."""
+    from unittest.mock import patch
+    caster = Character(
+        name="C", level=1, proficiency_bonus=2,
+        spellcasting_ability="wis",
+        ability_modifiers={"wis": 3},
+        spell_slots={1: 1},
+        spells=["guiding_bolt"],
+    )
+    target = NPC(name="T", ac=1, hp=20, max_hp=20)
+
+    # Only the d20 fires; no damage roll on a miss.
+    with patch.object(rules._rng, "randint", side_effect=[1]):
+        res = rules.cast_damaging_spell(caster, target, "guiding_bolt", 1)
+
+    assert res["to_hit_roll"] == 1
+    assert res["hit"] is False
+    assert res["critical"] is False
+    assert "damage" not in res
+    assert target.hp == 20           # untouched
+    assert res["slots_remaining"] == 0  # slot consumed despite miss
+
+
+def test_auto_hit_ignores_ac():
+    """magic_missile (auto_hit) hits AC 99 and applies damage — no to-hit roll needed."""
+    from unittest.mock import patch
+    caster = Character(name="C", level=1, spell_slots={1: 1}, spells=["magic_missile"])
+    target = NPC(name="T", ac=99, hp=30, max_hp=30)
+
+    # 3d4+3: three randint(1,4) calls, no d20.
+    with patch.object(rules._rng, "randint", side_effect=[2, 3, 4]):
+        res = rules.cast_damaging_spell(caster, target, "magic_missile", 1)
+
+    assert res["ok"] is True
+    assert res["auto_hit"] is True
+    assert "hit" not in res           # no spell-attack roll → no hit key
+    assert res["damage"] == 2 + 3 + 4 + 3  # 3d4+3 = 12
+    assert 30 - target.hp == res["damage"]
+    assert res["slots_remaining"] == 0
+
+
+# --- spell scaling -----------------------------------------------------------
+
+def test_magic_missile_upcast_uses_higher_by_slot():
+    """Upcasting magic_missile uses by_slot[level] expression; damage applied == rolled."""
+    from unittest.mock import patch
+
+    caster = Character(name="C", spell_slots={2: 1, 3: 1}, spells=["magic_missile"])
+    target = NPC(name="T", ac=10, hp=100, max_hp=100)
+
+    # Level 2: "4d4+4" → four d4 rolls
+    hp_before = target.hp
+    with patch.object(rules._rng, "randint", side_effect=[2, 2, 2, 2]):
+        res2 = rules.cast_damaging_spell(caster, target, "magic_missile", 2)
+
+    assert res2["ok"] is True
+    assert "4d4+4" in res2["damage_detail"]
+    assert hp_before - target.hp == res2["damage"]
+
+    # Level 3: "5d4+5" → five d4 rolls
+    hp_before = target.hp
+    with patch.object(rules._rng, "randint", side_effect=[2, 2, 2, 2, 2]):
+        res3 = rules.cast_damaging_spell(caster, target, "magic_missile", 3)
+
+    assert res3["ok"] is True
+    assert "5d4+5" in res3["damage_detail"]
+    assert hp_before - target.hp == res3["damage"]
+
+
+@pytest.mark.parametrize("level,expected_proficiency", [
+    (1, 2), (4, 2), (5, 3), (8, 3), (9, 4), (13, 5), (17, 6),
+])
+def test_spell_attack_bonus_proficiency_by_level(level, expected_proficiency):
+    """to_hit_bonus == wis_mod(3) + 2+(level-1)//4; attack_bonus(99) must not appear."""
+    from unittest.mock import patch
+
+    caster = Character(
+        name="C",
+        level=level,
+        attack_bonus=99,                    # sentinel — must not leak into spell attack
+        spellcasting_ability="wis",
+        ability_modifiers={"wis": 3},
+        spell_slots={1: 1},
+        spells=["guiding_bolt"],
+    )
+    # AC 99 ensures a miss with d20=10 → exactly one randint call, no damage dice.
+    target = NPC(name="T", ac=99, hp=40, max_hp=40)
+
+    with patch.object(rules._rng, "randint", side_effect=[10]):
+        res = rules.cast_damaging_spell(caster, target, "guiding_bolt", 1)
+
+    assert res["ok"] is True
+    assert res["to_hit_bonus"] == 3 + expected_proficiency
+    assert res["to_hit_bonus"] != 99    # attack_bonus sentinel was not used
+
+
+# --- NPC default-weapon behavior ---------------------------------------------
+
+def test_npc_no_weapon_uses_equipped_weapon():
+    """NPC attack with no weapon arg draws from the stat-block inventory (shortsword),
+    not the unarmed 1d6 fallback — 'weapon' key is present in the result."""
+    rules.seed(0)
+    npc = NPC(**rules.spawn_npc("goblin", name="Snik"))
+    target = Character(name="Hero", max_hp=20, hp=20, ac=1)
+    res = rules.attack(npc, target)
+    assert res["ok"] is True
+    assert res["weapon"] == "shortsword"
+    assert res["damage_type"] == "piercing"
+
+
+def test_npc_bogus_weapon_ignored_uses_equipped():
+    """NPC attack with weapon='scimitar' (absent from WEAPONS and from inventory):
+    the model's guess is silently ignored; engine falls back to shortsword."""
+    rules.seed(0)
+    npc = NPC(**rules.spawn_npc("goblin", name="Snik"))
+    target = Character(name="Hero", max_hp=20, hp=20, ac=1)
+    res = rules.attack(npc, target, weapon="scimitar")
+    assert res["ok"] is True
+    assert res["weapon"] == "shortsword"
+
+
+def test_pc_no_weapon_keeps_unarmed_fallback():
+    """PC with no weapon arg still takes the unarmed path: no 'weapon' key,
+    damage starts with '1d6', to_hit_bonus == attack_bonus."""
+    rules.seed(0)
+    pc = Character(name="Hero", attack_bonus=5)
+    target = NPC(name="D", ac=1, hp=20, max_hp=20)
+    res = rules.attack(pc, target)
+    assert res["ok"] is True
+    assert "weapon" not in res
+    assert res["to_hit_bonus"] == 5
+    if res["hit"]:
+        assert res["damage_detail"].startswith("1d6")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

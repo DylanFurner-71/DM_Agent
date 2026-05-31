@@ -142,12 +142,18 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
     damage_dice = "1d6"
     to_hit_bonus = attacker.attack_bonus  # stat-block fallback
 
-    # NPCs with no weapon arg auto-equip their first valid inventory weapon.
-    # PCs must always name their weapon explicitly.
+    # NPCs auto-equip their first valid inventory weapon: use it when no weapon
+    # arg is given OR when the arg fails validation (unknown weapon / not in
+    # inventory). The model should never name an NPC's weapon; its guess is
+    # silently ignored in favour of the stat-block weapon.
+    # PCs must always name their weapon explicitly; errors surface to the model.
     is_npc = not hasattr(attacker, "proficiency_bonus")
-    if weapon is None and is_npc:
+    if is_npc:
         raw_inv = getattr(attacker, "inventory", [])
-        weapon = next((w for w in raw_inv if w.strip().lower() in WEAPONS), None)
+        inv_lower = [w.strip().lower() for w in raw_inv]
+        weapon_candidate = (weapon or "").strip().lower()
+        if not (weapon_candidate in WEAPONS and weapon_candidate in inv_lower):
+            weapon = next((w for w in raw_inv if w.strip().lower() in WEAPONS), None)
 
     if weapon is not None:
         weapon_key = weapon.strip().lower()
