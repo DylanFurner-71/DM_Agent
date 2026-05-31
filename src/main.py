@@ -1,16 +1,18 @@
 """Play a session from the terminal.
 
 Usage:
-    python -m src.main                 # load data/scenario.json
-    python -m src.main mysave.json     # load a saved game
+    python -m src.main                              # load data/scenario.json
+    python -m src.main data/my_scenario.json        # load a custom scenario
+    python -m src.main savegame.json                # resume a saved game
+    python -m src.main data/my_scenario.json --debug
 
 In-session commands: /state  /trace  /save [path]  /quit
 """
 
 from __future__ import annotations
 
+import argparse
 import os
-import sys
 
 from .dm_agent import DMAgent
 from .game_state import GameState
@@ -69,15 +71,29 @@ def print_full_trace(full_trace: list) -> None:
 
 
 def main() -> None:
-    argv = sys.argv[1:]
-    debug = "--debug" in argv
-    argv = [a for a in argv if a != "--debug"]
-    path = argv[0] if argv else DEFAULT_SCENARIO
-    state = GameState.load(path)
+    parser = argparse.ArgumentParser(
+        prog="python -m src.main",
+        description="DM Agent — agentic tabletop RPG dungeon master",
+    )
+    parser.add_argument(
+        "scenario",
+        nargs="?",
+        default=DEFAULT_SCENARIO,
+        help="path to a scenario or saved-game JSON (default: data/scenario.json)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="print tool trace and state after each turn",
+    )
+    args = parser.parse_args()
+    debug = args.debug
+    state = GameState.load(args.scenario)
     agent = DMAgent(state)
 
     print("=" * 60)
     print("  DM AGENT — type /state, /trace, /save, or /quit at any time")
+    print(f"  Scenario: {args.scenario}")
     print("=" * 60)
     if state.scene:
         print(f"\n{state.scene}\n")

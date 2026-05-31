@@ -12,9 +12,12 @@ An agentic Dungeon Master for a single-session tabletop RPG. The LLM narrates an
 pip install -r requirements.txt
 # set ANTHROPIC_API_KEY in a .env file (python-dotenv loads it automatically)
 
-python -m pytest -q                     # 7 enforcement tests — no API needed
-python -m src.main                      # start a session with the default scenario
-python -m src.main mysave.json          # resume from a saved game
+python -m pytest -q                                  # enforcement tests — no API needed
+python -m src.main                                   # default scenario (data/scenario.json)
+python -m src.main data/my_scenario.json             # custom scenario
+python -m src.main savegame.json                     # resume a saved game
+python -m src.main data/my_scenario.json --debug     # print tool trace after each turn
+python -m src.main --help                            # show all options
 ```
 
 In-session commands: `/state`, `/save [path]`, `/quit`.
