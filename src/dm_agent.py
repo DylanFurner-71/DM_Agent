@@ -50,8 +50,10 @@ participant. Never call `attack` or `cast_spell` offensively before `start_comba
 2. TURN ORDER: `next_turn` is not available to you — the engine advances the pointer. \
 The preamble shows "[Combat: Round N — Name's turn]" so you always know who is active. \
 Only that combatant may act; the tools enforce this and return ok=false if you try to \
-act for someone else. A turn-guard ok=false is not a narrative failure — stop calling \
-tools for this phase.
+act for someone else. A turn-guard ok=false is a HARD STOP: call no further tools in \
+this [Tool-use phase] — the engine will advance the pointer and prompt the correct player. \
+If start_combat reports an active combatant different from the one the player named, \
+stop immediately without attempting the named action.
 3. NPC TURNS: In the tool-use phase, decide the NPC's action (hostile NPCs attack; \
 frightened ones flee) and execute it with `attack`, `cast_spell`, `skill_check`, etc.
 4. ENDING: After any action that might finish the fight, call `get_state` to check \
@@ -153,10 +155,14 @@ class DMAgent:
         # --- NPC turns (only while combat is active) ---
         if self.state.combat_order and self.state.combat_round > 0:
             current_key = self.state.combat_order[self.state.combat_index]
-            player_just_acted = current_key in self.state.party
+            # advance_first: only true if the active player HAS used their action.
+            # action_used=False means start_combat just ran (player hasn't acted yet)
+            # or the declared action was turn-guard rejected — in either case the
+            # pointer stays where the engine left it; do NOT call next_turn.
+            advance_first = self.state.action_used and current_key in self.state.party
 
             for i in range(len(self.state.combat_order)):
-                if player_just_acted or i > 0:
+                if advance_first or i > 0:
                     adv = tools.dispatch("next_turn", {}, self.state)
                     self.tool_trace.append({"name": "next_turn", "input": {}, "result": adv})
                     if not adv["ok"]:

@@ -7,6 +7,8 @@ Run:  python -m pytest -q     (or)     python tests/test_rules.py
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src import rules, tools
@@ -406,6 +408,9 @@ def test_combat_loop_halts_at_player_no_skip():
     fake_client.messages.create.return_value = fake_resp
 
     agent = DMAgent(gs, client=fake_client)
+    # Simulate Aldric having used his action (fake client makes no tool calls, so
+    # action_used would otherwise stay False and the loop wouldn't advance past him).
+    gs.action_used = True
     narration = agent.take_turn("Aldric swings at Snik")
 
     # Engine pointer must be on Wisp, still in round 1.
@@ -423,6 +428,50 @@ def test_combat_loop_halts_at_player_no_skip():
     assert len(next_turns) == 2, f"expected 2 next_turn calls, got {len(next_turns)}"
     assert next_turns[0]["result"]["active"] == "snik"
     assert next_turns[1]["result"]["active"] == "wisp"
+
+
+@pytest.mark.parametrize("first_key,second_key", [
+    ("aldric", "wisp"),   # Aldric wins initiative — input names Wisp
+    ("wisp", "aldric"),   # Wisp wins initiative  — input names Aldric
+])
+def test_loop_halts_at_first_player_when_input_names_another(first_key, second_key):
+    """When a player is first in initiative and the input names a different player,
+    the loop must halt at the first player and prompt for them — never advancing past.
+
+    Covers the regression: start_combat sets active=first_player, turn guard rejects
+    the named action (action_used stays False), loop must NOT call next_turn.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100 if first_key == "aldric" else -100})
+    gs.party["wisp"]   = Character(name="Wisp",   ability_modifiers={"dex": 100 if first_key == "wisp"   else -100}, spell_slots={1: 2})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    assert gs.combat_order[0] == first_key, "precondition: first_key won initiative"
+
+    # Fake client: no tool calls — simulates model stopping after a turn-guard rejection.
+    fake_block = MagicMock(); fake_block.type = "text"; fake_block.text = "Narration."
+    fake_resp  = MagicMock(); fake_resp.stop_reason = "end_turn"; fake_resp.content = [fake_block]
+    fake_client = MagicMock(); fake_client.messages.create.return_value = fake_resp
+
+    agent = DMAgent(gs, client=fake_client)
+    second_name = gs.party[second_key].name
+    first_name  = gs.party[first_key].name
+
+    narration = agent.take_turn(f"{second_name} casts magic missile at Snik")
+
+    assert gs.combat_order[gs.combat_index] == first_key, (
+        f"Loop advanced past {first_name} to {gs.combat_order[gs.combat_index]}"
+    )
+    assert f"{first_name}, what do you do?" in narration, (
+        f"Expected prompt for {first_name}, got: {narration!r}"
+    )
+    next_turns = [c for c in agent.tool_trace if c["name"] == "next_turn"]
+    assert next_turns == [], f"next_turn must not be called when active player hasn't acted; got {next_turns}"
 
 
 def test_next_turn_skips_downed_combatant():
