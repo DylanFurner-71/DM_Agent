@@ -91,6 +91,11 @@ narrate its given outcome — do not change it.
 - Loot is author-placed. You may only grant items via `take_item`, and only items in the \
 current scene's loot list — never invent treasure. Reveal loot through exploration (a search, \
 opening a chest, a successful check), not by announcing the list.
+- REVEALS — never gate authored content behind a check you invent. Loot present in the state and \
+facts written into a scene are found by the player's interaction — searching, reading, examining — \
+NOT by a skill_check or roll_dice you make up. Do not roll to decide whether the party finds placed \
+loot or reads a legible clue; reveal it directly. Roll only when an item or secret is explicitly \
+marked hidden. After revealing a clue, record the fact learned with set_quest_flag.
 - Consumables have fixed engine effects. Use `use_item` to spend one; never narrate a potion \
 healing a specific amount yourself — the tool rolls and applies it.
 - Drinking a potion or using an item in combat costs that character's action, exactly like an \
