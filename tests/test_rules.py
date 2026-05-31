@@ -356,6 +356,55 @@ def test_cast_damaging_spell_no_slot_fails():
     assert caster.spell_slots == {1: 0} # slot untouched
 
 
+def test_spell_attack_bonus_uses_spellcasting_ability_not_attack_bonus():
+    """spell_attack bonus = spellcasting_ability_mod + proficiency_from_level.
+    The caster's attack_bonus field must NOT be used."""
+    rules.seed(42)
+    caster = Character(
+        name="Aldric", level=3,
+        attack_bonus=99,                    # must NOT appear in to_hit_bonus
+        spellcasting_ability="wis",
+        ability_modifiers={"wis": 3},
+        spell_slots={1: 2},
+        spells=["guiding_bolt"],
+    )
+    target = NPC(name="Snik", max_hp=40, hp=40, ac=12)
+    res = rules.cast_damaging_spell(caster, target, "guiding_bolt", 1)
+    assert res["ok"] is True
+    assert res["to_hit_bonus"] == 5              # wis(3) + proficiency(2) for level 3
+    assert res["to_hit_total"] == res["to_hit_roll"] + 5
+    assert res["defender_ac"] == 12
+    assert res["slots_remaining"] == 1
+    # Result must be self-consistent regardless of the dice outcome.
+    expected_hit = res["to_hit_roll"] == 20 or (res["to_hit_roll"] != 1 and res["to_hit_total"] >= 12)
+    assert res["hit"] is expected_hit
+    if res["hit"]:
+        assert target.hp == 40 - res["damage"]
+        assert "4d6" in res["damage_detail"]    # by_slot[1] expression used
+    else:
+        assert target.hp == 40                  # miss: no damage applied
+
+
+def test_spell_attack_miss_slot_consumed_no_damage():
+    """On a miss the slot is consumed but no damage is applied and 'damage' is absent."""
+    rules.seed(1)  # seed(1) gives a non-20 first 1d20 (confirmed by test_attack_respects_ac)
+    caster = Character(
+        name="Aldric", level=3,
+        spellcasting_ability="wis",
+        ability_modifiers={"wis": 3},
+        spell_slots={1: 2},
+        spells=["guiding_bolt"],
+    )
+    target = NPC(name="Wall", max_hp=40, hp=40, ac=99)  # unreachable without nat 20
+    res = rules.cast_damaging_spell(caster, target, "guiding_bolt", 1)
+    assert res["ok"] is True
+    assert res["hit"] is False
+    assert res["critical"] is False
+    assert "damage" not in res              # no damage key on a miss
+    assert target.hp == 40                  # HP untouched
+    assert res["slots_remaining"] == 1      # slot consumed despite miss
+
+
 # --- legacy: kept for dispatch-layer coverage --------------------------------
 
 def test_damaging_spell_unknown_to_caster_fails():
@@ -767,6 +816,66 @@ def test_agent_re_prompts_after_failed_cast_not_success():
 
     # Two-phase protocol: 2 execute calls + 1 narrate call.
     assert fake_client.messages.create.call_count == 3
+
+
+def test_invalid_action_does_not_advance_turn():
+    """Attack rejected for an unowned weapon must:
+    - leave the active combatant unchanged (no next_turn fired)
+    - leave the round number unchanged
+    - leave action_used=False so a follow-up valid attack by the same character succeeds.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    # Aldric goes first (extreme dex) and carries only a mace — no dagger.
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100},
+                                   inventory=["mace"])
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric"
+
+    # Fake client: model calls attack(dagger) → rejected; stops; narrates rejection.
+    dagger_block = MagicMock()
+    dagger_block.type = "tool_use"; dagger_block.id = "t1"
+    dagger_block.name = "attack"
+    dagger_block.input = {"attacker": "Aldric", "defender": "Snik", "weapon": "dagger"}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [dagger_block]
+
+    stop_block = MagicMock(); stop_block.type = "text"; stop_block.text = ""
+    stop_resp = MagicMock(); stop_resp.stop_reason = "end_turn"; stop_resp.content = [stop_block]
+
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "Aldric has no dagger — he's carrying a mace. What does Aldric do?"
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, stop_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    agent.take_turn("Aldric attacks Snik with dagger")
+
+    # Active combatant and round unchanged.
+    assert gs.combat_order[gs.combat_index] == "aldric", (
+        f"pointer moved to {gs.combat_order[gs.combat_index]} after invalid action"
+    )
+    assert gs.combat_round == 1, "round advanced after invalid action"
+    assert gs.action_used is False, "action_used must be False — no valid action was taken"
+
+    # No next_turn must have fired.
+    next_turns = [c for c in agent.tool_trace if c["name"] == "next_turn"]
+    assert next_turns == [], f"next_turn fired {len(next_turns)} time(s) after invalid action"
+
+    # Follow-up: the same character's valid attack resolves normally.
+    follow_up = tools.dispatch(
+        "attack", {"attacker": "Aldric", "defender": "Snik", "weapon": "mace"}, gs
+    )
+    assert follow_up["ok"] is True, "valid follow-up attack must succeed"
+    assert gs.action_used is True  # action now consumed by the valid attack
 
 
 def test_next_turn_skips_downed_combatant():

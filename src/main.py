@@ -21,10 +21,13 @@ DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenar
 def print_state(state: GameState) -> None:
     print(f"\n  Location: {state.location}")
     for c in state.party.values():
-        spells = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
+        slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
         status = ", ".join(c.conditions) or "ok"
-        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | spells {spells} | {status}")
+        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | slots {slots} | {status}")
         print(f"    Inventory: {', '.join(c.inventory) if c.inventory else '—'}")
+        if c.spells:
+            ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
+            print(f"    Spells{ability}: {', '.join(c.spells)}")
     for n in state.npcs.values():
         print(f"  {n.name} (NPC): HP {n.hp}/{n.max_hp}{' [down]' if n.is_down else ''}")
     if state.combat_round > 0:

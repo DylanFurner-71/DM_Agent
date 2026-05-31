@@ -215,6 +215,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         res = rules.attack(attacker, defender, args.get("weapon"))
         if res["ok"]:
             state.record(f"{attacker.name} attacks {defender.name}: {'hit' if res['hit'] else 'miss'}")
+        else:
+            state.action_used = False  # invalid action — undo guard; character stays active
         return res
 
     if name == "cast_spell":
@@ -229,16 +231,20 @@ def dispatch(name: str, args: dict, state) -> dict:
         if spell_name and target_name:
             target = state.find_actor(target_name)
             if not target:
+                state.action_used = False  # invalid action — undo guard
                 return {"ok": False, "error": f"Unknown target {target_name!r}; call get_state."}
             res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]))
             if res["ok"]:
                 state.record(f"{caster.name} casts {spell_name} at {target.name}: {res.get('damage_detail', 'no damage table')}")
             else:
+                state.action_used = False  # invalid action — undo guard; character stays active
                 state.record(f"{caster.name} tried to cast {spell_name}: {res.get('reason', res.get('error'))}")
         else:
             res = rules.cast_spell(caster, int(args["spell_level"]))
             if res["ok"]:
                 state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
+            else:
+                state.action_used = False  # invalid action — undo guard; character stays active
         return res
 
     if name == "modify_hp":

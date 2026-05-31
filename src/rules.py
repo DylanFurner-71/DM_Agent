@@ -247,6 +247,16 @@ SPELLS: dict[str, dict] = {
         "by_slot": {1: "3d4+3", 2: "4d4+4", 3: "5d4+5"},
         "target": "single",
     },
+    "guiding_bolt": {
+        "name": "Guiding Bolt",
+        "level": 1,
+        "tradition": "divine",
+        "resolution": "spell_attack",
+        "effect": "damage",
+        "damage_type": "radiant",
+        "by_slot": {1: "4d6", 2: "5d6", 3: "6d6"},
+        "target": "single",
+    },
 }
 
 
@@ -256,6 +266,11 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
     Validates before consuming anything:
       (a) caster knows the spell (spell_id in caster.spells, when attribute present)
       (b) caster has a slot of the required level (delegated to cast_spell)
+
+    Resolution:
+      "auto_hit"     — no attack roll; damage applied unconditionally (e.g. magic_missile).
+      "spell_attack" — d20 + (spellcasting_ability mod + proficiency from level) vs AC.
+                       On a miss the slot is consumed but no damage is applied.
 
     The engine owns both the roll and the HP change. rolled == applied is the invariant.
     """
@@ -284,22 +299,55 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
 
     by_slot = spell["by_slot"]
     dice_expr = by_slot.get(spell_level, by_slot[max(by_slot)])
-    dmg = roll(dice_expr)
-    dealt = apply_damage(target, dmg.total)
+    resolution = spell["resolution"]
 
-    return {
+    result = {
         "ok": True,
         "caster": caster.name,
         "spell": spell_name,
         "spell_level": spell_level,
         "slots_remaining": slot_res["slots_remaining"],
-        "auto_hit": spell["resolution"] == "auto_hit",
+        "auto_hit": resolution == "auto_hit",
+        "target": target.name,
+    }
+
+    if resolution == "spell_attack":
+        ability = getattr(caster, "spellcasting_ability", "")
+        ability_mod = getattr(caster, "ability_modifiers", {}).get(ability, 0) if ability else 0
+        proficiency = 2 + (getattr(caster, "level", 1) - 1) // 4
+        spell_attack_bonus = ability_mod + proficiency
+
+        d20_res = roll("1d20")
+        nat = d20_res.rolls[0]
+        to_hit_total = nat + spell_attack_bonus
+        hit = nat == 20 or (nat != 1 and to_hit_total >= target.ac)
+
+        result.update({
+            "to_hit_roll": nat,
+            "to_hit_bonus": spell_attack_bonus,
+            "to_hit_total": to_hit_total,
+            "defender_ac": target.ac,
+            "hit": hit,
+            "critical": nat == 20,
+        })
+
+        if not hit:
+            return result  # slot consumed; no damage on a miss
+
+        dmg = roll(dice_expr)
+        if nat == 20:  # crit: double the dice
+            dmg = RollResult(dice_expr, dmg.rolls * 2, dmg.modifier, sum(dmg.rolls * 2) + dmg.modifier)
+    else:
+        dmg = roll(dice_expr)
+
+    dealt = apply_damage(target, dmg.total)
+    result.update({
         "damage": dmg.total,
         "damage_detail": dmg.describe(),
-        "target": target.name,
         "target_hp": dealt["hp"],
         "downed": dealt["downed"],
-    }
+    })
+    return result
 
 
 # --- a tiny SRD-lite rules reference the DM can look things up in ----------

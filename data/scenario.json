@@ -14,7 +14,7 @@
       "inventory": ["mace", "holy symbol", "torch"],
       "conditions": [],
       "spellcasting_ability": "wis",
-      "spells": []
+      "spells": ["guiding_bolt"]
     },
     "wisp": {
       "name": "Wisp",
