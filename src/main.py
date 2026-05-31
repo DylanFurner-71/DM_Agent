@@ -49,6 +49,7 @@ def _do_save(
     overwrite: bool = False,
     *,
     trace: list,
+    stats_trace: list | None = None,
 ) -> tuple:
     """Resolve path and write state; return (status, path_or_message).
 
@@ -56,9 +57,9 @@ def _do_save(
     Never raises — all failures are captured and returned as ("error", msg).
 
     When trace is provided, also writes a sidecar at <name>.trace.jsonl —
-    one JSON record per list element, one per line. The game file is written
-    first; a sidecar failure is silently swallowed so it never blocks the save
-    or crashes the REPL.
+    one JSON record per list element, one per line.
+    When stats_trace is provided, also writes <name>_stats_trace.json.
+    Sidecar failures are silently swallowed so they never block the save.
     """
     try:
         path = _resolve_save_path(raw, base_dir)
@@ -77,7 +78,14 @@ def _do_save(
                 for record in trace:
                     _f.write(json.dumps(record) + "\n")
         except Exception:
-            pass  # trace failure must not affect the game save result
+            pass
+    if stats_trace is not None:
+        stats_path = path.with_name(path.stem + "_stats_trace.json")
+        try:
+            with open(stats_path, "w") as _f:
+                json.dump(stats_trace, _f, indent=2)
+        except Exception:
+            pass
     return ("saved", path)
 
 
@@ -149,6 +157,22 @@ def print_full_trace(full_trace: list) -> None:
             result_summary = {k: v for k, v in call["result"].items() if k != "state"}
             print(f"    {call['name']}({call['input']}) -> {result_summary}")
     print()
+
+
+def _build_stats_trace(full_trace: list) -> list:
+    """Build a per-turn stats structure: tool calls + api call timing/tokens."""
+    result = []
+    for entry in full_trace:
+        result.append({
+            "turn": entry["turn"],
+            "player_input": entry.get("input", ""),
+            "tool_calls": [
+                {"name": c["name"], "input": c["input"], "result": c["result"]}
+                for c in entry["calls"]
+            ],
+            "api_calls": entry.get("api_calls", []),
+        })
+    return result
 
 
 def print_full_trace_verbose(full_trace: list) -> None:
@@ -236,7 +260,8 @@ def main() -> None:
                 for entry in agent.full_trace
                 for call in entry["calls"]
             ]
-            status, val = _do_save(state, raw, trace=trace)
+            stats = _build_stats_trace(agent.full_trace)
+            status, val = _do_save(state, raw, trace=trace, stats_trace=stats)
             if status == "saved":
                 print(f"  Saved to {val}")
             elif status == "exists":
@@ -246,7 +271,7 @@ def main() -> None:
                     print()
                     continue
                 if confirm == "y":
-                    status2, val2 = _do_save(state, raw, overwrite=True, trace=trace)
+                    status2, val2 = _do_save(state, raw, overwrite=True, trace=trace, stats_trace=stats)
                     if status2 == "saved":
                         print(f"  Saved to {val2}")
                     else:
@@ -276,7 +301,8 @@ def main() -> None:
                         for entry in agent.full_trace
                         for call in entry["calls"]
                     ]
-                    status, val = _do_save(state, raw, trace=end_trace)
+                    end_stats = _build_stats_trace(agent.full_trace)
+                    status, val = _do_save(state, raw, trace=end_trace, stats_trace=end_stats)
                     if status == "saved":
                         print(f"  Saved to {val}")
                     elif status == "exists":
@@ -286,7 +312,7 @@ def main() -> None:
                             print()
                             confirm = "n"
                         if confirm == "y":
-                            status2, val2 = _do_save(state, raw, overwrite=True, trace=end_trace)
+                            status2, val2 = _do_save(state, raw, overwrite=True, trace=end_trace, stats_trace=end_stats)
                             print(f"  {'Saved to ' + val2 if status2 == 'saved' else val2}")
                     else:
                         print(f"  {val}")
