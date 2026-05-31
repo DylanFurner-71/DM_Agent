@@ -57,6 +57,9 @@ ONLY paths that exist — narrate only declared exits, never invent a passage, d
 or room that isn't listed. When the player moves, match their intent to a declared exit \
 and call `move_scene` with that exit's scene_key. A scene whose exits map is empty (or \
 absent) is a dead end; tell the player there is nowhere further to go.
+- When the engine requests a closing epilogue ("The adventure is over — the party has \
+prevailed" or "…has fallen"), write the single paragraph asked for. The session ends \
+there — no prompts, no further turns, no improvised continuation.
 - Stay in the fiction. Never expose raw tool JSON, internal reasoning, process notes, \
 or meta-commentary.
 
@@ -283,8 +286,35 @@ class DMAgent:
         if not living_hostiles or not living_party:
             result = tools.dispatch("end_combat", {}, self.state)
             self.tool_trace.append({"name": "end_combat", "input": {}, "result": result})
+            if not living_party:  # party wipe — defeat takes precedence over mutual kill
+                self.state.game_over = True
+                self.state.game_outcome = "defeat"
             return True
         return False
+
+    def _narrate_epilogue(self, outcome: str) -> str:
+        """Single closing paragraph ending the adventure — victory or defeat."""
+        if outcome == "victory":
+            prompt = (
+                "The adventure is over — the party has prevailed. "
+                "Write a single triumphant closing paragraph: the final image, the aftermath, "
+                "what was won. No tool calls. No prompts. No meta-commentary."
+            )
+        else:
+            prompt = (
+                "The adventure is over — the party has fallen. "
+                "Write a single somber closing paragraph: the final image, the silence that "
+                "follows, what was lost. No tool calls. No prompts. No meta-commentary."
+            )
+        self.messages.append({"role": "user", "content": prompt})
+        resp = self.client.messages.create(
+            model=self.model,
+            max_tokens=300,
+            system=SYSTEM_PROMPT,
+            messages=self.messages,
+        )
+        self.messages.append({"role": "assistant", "content": resp.content})
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
 
     def _closing_prompt(self) -> str | None:
         """Engine-sourced closing prompt for the active combatant.
@@ -353,6 +383,15 @@ class DMAgent:
         self._execute(player_prompt)
         self._maybe_end_combat()
 
+        # Check point 1: game_over from player phase (victory via move_scene, or party wipe).
+        if self.state.game_over:
+            epilogue = self._narrate_epilogue(self.state.game_outcome)
+            self.narration_history.append((player_input, epilogue))
+            if len(self.narration_history) > NARRATION_WINDOW:
+                self.narration_history = self.narration_history[-NARRATION_WINDOW:]
+            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
+            return epilogue
+
         narration_beats: list[str] = []
         narration_beats.append(self._narrate_for(trace_len))
 
@@ -397,9 +436,24 @@ class DMAgent:
                 self._maybe_end_combat()
                 npc_beats.append((active_name, active_round))
 
+                if self.state.game_over:  # defeat during NPC phase
+                    combat_ended_in_npc_phase = True
+                    break
+
                 if self.state.combat_round == 0:  # end_combat fired; don't advance
                     combat_ended_in_npc_phase = True
                     break
+
+        # Check point 2: game_over from NPC phase (defeat). Include player beat + epilogue.
+        if self.state.game_over:
+            epilogue = self._narrate_epilogue(self.state.game_outcome)
+            narration_beats.append(epilogue)
+            combined = "\n\n".join(n for n in narration_beats if n)
+            self.narration_history.append((player_input, combined))
+            if len(self.narration_history) > NARRATION_WINDOW:
+                self.narration_history = self.narration_history[-NARRATION_WINDOW:]
+            self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace)})
+            return combined
 
         # Single batched narration call for all NPC actions this cycle.
         if npc_beats:

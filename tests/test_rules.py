@@ -2474,6 +2474,140 @@ def test_take_turn_emits_ambiguous_target_prompt():
     assert "Aldric, what do you do?" not in narration
 
 
+# --- game over: victory and defeat -------------------------------------------
+
+def test_move_scene_from_terminal_completes():
+    """Terminal scene + no active combat: move_scene triggers victory."""
+    gs = GameState(location="Final Chamber", current_scene="final_room")
+    gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is True
+    assert res.get("adventure_complete") is True
+    assert res.get("outcome") == "victory"
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
+
+
+def test_move_scene_nonterminal_unchanged():
+    """Normal declared-exit transition: game_over stays False."""
+    gs = GameState(location="Start", current_scene="a")
+    gs.scenes = {
+        "a": {"location": "A", "exits": {"forward": "b"}},
+        "b": {"location": "B", "exits": {}},
+    }
+    res = tools.dispatch("move_scene", {"scene_key": "b"}, gs)
+    assert res["ok"] is True
+    assert gs.current_scene == "b"
+    assert gs.game_over is False
+
+
+def test_move_scene_terminal_in_combat_does_not_complete():
+    """Terminal scene but combat_round > 0: no victory, existing no-exits rejection."""
+    gs = GameState(location="Final Chamber", current_scene="final_room")
+    gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
+    gs.combat_round = 1
+    gs.combat_order = ["aldric"]
+    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
+    assert res["ok"] is False
+    assert gs.game_over is False
+
+
+def test_party_wipe_sets_defeat():
+    """All PCs at 0 HP with a living hostile: _maybe_end_combat ends combat and sets defeat."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=0, ability_modifiers={"dex": 0})
+    gs.party["wisp"]   = Character(name="Wisp",   max_hp=16, hp=0, ability_modifiers={"dex": 0})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=12)
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    assert gs.combat_round == 1
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0
+    assert gs.game_over is True
+    assert gs.game_outcome == "defeat"
+
+
+def test_combat_victory_no_game_over():
+    """All hostiles down, party alive: combat ends, game_over stays False."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ability_modifiers={"dex": 0})
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=12, hp=0)  # already downed
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+
+    agent = DMAgent(gs, client=MagicMock())
+    ended = agent._maybe_end_combat()
+
+    assert ended is True
+    assert gs.combat_round == 0
+    assert gs.game_over is False
+    assert gs.game_outcome == ""
+
+
+def test_game_over_roundtrips():
+    """game_over and game_outcome survive to_dict/from_dict; absent keys load as defaults."""
+    gs = GameState(location="End")
+    gs.game_over = True
+    gs.game_outcome = "victory"
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.game_over is True
+    assert restored.game_outcome == "victory"
+
+    # Old save without the keys must load with clean defaults.
+    old = GameState.from_dict({"location": "Old", "party": {}, "npcs": {}})
+    assert old.game_over is False
+    assert old.game_outcome == ""
+
+
+def test_game_over_emits_epilogue_no_prompt():
+    """take_turn: victory from move_scene → output contains epilogue, no closing prompt."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Final Chamber", current_scene="final_room")
+    gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ability_modifiers={"dex": 0})
+
+    # Call 1 (_execute): model calls move_scene
+    ms_block = MagicMock()
+    ms_block.type = "tool_use"; ms_block.id = "t1"
+    ms_block.name = "move_scene"; ms_block.input = {"scene_key": "onward"}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [ms_block]
+
+    # Call 2 (_execute loop): model sees adventure_complete result, stops
+    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
+    done_resp = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
+
+    # Call 3 (_narrate_epilogue): returns victory epilogue
+    epi_block = MagicMock()
+    epi_block.type = "text"
+    epi_block.text = "The party emerges victorious from the depths of the Ashen Barrow."
+    epi_resp = MagicMock(); epi_resp.stop_reason = "end_turn"; epi_resp.content = [epi_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, done_resp, epi_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("We press onward")
+
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
+    assert "victorious" in narration           # epilogue present
+    assert "Aldric, what do you do?" not in narration  # no closing prompt
+    assert fake_client.messages.create.call_count == 3  # execute×2, epilogue×1
+
+
 # --- exits / scene topology tests -------------------------------------------
 
 def test_move_scene_follows_declared_exit():
@@ -2503,11 +2637,13 @@ def test_move_scene_rejects_non_exit():
 
 
 def test_move_scene_terminal_has_no_exits():
-    """move_scene from a scene with empty exits is rejected; error mentions no exits."""
+    """Terminal scene + active combat: move_scene is rejected and error mentions no exits."""
     gs = GameState(location="Chamber", current_scene="ember_chamber")
     gs.scenes = {
         "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
     }
+    gs.combat_round = 1
+    gs.combat_order = ["aldric"]
     res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
     assert res["ok"] is False
     assert "no exits" in res["error"].lower()

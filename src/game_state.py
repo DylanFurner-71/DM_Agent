@@ -89,6 +89,8 @@ class GameState:
     combat_round: int = 0    # increments each time the order wraps; 0 = not in combat
     action_used: bool = False  # True after the active combatant uses an action; reset by next_turn
     combat_initiatives: dict[str, int] = field(default_factory=dict)  # {key: initiative_total}
+    game_over: bool = False
+    game_outcome: str = ""  # "" | "victory" | "defeat"
 
     # --- lookup helpers -------------------------------------------------
     def find_actor(self, name: str):
@@ -122,6 +124,8 @@ class GameState:
             "combat_round": self.combat_round,
             "action_used": self.action_used,
             "combat_initiatives": self.combat_initiatives,
+            "game_over": self.game_over,
+            "game_outcome": self.game_outcome,
         }
 
     def save(self, path: str) -> None:
@@ -160,6 +164,8 @@ class GameState:
             combat_round=d.get("combat_round", 0),
             action_used=d.get("action_used", False),
             combat_initiatives=d.get("combat_initiatives", {}),
+            game_over=d.get("game_over", False),
+            game_outcome=d.get("game_outcome", ""),
         )
         for k, v in d.get("party", {}).items():
             # JSON keys are strings; spell_slots keys must be ints.

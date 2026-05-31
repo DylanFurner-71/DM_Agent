@@ -462,6 +462,10 @@ def dispatch(name: str, args: dict, state) -> dict:
                             f"Available exits: {exits_str}."
                         ),
                     }
+                if state.combat_round == 0:
+                    state.game_over = True
+                    state.game_outcome = "victory"
+                    return {"ok": True, "adventure_complete": True, "outcome": "victory"}
                 return {
                     "ok": False,
                     "error": "The current scene has no exits — there is nowhere to move.",

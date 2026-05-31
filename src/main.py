@@ -131,6 +131,9 @@ def main() -> None:
         if debug:
             print_tool_trace(agent.tool_trace)
             print_state(state)
+        if state.game_over:
+            print("— The End —")
+            break
 
 
 if __name__ == "__main__":
