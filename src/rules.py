@@ -210,21 +210,50 @@ def roll_death_save(character) -> dict:
 
 # Canonical weapon table: damage die, damage type, optional finesse flag.
 # Finesse weapons may use the higher of Str or Dex for damage.
+# 5e SRD weapon table. The engine models damage die, damage type, and the finesse
+# property (Str-or-Dex for the modifier). Other 5e properties — versatile, reach,
+# thrown, two-handed, ammunition, loading — are not modelled; versatile weapons list
+# their one-handed die. `dice` must be valid notation for rules.roll().
 WEAPONS: dict[str, dict] = {
+    # --- simple melee ---
+    "club":           {"dice": "1d4",  "type": "bludgeoning"},
     "dagger":         {"dice": "1d4",  "type": "piercing",     "finesse": True},
-    "shortsword":     {"dice": "1d6",  "type": "piercing",     "finesse": True},
-    "rapier":         {"dice": "1d8",  "type": "piercing",     "finesse": True},
+    "greatclub":      {"dice": "1d8",  "type": "bludgeoning"},
     "handaxe":        {"dice": "1d6",  "type": "slashing"},
-    "longsword":      {"dice": "1d8",  "type": "slashing"},
-    "greataxe":       {"dice": "1d12", "type": "slashing"},
+    "javelin":        {"dice": "1d6",  "type": "piercing"},
+    "light hammer":   {"dice": "1d4",  "type": "bludgeoning"},
     "mace":           {"dice": "1d6",  "type": "bludgeoning"},
     "quarterstaff":   {"dice": "1d6",  "type": "bludgeoning"},
-    "greatclub":      {"dice": "1d8",  "type": "bludgeoning"},
-    "shortbow":       {"dice": "1d6",  "type": "piercing"},
-    "longbow":        {"dice": "1d8",  "type": "piercing"},
-    "light crossbow": {"dice": "1d8",  "type": "piercing"},
+    "sickle":         {"dice": "1d4",  "type": "slashing"},
     "spear":          {"dice": "1d6",  "type": "piercing"},
-    
+    # --- simple ranged ---
+    "dart":           {"dice": "1d4",  "type": "piercing",     "finesse": True},
+    "light crossbow": {"dice": "1d8",  "type": "piercing"},
+    "shortbow":       {"dice": "1d6",  "type": "piercing"},
+    "sling":          {"dice": "1d4",  "type": "bludgeoning"},
+    # --- martial melee ---
+    "battleaxe":      {"dice": "1d8",  "type": "slashing"},
+    "flail":          {"dice": "1d8",  "type": "bludgeoning"},
+    "glaive":         {"dice": "1d10", "type": "slashing"},
+    "greataxe":       {"dice": "1d12", "type": "slashing"},
+    "greatsword":     {"dice": "2d6",  "type": "slashing"},
+    "halberd":        {"dice": "1d10", "type": "slashing"},
+    "lance":          {"dice": "1d12", "type": "piercing"},
+    "longsword":      {"dice": "1d8",  "type": "slashing"},
+    "maul":           {"dice": "2d6",  "type": "bludgeoning"},
+    "morningstar":    {"dice": "1d8",  "type": "piercing"},
+    "pike":           {"dice": "1d10", "type": "piercing"},
+    "rapier":         {"dice": "1d8",  "type": "piercing",     "finesse": True},
+    "scimitar":       {"dice": "1d6",  "type": "slashing",     "finesse": True},
+    "shortsword":     {"dice": "1d6",  "type": "piercing",     "finesse": True},
+    "trident":        {"dice": "1d6",  "type": "piercing"},
+    "war pick":       {"dice": "1d8",  "type": "piercing"},
+    "warhammer":      {"dice": "1d8",  "type": "bludgeoning"},
+    "whip":           {"dice": "1d4",  "type": "slashing",     "finesse": True},
+    # --- martial ranged ---
+    "hand crossbow":  {"dice": "1d6",  "type": "piercing"},
+    "heavy crossbow": {"dice": "1d10", "type": "piercing"},
+    "longbow":        {"dice": "1d8",  "type": "piercing"},
 }
 
 
@@ -382,7 +411,28 @@ def roll_initiative(combatants: dict) -> tuple[list[str], dict[str, int]]:
     return [key for key, _, _ in entries], initiatives
 
 
+# 5e SRD damaging spells the engine can resolve. Each entry needs `by_slot`
+# (slot level → damage dice; the model passes the slot it cast at) and `resolution`:
+#   "auto_hit"     — no attack roll; damage applied (e.g. magic_missile).
+#   "spell_attack" — d20 + (spell ability mod + proficiency) vs AC; miss = no damage.
+# The engine has no saving-throw mechanic yet (see README "Need to implement"), so
+# save-for-half spells (fireball, cone of cold, …) are modelled as "auto_hit" full
+# damage against a single target. Area spells likewise resolve against one target;
+# the model narrates the blast. Non-damage spells (buffs, healing, control) are not
+# tabled — casting one consumes the slot and is narrated (see cast_damaging_spell).
 SPELLS: dict[str, dict] = {
+    # --- cantrips (level 0) ---
+    "fire_bolt":      {"name": "Fire Bolt",      "level": 0, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "fire",      "by_slot": {0: "1d10"}, "target": "single"},
+    "ray_of_frost":   {"name": "Ray of Frost",   "level": 0, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "cold",      "by_slot": {0: "1d8"},  "target": "single"},
+    "shocking_grasp": {"name": "Shocking Grasp", "level": 0, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "lightning", "by_slot": {0: "1d8"},  "target": "single"},
+    "chill_touch":    {"name": "Chill Touch",    "level": 0, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "necrotic",  "by_slot": {0: "1d8"},  "target": "single"},
+    "eldritch_blast": {"name": "Eldritch Blast", "level": 0, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "force",     "by_slot": {0: "1d10"}, "target": "single"},
+    "thorn_whip":     {"name": "Thorn Whip",     "level": 0, "tradition": "primal", "resolution": "spell_attack", "effect": "damage", "damage_type": "piercing",  "by_slot": {0: "1d6"},  "target": "single"},
+    "produce_flame":  {"name": "Produce Flame",  "level": 0, "tradition": "primal", "resolution": "spell_attack", "effect": "damage", "damage_type": "fire",      "by_slot": {0: "1d8"},  "target": "single"},
+    "sacred_flame":   {"name": "Sacred Flame",   "level": 0, "tradition": "divine", "resolution": "auto_hit",     "effect": "damage", "damage_type": "radiant",   "by_slot": {0: "1d8"},  "target": "single"},
+    "poison_spray":   {"name": "Poison Spray",   "level": 0, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "poison",    "by_slot": {0: "1d12"}, "target": "single"},
+    "vicious_mockery": {"name": "Vicious Mockery", "level": 0, "tradition": "arcane", "resolution": "auto_hit",   "effect": "damage", "damage_type": "psychic",   "by_slot": {0: "1d4"},  "target": "single"},
+    # --- level 1 ---
     "magic_missile": {
         "name": "Magic Missile",
         "level": 1,
@@ -413,6 +463,38 @@ SPELLS: dict[str, dict] = {
         "by_slot": {1: "3d8", 2: "4d8", 3: "5d8"},
         "target": "single",
     },
+    "burning_hands":  {"name": "Burning Hands",  "level": 1, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "fire",      "by_slot": {1: "3d6", 2: "4d6", 3: "5d6", 4: "6d6"}, "target": "single"},
+    "thunderwave":    {"name": "Thunderwave",    "level": 1, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "thunder",   "by_slot": {1: "2d8", 2: "3d8", 3: "4d8"}, "target": "single"},
+    "witch_bolt":     {"name": "Witch Bolt",     "level": 1, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "lightning", "by_slot": {1: "1d12", 2: "2d12", 3: "3d12"}, "target": "single"},
+    "inflict_wounds": {"name": "Inflict Wounds", "level": 1, "tradition": "divine", "resolution": "spell_attack", "effect": "damage", "damage_type": "necrotic",  "by_slot": {1: "3d10", 2: "4d10", 3: "5d10"}, "target": "single"},
+    "hellish_rebuke": {"name": "Hellish Rebuke", "level": 1, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "fire",      "by_slot": {1: "2d10", 2: "3d10", 3: "4d10"}, "target": "single"},
+    "ice_knife":      {"name": "Ice Knife",      "level": 1, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "piercing",  "by_slot": {1: "1d10", 2: "1d10", 3: "1d10"}, "target": "single"},
+    # --- level 2 ---
+    "scorching_ray":  {"name": "Scorching Ray",  "level": 2, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "fire",      "by_slot": {2: "6d6", 3: "8d6", 4: "10d6"}, "target": "single"},
+    "shatter":        {"name": "Shatter",        "level": 2, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "thunder",   "by_slot": {2: "3d8", 3: "4d8", 4: "5d8"}, "target": "single"},
+    "acid_arrow":     {"name": "Acid Arrow",     "level": 2, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "acid",      "by_slot": {2: "4d4", 3: "5d4", 4: "6d4"}, "target": "single"},
+    "moonbeam":       {"name": "Moonbeam",       "level": 2, "tradition": "primal", "resolution": "auto_hit",     "effect": "damage", "damage_type": "radiant",   "by_slot": {2: "2d10", 3: "3d10", 4: "4d10"}, "target": "single"},
+    # --- level 3 ---
+    "fireball":       {"name": "Fireball",       "level": 3, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "fire",      "by_slot": {3: "8d6", 4: "9d6", 5: "10d6", 6: "11d6"}, "target": "single"},
+    "lightning_bolt": {"name": "Lightning Bolt", "level": 3, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "lightning", "by_slot": {3: "8d6", 4: "9d6", 5: "10d6", 6: "11d6"}, "target": "single"},
+    "vampiric_touch": {"name": "Vampiric Touch", "level": 3, "tradition": "arcane", "resolution": "spell_attack", "effect": "damage", "damage_type": "necrotic",  "by_slot": {3: "3d6", 4: "4d6", 5: "5d6"}, "target": "single"},
+    "call_lightning": {"name": "Call Lightning", "level": 3, "tradition": "primal", "resolution": "auto_hit",     "effect": "damage", "damage_type": "lightning", "by_slot": {3: "3d10", 4: "4d10", 5: "5d10"}, "target": "single"},
+    # --- level 4 ---
+    "blight":         {"name": "Blight",         "level": 4, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "necrotic",  "by_slot": {4: "8d8", 5: "9d8", 6: "10d8"}, "target": "single"},
+    "ice_storm":      {"name": "Ice Storm",      "level": 4, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "cold",      "by_slot": {4: "2d8", 5: "3d8"}, "target": "single"},
+    # --- level 5 ---
+    "cone_of_cold":   {"name": "Cone of Cold",   "level": 5, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "cold",      "by_slot": {5: "8d8", 6: "9d8", 7: "10d8"}, "target": "single"},
+    "flame_strike":   {"name": "Flame Strike",   "level": 5, "tradition": "divine", "resolution": "auto_hit",     "effect": "damage", "damage_type": "fire",      "by_slot": {5: "8d6", 6: "9d6", 7: "10d6"}, "target": "single"},
+    # --- level 6 ---
+    "disintegrate":   {"name": "Disintegrate",   "level": 6, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "force",     "by_slot": {6: "10d6+40", 7: "13d6+40", 8: "16d6+40"}, "target": "single"},
+    "chain_lightning": {"name": "Chain Lightning", "level": 6, "tradition": "arcane", "resolution": "auto_hit",   "effect": "damage", "damage_type": "lightning", "by_slot": {6: "10d8", 7: "11d8"}, "target": "single"},
+    # --- level 7 ---
+    "finger_of_death": {"name": "Finger of Death", "level": 7, "tradition": "arcane", "resolution": "auto_hit",   "effect": "damage", "damage_type": "necrotic",  "by_slot": {7: "7d8+30"}, "target": "single"},
+    "delayed_blast_fireball": {"name": "Delayed Blast Fireball", "level": 7, "tradition": "arcane", "resolution": "auto_hit", "effect": "damage", "damage_type": "fire", "by_slot": {7: "12d6", 8: "13d6", 9: "14d6"}, "target": "single"},
+    # --- level 8 ---
+    "horrid_wilting": {"name": "Horrid Wilting", "level": 8, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "necrotic",  "by_slot": {8: "10d10", 9: "11d10"}, "target": "single"},
+    # --- level 9 ---
+    "meteor_swarm":   {"name": "Meteor Swarm",   "level": 9, "tradition": "arcane", "resolution": "auto_hit",     "effect": "damage", "damage_type": "fire",      "by_slot": {9: "40d6"}, "target": "single"},
 }
 
 
@@ -443,12 +525,14 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
         return slot_res
 
     spell = SPELLS.get(spell_key)
-    if spell is None:
+    # No tabled entry, or a tabled non-damage spell (no dice): the engine can't
+    # resolve a number, so the slot is consumed and the effect is narrated.
+    if spell is None or spell.get("effect") != "damage" or not spell.get("by_slot"):
         return {
             **slot_res,
             "damage_applied": False,
             "note": (
-                f"No spell entry for {spell_name!r}. "
+                f"No damaging spell entry for {spell_name!r}. "
                 "Slot consumed; describe the effect narratively or add it to SPELLS."
             ),
         }
@@ -534,6 +618,50 @@ MONSTERS: dict[str, dict] = {
         "ability_modifiers": {"str": 0, "dex": 2, "con": 2, "int": -4, "wis": -2, "cha": -3},
         "inventory": ["shortsword", "shortbow"],
     },
+    # Beasts and undead with an empty inventory use the unarmed fallback (attack_bonus
+    # + 1d6) for their natural attacks; weapon-users list weapons from the WEAPONS table.
+    # --- low threat ---
+    "kobold":          {"name": "Kobold",          "max_hp": 5,   "ac": 12, "attack_bonus": 4, "ability_modifiers": {"str": -2, "dex": 2, "con": -1, "int": -1, "wis": -2, "cha": -1}, "inventory": ["dagger", "sling"]},
+    "giant_rat":       {"name": "Giant Rat",       "max_hp": 7,   "ac": 12, "attack_bonus": 4, "ability_modifiers": {"str": -2, "dex": 2, "con": 0, "int": -4, "wis": 0, "cha": -3}, "inventory": []},
+    "cultist":         {"name": "Cultist",         "max_hp": 9,   "ac": 12, "attack_bonus": 3, "ability_modifiers": {"str": 0, "dex": 1, "con": 1, "int": 0, "wis": 0, "cha": 0}, "inventory": ["scimitar"]},
+    "acolyte":         {"name": "Acolyte",         "max_hp": 9,   "ac": 10, "attack_bonus": 2, "ability_modifiers": {"str": 0, "dex": 0, "con": 0, "int": 0, "wis": 2, "cha": 0}, "inventory": ["club"]},
+    "guard":           {"name": "Guard",           "max_hp": 11,  "ac": 16, "attack_bonus": 3, "ability_modifiers": {"str": 1, "dex": 1, "con": 1, "int": 0, "wis": 0, "cha": 0}, "inventory": ["spear"]},
+    "bandit":          {"name": "Bandit",          "max_hp": 11,  "ac": 12, "attack_bonus": 3, "ability_modifiers": {"str": 0, "dex": 1, "con": 1, "int": 0, "wis": 0, "cha": 0}, "inventory": ["scimitar", "light crossbow"]},
+    "hobgoblin":       {"name": "Hobgoblin",       "max_hp": 11,  "ac": 18, "attack_bonus": 3, "ability_modifiers": {"str": 1, "dex": 1, "con": 1, "int": 0, "wis": 0, "cha": -1}, "inventory": ["longsword", "longbow"]},
+    "wolf":            {"name": "Wolf",            "max_hp": 11,  "ac": 13, "attack_bonus": 4, "ability_modifiers": {"str": 1, "dex": 2, "con": 1, "int": -4, "wis": 1, "cha": -2}, "inventory": []},
+    "scout":           {"name": "Scout",           "max_hp": 16,  "ac": 13, "attack_bonus": 4, "ability_modifiers": {"str": 0, "dex": 2, "con": 1, "int": 0, "wis": 1, "cha": 0}, "inventory": ["shortsword", "longbow"]},
+    "gnoll":           {"name": "Gnoll",           "max_hp": 22,  "ac": 15, "attack_bonus": 4, "ability_modifiers": {"str": 2, "dex": 1, "con": 1, "int": -2, "wis": 0, "cha": -2}, "inventory": ["spear", "longbow"]},
+    "zombie":          {"name": "Zombie",          "max_hp": 22,  "ac": 8,  "attack_bonus": 3, "ability_modifiers": {"str": 1, "dex": -2, "con": 3, "int": -4, "wis": -2, "cha": -3}, "inventory": []},
+    "ghoul":           {"name": "Ghoul",           "max_hp": 22,  "ac": 12, "attack_bonus": 4, "ability_modifiers": {"str": 1, "dex": 2, "con": 0, "int": -2, "wis": 0, "cha": -2}, "inventory": []},
+    "specter":         {"name": "Specter",         "max_hp": 22,  "ac": 12, "attack_bonus": 4, "ability_modifiers": {"str": -5, "dex": 2, "con": 0, "int": -2, "wis": 0, "cha": 0}, "inventory": []},
+    "giant_spider":    {"name": "Giant Spider",    "max_hp": 26,  "ac": 14, "attack_bonus": 5, "ability_modifiers": {"str": 2, "dex": 3, "con": 1, "int": -4, "wis": 0, "cha": -3}, "inventory": []},
+    "worg":            {"name": "Worg",            "max_hp": 26,  "ac": 13, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": 1, "con": 1, "int": -2, "wis": 1, "cha": -1}, "inventory": []},
+    "bugbear":         {"name": "Bugbear",         "max_hp": 27,  "ac": 16, "attack_bonus": 4, "ability_modifiers": {"str": 2, "dex": 2, "con": 1, "int": -1, "wis": 0, "cha": -1}, "inventory": ["morningstar", "javelin"]},
+    "thug":            {"name": "Thug",            "max_hp": 32,  "ac": 11, "attack_bonus": 4, "ability_modifiers": {"str": 2, "dex": 0, "con": 1, "int": 0, "wis": 0, "cha": 0}, "inventory": ["mace", "heavy crossbow"]},
+    "animated_armor":  {"name": "Animated Armor",  "max_hp": 33,  "ac": 18, "attack_bonus": 4, "ability_modifiers": {"str": 3, "dex": 0, "con": 0, "int": -5, "wis": -5, "cha": -5}, "inventory": []},
+    "dire_wolf":       {"name": "Dire Wolf",       "max_hp": 37,  "ac": 14, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": 2, "con": 2, "int": -4, "wis": 1, "cha": -2}, "inventory": []},
+    # --- mid threat ---
+    "wight":           {"name": "Wight",           "max_hp": 45,  "ac": 14, "attack_bonus": 4, "ability_modifiers": {"str": 2, "dex": 2, "con": 2, "int": 0, "wis": 1, "cha": 1}, "inventory": ["longsword", "longbow"]},
+    "knight":          {"name": "Knight",          "max_hp": 52,  "ac": 18, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": 0, "con": 2, "int": 0, "wis": 0, "cha": 2}, "inventory": ["greatsword", "heavy crossbow"]},
+    "mummy":           {"name": "Mummy",           "max_hp": 58,  "ac": 11, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": -1, "con": 3, "int": -3, "wis": 0, "cha": -2}, "inventory": []},
+    "veteran":         {"name": "Veteran",         "max_hp": 58,  "ac": 17, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": 1, "con": 2, "int": 0, "wis": 0, "cha": 0}, "inventory": ["longsword", "shortsword", "heavy crossbow"]},
+    "werewolf":        {"name": "Werewolf",        "max_hp": 58,  "ac": 12, "attack_bonus": 4, "ability_modifiers": {"str": 3, "dex": 2, "con": 2, "int": -1, "wis": 0, "cha": -1}, "inventory": []},
+    "owlbear":         {"name": "Owlbear",         "max_hp": 59,  "ac": 13, "attack_bonus": 7, "ability_modifiers": {"str": 5, "dex": 1, "con": 3, "int": -4, "wis": 1, "cha": -2}, "inventory": []},
+    "ogre":            {"name": "Ogre",            "max_hp": 59,  "ac": 11, "attack_bonus": 6, "ability_modifiers": {"str": 4, "dex": -1, "con": 3, "int": -3, "wis": -2, "cha": -2}, "inventory": ["greatclub", "javelin"]},
+    "bandit_captain":  {"name": "Bandit Captain",  "max_hp": 65,  "ac": 15, "attack_bonus": 5, "ability_modifiers": {"str": 2, "dex": 3, "con": 2, "int": 1, "wis": 0, "cha": 2}, "inventory": ["scimitar", "dagger"]},
+    "berserker":       {"name": "Berserker",       "max_hp": 67,  "ac": 13, "attack_bonus": 5, "ability_modifiers": {"str": 3, "dex": 1, "con": 3, "int": -1, "wis": 0, "cha": -1}, "inventory": ["greataxe"]},
+    "wraith":          {"name": "Wraith",          "max_hp": 67,  "ac": 13, "attack_bonus": 6, "ability_modifiers": {"str": 1, "dex": 3, "con": 3, "int": 2, "wis": 1, "cha": 3}, "inventory": []},
+    # --- high threat ---
+    "troll":           {"name": "Troll",           "max_hp": 84,  "ac": 15, "attack_bonus": 7, "ability_modifiers": {"str": 4, "dex": 1, "con": 5, "int": -2, "wis": -1, "cha": -2}, "inventory": []},
+    "hill_giant":      {"name": "Hill Giant",      "max_hp": 105, "ac": 13, "attack_bonus": 8, "ability_modifiers": {"str": 5, "dex": -1, "con": 5, "int": -4, "wis": -1, "cha": -2}, "inventory": ["greatclub"]},
+    "vampire":         {"name": "Vampire",         "max_hp": 144, "ac": 16, "attack_bonus": 9, "ability_modifiers": {"str": 4, "dex": 4, "con": 4, "int": 3, "wis": 2, "cha": 4}, "inventory": []},
+    "fire_giant":      {"name": "Fire Giant",      "max_hp": 162, "ac": 18, "attack_bonus": 11, "ability_modifiers": {"str": 7, "dex": -1, "con": 6, "int": 0, "wis": 2, "cha": 1}, "inventory": ["greatsword"]},
+    "stone_golem":     {"name": "Stone Golem",     "max_hp": 178, "ac": 17, "attack_bonus": 10, "ability_modifiers": {"str": 6, "dex": -1, "con": 5, "int": -4, "wis": -2, "cha": -5}, "inventory": []},
+    "young_red_dragon": {"name": "Young Red Dragon", "max_hp": 178, "ac": 18, "attack_bonus": 10, "ability_modifiers": {"str": 6, "dex": 0, "con": 6, "int": 2, "wis": 1, "cha": 4}, "inventory": []},
+    "adult_red_dragon": {"name": "Adult Red Dragon", "max_hp": 256, "ac": 19, "attack_bonus": 14, "ability_modifiers": {"str": 8, "dex": 0, "con": 8, "int": 3, "wis": 2, "cha": 5}, "inventory": []},
+    "pit_fiend":       {"name": "Pit Fiend",       "max_hp": 300, "ac": 19, "attack_bonus": 14, "ability_modifiers": {"str": 9, "dex": 3, "con": 8, "int": 4, "wis": 3, "cha": 5}, "inventory": []},
+    "ancient_red_dragon": {"name": "Ancient Red Dragon", "max_hp": 546, "ac": 22, "attack_bonus": 17, "ability_modifiers": {"str": 10, "dex": 0, "con": 9, "int": 4, "wis": 3, "cha": 6}, "inventory": []},
+    "tarrasque":       {"name": "Tarrasque",       "max_hp": 676, "ac": 25, "attack_bonus": 19, "ability_modifiers": {"str": 10, "dex": 0, "con": 10, "int": -4, "wis": 2, "cha": 2}, "inventory": []},
 }
 
 

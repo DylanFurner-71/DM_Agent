@@ -209,6 +209,79 @@ def test_spawn_npc_unknown_raises():
         rules.spawn_npc("dragon")
 
 
+# --- expanded SRD tables: integrity + sampling ---------------------------------
+
+def test_monster_inventories_reference_known_weapons():
+    """Every weapon listed on a monster stat block must exist in the WEAPONS table,
+    so spawn_npc + attack never auto-equip an unknown weapon."""
+    bad = [(mid, w) for mid, e in rules.MONSTERS.items()
+           for w in e.get("inventory", []) if w not in rules.WEAPONS]
+    assert bad == [], f"monsters reference weapons absent from WEAPONS: {bad}"
+
+
+def test_spell_dice_parse_and_have_required_keys():
+    """Every SPELLS entry must declare by_slot + resolution, and every dice
+    expression must be valid rules.roll() notation."""
+    for key, spell in rules.SPELLS.items():
+        assert "resolution" in spell and "by_slot" in spell, f"{key} missing keys"
+        for lvl, expr in spell["by_slot"].items():
+            rules.roll(expr)  # raises ValueError on bad notation
+
+
+def test_weapon_entries_have_dice_and_type():
+    """Every weapon must have parseable dice and a damage type."""
+    for key, w in rules.WEAPONS.items():
+        assert w.get("type"), f"{key} has no damage type"
+        rules.roll(w["dice"])
+
+
+def test_spawn_new_monster_full_hp():
+    """A newly-added monster (ogre) spawns at full HP with its stat block."""
+    kwargs = rules.spawn_npc("ogre")
+    assert kwargs["name"] == "Ogre"
+    assert kwargs["hp"] == kwargs["max_hp"] == 59
+    assert "greatclub" in kwargs["inventory"]
+
+
+def test_attack_with_new_weapon_uses_its_dice_and_type():
+    """A PC can attack with a newly-added weapon (greatsword: 2d6 slashing)."""
+    rules.seed(0)
+    pc = Character(name="Hero", ability_modifiers={"str": 3}, inventory=["greatsword"],
+                   proficiency_bonus=2)
+    target = NPC(name="Dummy", max_hp=30, hp=30, ac=1)  # ac 1 → reliable hit
+    res = rules.attack(pc, target, weapon="greatsword")
+    assert res["ok"] is True
+    assert res["weapon"] == "greatsword"
+    assert res["damage_type"] == "slashing"
+    if res["hit"]:
+        assert res["damage_detail"].startswith("2d6")
+
+
+def test_cast_new_save_spell_auto_hits():
+    """Fireball (a save-for-half spell, modelled auto_hit) applies full single-target
+    damage and consumes the slot."""
+    caster = Character(name="Wisp", spell_slots={3: 1}, spells=["fireball"])
+    target = NPC(name="Goblin", max_hp=40, hp=40, ac=15)
+    rules.seed(0)
+    res = rules.cast_damaging_spell(caster, target, "fireball", 3)
+    assert res["ok"] is True
+    assert res["auto_hit"] is True
+    assert res["damage"] > 0
+    assert caster.spell_slots[3] == 0
+    assert target.hp == 40 - res["damage"]
+
+
+def test_cast_cantrip_is_free_and_resolves():
+    """A damaging cantrip (fire_bolt at level 0) resolves without consuming a slot."""
+    caster = Character(name="Wisp", spell_slots={1: 1}, spells=["fire_bolt"],
+                       spellcasting_ability="int", ability_modifiers={"int": 5})
+    target = NPC(name="Goblin", max_hp=20, hp=20, ac=1)  # ac 1 → reliable hit
+    rules.seed(0)
+    res = rules.cast_damaging_spell(caster, target, "fire_bolt", 0)
+    assert res["ok"] is True
+    assert caster.spell_slots == {1: 1}  # cantrip spent no slot
+
+
 def test_spawn_npc_can_attack_with_inventory_weapon():
     """An NPC built from spawn_npc can use its inventory weapon through dispatch."""
     rules.seed(0)

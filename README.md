@@ -103,8 +103,11 @@ look, picked up with `take_item`.
 **Spells & items.** A real spell-slot economy (`cast_spell` decrements actual slots
 and refuses when tapped out; cantrips are free). Slots are capped at the starting
 allotment, so a restoring item (Pearl of Power) can't over-fill — at the cap it's
-refused and not consumed. Damaging spells — magic missile, guiding bolt, chromatic
-orb — roll and apply atomically and thread crits. Consumables apply through
+refused and not consumed. A broad SRD set of single-target damaging spells (cantrips
+through 9th level — fire bolt, magic missile, fireball, disintegrate, meteor swarm, …)
+rolls and applies atomically and threads crits; save-for-half and area spells currently
+resolve as single-target full damage (see the spell-engine item in the roadmap).
+Consumables apply through
 `use_item` / `apply_consumable`; an item can be used on oneself or **administered to
 a party ally** — pouring a healing potion into a downed ally revives them and resets
 their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
@@ -168,6 +171,7 @@ Future work, ranked roughly least → most difficult to implement:
 - **Enemy-initiated stealth:** let foes ambush the party — the mirror of `attempt_ambush`.
 - **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Utility & healing spells:** expand the spell table beyond damage (shield, bless, cure wounds).
+- **Multi-category spell engine:** today `cast_damaging_spell` resolves only single-target *damage* (auto-hit or spell-attack); generalize it into a category-aware resolver that also handles saving-throw spells (save for half), area-of-effect multi-target, healing, buffs/utility, and condition-inflicting spells — so the broad SRD spell list in `rules.SPELLS` is mechanically resolved, not just narrated.
 - **Fail-forward system:** failed checks that advance the fiction with a cost or complication instead of dead-ending — partial-success outcomes baked into resolution.
 - **Structured quests:** tracked multi-step objectives with prerequisites and completion state, beyond today's single-flag gates.
 - **Reactions & bonus actions:** a richer action economy (opportunity attacks, off-hand attacks, reactions).
