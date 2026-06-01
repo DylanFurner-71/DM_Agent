@@ -146,31 +146,7 @@ violation — that rule protects the player's stated intent. An NPC's weapon is 
 statblock data, not the player's choice, so the model has no standing to pick it; the
 entity whose choice matters still gets respected.
 
-
-
-To be decided upon: 
-────────────────────────────────────────────────────────────────────────
-STEP 1 — consumables catalog + effect application (rules.py)
-────────────────────────────────────────────────────────────────────────
-- Add a CONSUMABLES table alongside WEAPONS/SPELLS/MONSTERS. The engine owns effects — the model
-  must never invent what an item does. Start small:
-    "healing_potion":  {"name": "Potion of Healing",  "effect": "heal", "dice": "2d4+2"}
-    "greater_healing":  {"name": "Potion of Greater Healing", "effect": "heal", "dice": "4d4+4"}
-    "pearl_of_power":  {"name": "Pearl of Power", "effect": "restore_slot", "level": 1}
-- rules.apply_consumable(character, item_id) -> dict. Validates item_id in CONSUMABLES (ok=False
-  "unknown_consumable" otherwise). Applies the effect through EXISTING engine paths:
-    "heal":         roll the dice, then rules.heal(character, rolled.total) — rolled == applied,
-                    same invariant as apply_dice; return rolled amount + resulting hp.
-    "restore_slot": character.spell_slots[level] = character.spell_slots.get(level, 0) + 1;
-                    return the new count.
-  This function applies the EFFECT only — it does NOT touch inventory (the tool does that), the
-  same way rules.attack/heal stay separate from dispatch.
-- NOTE (your call, flag in DECISIONS.md): there is no max-spell-slot field, so restore_slot can't
-  cap at a character's starting maximum. For rare single-use items a simple +1 is fine; if you'd
-  rather cap it, add max_spell_slots to Character and clamp. Recommend uncapped +1 for now.
-
-
-  ## ADR: Target agency is soft-enforced
+## ADR: Target agency is soft-enforced
 
 **Status:** Accepted
 
@@ -432,25 +408,11 @@ narration with no other change. Localized to `dm_agent.py` (`_narration_call`,
 
 ---
 
-## 7. Companions, an ally-administered item, and a spell-slot cap
+## 7. Companions: recruiting a cross-scene ally
 
-Three formerly-deferred features, landed together. The first two are small; the
-third (companions) carries the design judgment.
-
-**`max_spell_slots` cap.** Each `Character` now has a per-level `max_spell_slots`,
-defaulted on load from the starting allotment (absent key → copy `spell_slots`;
-present key → preserved, so round-trips stay lossless). A restoring item (Pearl of
-Power) clamps to the cap and, *at* the cap, is **refused** (`ok=false slots_full`)
-rather than silently wasted — `use_item` leaves it in inventory and keeps the turn.
-
-**`use_item` on a downed ally.** `use_item` gained an optional `target`. The active
-combatant spends *their* action to administer the item to a party ally (validated as
-a party member); a healing potion poured into a downed ally runs the normal `heal`
-path, which revives and resets death saves. The recipient need not be active and may
-be unconscious — only the giver's turn/action is consumed.
-
-**Companions / following.** A non-hostile NPC can be recruited with `recruit_npc`
-(between fights, not mid-combat); it sets a `companion` flag on the NPC.
+**Decision.** A non-hostile NPC can be recruited with `recruit_npc` (between fights, not
+mid-combat); it sets a `companion` flag on the NPC, which then follows the party across
+scenes and fights hostiles on the party's side.
 
 - *Recruit gating.* Out-of-combat only, and the NPC must already be non-hostile
   (de-escalate via `influence_npc` first). Mid-combat recruiting would require
@@ -458,19 +420,18 @@ be unconscious — only the giver's turn/action is consumed.
 - *Cross-scene follow.* `move_scene` rebuilds `state.npcs` from the destination
   scene; companions are carried forward (re-keyed on collision) so they travel with
   the party. Their surprise flag is cleared — a new scene isn't a surprise round.
-- *Combat.* `resolve_npc_action` now resolves a companion's turn engine-side: it
-  attacks the lowest-HP living hostile, mirroring how a plain hostile attacks the
-  lowest-HP PC. The model includes companions in `start_combat`; their beats narrate
-  like any NPC's.
-- *Deliberate simplifications.* Hostiles still target **PCs only** — they ignore
-  companions. And a full party wipe is still a **defeat even if a companion
-  survives**: a companion augments the party, it doesn't substitute for it. Both keep
-  the win/lose condition anchored on the player characters and avoid an ally-only
-  victory/stalemate. Revisit if companions become central rather than a bonus.
+- *Combat.* `resolve_npc_action` resolves a companion's turn engine-side: it attacks
+  the lowest-HP living hostile, mirroring how a plain hostile attacks the lowest-HP PC.
+  The model includes companions in `start_combat`; their beats narrate like any NPC's.
 
-**Scope — unaffected.** Enforcement, turn order, and redaction are untouched; new
-fields serialize through the existing `asdict`/`from_dict` path (with the
-`max_spell_slots` default-on-absent shim).
+**Deliberate simplifications.** Hostiles still target **PCs only** — they ignore
+companions. And a full party wipe is still a **defeat even if a companion survives**: a
+companion augments the party, it doesn't substitute for it. Both keep the win/lose
+condition anchored on the player characters and avoid an ally-only victory/stalemate.
+Revisit if companions become central rather than a bonus.
+
+**Scope — unaffected.** Enforcement, turn order, and redaction are untouched; the new
+`companion` field serializes through the existing `asdict`/`from_dict` path.
 
 ## ADR: Concluding an empty terminal scene (soft trigger, hard gate)
 
@@ -550,37 +511,3 @@ turn. The hard parts (declared-only, gating, once, save+damage math) are unit-te
 the model's choice of when to spring a hazard is soft. `demo_saving_throws` is converted from
 the prose-DC stopgap to a real manifest, retaining one bare `saving_throw` (the fear ward) to
 show the distinction: not every save is a hazard.
-
-## ADR: /undo and per-turn autosave
-
-**Status:** Accepted
-
-**Context:** A single-session game with an LLM in the loop will occasionally produce a turn
-the player wants to take back — a misread intent, an unlucky narration, a fat-fingered input
-— and a crash or closed terminal mid-session lost all progress (the only persistence was the
-manual `/save`). `GameState` already round-trips losslessly through `to_dict`/`from_dict`
-(proven by `test_persistence`), so both rewind and crash-safety are mostly plumbing on top of
-machinery that already exists.
-
-**Decision.** Two REPL-layer features, no new engine mechanics. (1) **`/undo`** — `DMAgent`
-pushes a pre-turn snapshot at the top of `take_turn` into a bounded `_undo_stack`
-(`UNDO_DEPTH = 20`). A snapshot is the state `to_dict()` *deep-copied through a JSON round-trip*
-(`to_dict` returns live references to the state's mutable lists, so the next `narrative`/`log`
-append would otherwise mutate the snapshot) plus the two rolling histories that live *outside*
-`GameState` — the narration window (copied) and the length of the cumulative tool trace
-(truncated on undo). `undo()` restores via a new `GameState.restore(d)` that does
-`self.__dict__.update(GameState.from_dict(d).__dict__)` — mutating the state object **in place**
-so existing references (the REPL's local, `agent.state`) stay valid without reassignment.
-(2) **Autosave** — after every `take_turn` (and after an `/undo`) the REPL writes
-`saves/autosave.json`, state only (no trace sidecar), overwriting the previous turn; resume with
-`python -m src.main saves/autosave.json`. Autosave is best-effort: a disk error is reported but
-never raised, so it can't end the session.
-
-**Consequences.** Undo lives in the agent (it owns the turn lifecycle and the narration/trace
-histories), autosave lives in `main.py` (file I/O is a REPL concern, kept out of the agent so the
-no-API tests stay pure). Snapshots are full state copies, not deltas — simple and correct, and
-bounded depth caps memory; a long session keeps only the last 20. Transient runtime flags
-(`combat_starting`, `pending_ambush`, `ambush_attempted`) are not serialized and reset to their
-defaults on restore, which is correct at a turn boundary. `restore` is the in-place twin of
-`load`: both go through `from_dict`, but `load` builds a new object while `restore` keeps the
-identity. Scope kept to whole-turn granularity — there is no mid-turn or redo stack.
