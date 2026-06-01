@@ -129,7 +129,9 @@ marked hidden. After revealing a clue, record the fact learned with set_quest_fl
 - Consumables have fixed engine effects. Use `use_item` to spend one; never narrate a potion \
 healing a specific amount yourself — the tool rolls and applies it.
 - Drinking a potion or using an item in combat costs that character's action, exactly like an \
-attack. Only the active combatant may do it, on their turn.
+attack. Only the active combatant may do it, on their turn. They may instead administer the item \
+to a party ally by passing `target` — including a downed, unconscious ally (a healing potion \
+revives them); the action belongs to the active giver, not the recipient.
 - SOCIAL — talking a foe down. When the party tries to persuade or intimidate a HOSTILE NPC into \
 standing down, call influence_npc with the approach; the engine rolls against that NPC's authored \
 difficulty and applies the result. Never decide a negotiation's outcome yourself or flip a \
@@ -141,6 +143,12 @@ the engine rolls initiative for all present fighters and merges the result into 
 announce the order from combat_order and stop, exactly as you would after start_combat. Do NOT \
 call start_combat yourself. In combat a failed attempt simply ends the character's turn. \
 Attacking a non-hostile NPC makes it hostile again.
+- COMPANIONS — recruiting an ally. Once an NPC is non-hostile, the party may invite it to join. \
+Call recruit_npc with the NPC's name (between fights, not mid-combat). A companion follows the \
+party across scenes automatically and, when you include it in start_combat, fights hostiles on \
+the party's side — the engine resolves its attacks for you, narrate the beat as you would a foe's. \
+Only recruit when the player actually asks the ally to come along; never auto-recruit. A companion \
+does not replace a party member — a full party wipe is still a defeat even if it survives.
 
 STEALTH — getting the drop. Before a fight starts, when the party wants to sneak up on the \
 enemy, call attempt_ambush with NO arguments. It is a group stealth check: the engine rolls \
@@ -393,6 +401,8 @@ class DMAgent:
                     entry["social_attempted"] = True
                 if n.surprised:
                     entry["surprised"] = True
+                if getattr(n, "companion", False):
+                    entry["companion"] = True
                 return entry
             snap["npcs"] = {n.name: _npc_entry(n) for n in s.npcs.values()}
         if s.current_scene:

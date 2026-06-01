@@ -4047,6 +4047,46 @@ def test_apply_consumable_pearl_of_power_no_prior_key():
     assert c.spell_slots[1] == 1
 
 
+def test_apply_consumable_pearl_respects_max_slot_cap():
+    """With a max_spell_slots cap, a Pearl restores up to but not past the cap."""
+    c = Character(name="Wisp", max_hp=15, hp=15, spell_slots={1: 1}, max_spell_slots={1: 2})
+    res = rules.apply_consumable(c, "pearl_of_power")
+    assert res["ok"] is True
+    assert c.spell_slots[1] == 2  # restored to the cap
+
+
+def test_apply_consumable_pearl_at_cap_refused_not_consumed():
+    """At the cap, a Pearl is refused (ok=False 'slots_full') and the slot is unchanged
+    so dispatch leaves the item in inventory."""
+    c = Character(name="Wisp", max_hp=15, hp=15, spell_slots={1: 2}, max_spell_slots={1: 2})
+    res = rules.apply_consumable(c, "pearl_of_power")
+    assert res["ok"] is False
+    assert res["reason"] == "slots_full"
+    assert c.spell_slots[1] == 2  # unchanged — no over-fill
+
+
+def test_use_item_pearl_at_cap_keeps_item_and_turn():
+    """use_item dispatch must not consume the Pearl or the action when slots are full."""
+    gs = GameState(location="Hall")
+    gs.party["wisp"] = Character(name="Wisp", max_hp=15, hp=15,
+                                 spell_slots={1: 2}, max_spell_slots={1: 2},
+                                 inventory=["pearl_of_power"])
+    res = tools.dispatch("use_item", {"character": "Wisp", "item": "pearl_of_power"}, gs)
+    assert res["ok"] is False and res["reason"] == "slots_full"
+    assert "pearl_of_power" in gs.party["wisp"].inventory  # not consumed
+    assert gs.action_used is False                          # turn kept alive
+
+
+def test_max_spell_slots_defaults_from_scenario_allotment():
+    """A scenario character (no max_spell_slots key) gets a cap equal to its starting slots."""
+    scenario = {
+        "current_scene": "a", "scenes": {"a": {"location": "A", "scene": "s", "npcs": {}}},
+        "party": {"wisp": {"name": "Wisp", "max_hp": 15, "hp": 15, "spell_slots": {"1": 2}}},
+    }
+    gs = GameState.from_dict(scenario)
+    assert gs.party["wisp"].max_spell_slots == {1: 2}
+
+
 def test_apply_consumable_unknown_id_returns_error():
     """Unknown item_id returns ok=False 'unknown_consumable' without touching state."""
     c = Character(name="Aldric", max_hp=20, hp=10)
@@ -4214,6 +4254,48 @@ def test_use_item_out_of_combat_is_free_and_does_not_set_action_used():
         res = tools.dispatch("use_item", {"character": "Aldric", "item": "healing_potion"}, gs)
 
     assert res["ok"] is True
+    assert gs.action_used is False
+
+
+def test_use_item_on_downed_ally_revives_and_costs_giver_action():
+    """A conscious PC spends their action to pour a potion into a downed ally: the
+    ally revives (hp>0, death saves reset, unconscious cleared), the giver's potion
+    is consumed, and it's the giver who spent the action."""
+    from unittest.mock import patch
+
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20,
+                                   inventory=["healing_potion"], ability_modifiers={"dex": 100})
+    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=0,
+                                 conditions=["unconscious"], death_save_failures=2)
+    rules.seed(0)
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+    gs.combat_starting = False
+    # Ensure Aldric is the active combatant (dex 100 wins initiative).
+    assert gs.combat_order[gs.combat_index] == "aldric"
+
+    with patch.object(rules._rng, "randint", side_effect=[2, 2]):  # heal dice
+        res = tools.dispatch("use_item",
+                             {"character": "Aldric", "item": "healing_potion", "target": "Wisp"}, gs)
+
+    assert res["ok"] is True
+    assert res["recipient"] == "Wisp"
+    assert gs.party["wisp"].hp > 0                       # revived
+    assert "unconscious" not in gs.party["wisp"].conditions
+    assert gs.party["wisp"].death_save_failures == 0      # reset on revive
+    assert "healing_potion" not in gs.party["aldric"].inventory  # giver's potion spent
+    assert gs.action_used is True                         # giver spent the action
+
+
+def test_use_item_unknown_target_rejected_and_keeps_turn():
+    """A non-party target is rejected without consuming the item or the action."""
+    gs = GameState()
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, inventory=["healing_potion"])
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=5, hostile=True)
+    res = tools.dispatch("use_item",
+                         {"character": "Aldric", "item": "healing_potion", "target": "Snik"}, gs)
+    assert res["ok"] is False and res["reason"] == "unknown_target"
+    assert "healing_potion" in gs.party["aldric"].inventory
     assert gs.action_used is False
 
 
@@ -5041,6 +5123,93 @@ def test_ambush_npc_defaults_on_old_save():
     gs = GameState.from_dict(d)
     assert gs.npcs["snik"].alertness_dc is None
     assert gs.npcs["snik"].surprised is False
+
+
+# --- companions / following ----------------------------------------------------
+
+def test_recruit_npc_marks_companion():
+    """A non-hostile, present NPC becomes a companion."""
+    gs = GameState(location="Camp")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False)
+    res = tools.dispatch("recruit_npc", {"npc": "Brak"}, gs)
+    assert res["ok"] is True and res["companion"] is True
+    assert gs.npcs["brak"].companion is True
+
+
+def test_recruit_npc_rejected_while_hostile():
+    """Can't recruit a still-hostile NPC — must de-escalate first."""
+    gs = GameState(location="Camp")
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
+    res = tools.dispatch("recruit_npc", {"npc": "Snik"}, gs)
+    assert res["ok"] is False and res["reason"] == "hostile"
+    assert gs.npcs["snik"].companion is False
+
+
+def test_recruit_npc_rejected_in_combat():
+    """Recruiting happens between fights, not mid-combat."""
+    gs = GameState(location="Camp", combat_round=1)
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False)
+    res = tools.dispatch("recruit_npc", {"npc": "Brak"}, gs)
+    assert res["ok"] is False and res["reason"] == "in_combat"
+
+
+def test_companion_follows_across_scene():
+    """A companion travels with the party through move_scene into the next scene."""
+    gs = GameState(
+        current_scene="hall",
+        scenes={
+            "hall": {"location": "Hall", "scene": "s", "npcs": {}, "exits": {"north": "vault"}},
+            "vault": {"location": "Vault", "scene": "s", "npcs": {"guard": {"name": "Guard", "hp": 8, "max_hp": 8, "hostile": True}}},
+        },
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True)
+
+    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res["ok"] is True
+    assert "Brak" in res.get("companions", [])
+    names = {n.name for n in gs.npcs.values()}
+    assert "Brak" in names      # companion came along
+    assert "Guard" in names     # plus the new scene's own NPC
+
+
+def test_companion_attacks_hostile_on_its_turn():
+    """resolve_npc_action makes a companion attack the lowest-HP living hostile."""
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True,
+                          attack_bonus=8, inventory=["shortsword"])
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
+    # Companion is the active combatant.
+    gs.combat_order = ["brak", "snik", "aldric"]
+    gs.combat_index = 0
+    gs.combat_round = 1
+    gs.action_used = False
+
+    rules.seed(0)
+    resolution = tools.resolve_npc_action(gs.npcs["brak"], gs)
+    assert resolution is not None
+    args, result = resolution
+    assert args["attacker"] == "Brak"
+    assert args["defender"] == "Snik"   # attacked the hostile, not the party
+    assert result["ok"] is True
+
+
+def test_plain_non_hostile_npc_still_stands_aside():
+    """A non-hostile NPC that is NOT a companion takes no action (regression)."""
+    gs = GameState(location="Arena")
+    gs.npcs["bystander"] = NPC(name="Bystander", max_hp=8, hp=8, hostile=False)
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
+    assert tools.resolve_npc_action(gs.npcs["bystander"], gs) is None
+
+
+def test_companion_flag_round_trips():
+    """The companion flag survives save/load."""
+    gs = GameState(location="Camp")
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True)
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.npcs["brak"].companion is True
 
 
 def test_state_snapshot_shows_surprised_not_alertness_dc():

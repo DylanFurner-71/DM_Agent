@@ -429,3 +429,45 @@ remains open and independent.
 **Reversibility.** Leaving `on_narration_delta` unset reverts to fully buffered
 narration with no other change. Localized to `dm_agent.py` (`_narration_call`,
 `_NarrationGate`) and the REPL wiring in `main.py`.
+
+---
+
+## 7. Companions, an ally-administered item, and a spell-slot cap
+
+Three formerly-deferred features, landed together. The first two are small; the
+third (companions) carries the design judgment.
+
+**`max_spell_slots` cap.** Each `Character` now has a per-level `max_spell_slots`,
+defaulted on load from the starting allotment (absent key → copy `spell_slots`;
+present key → preserved, so round-trips stay lossless). A restoring item (Pearl of
+Power) clamps to the cap and, *at* the cap, is **refused** (`ok=false slots_full`)
+rather than silently wasted — `use_item` leaves it in inventory and keeps the turn.
+
+**`use_item` on a downed ally.** `use_item` gained an optional `target`. The active
+combatant spends *their* action to administer the item to a party ally (validated as
+a party member); a healing potion poured into a downed ally runs the normal `heal`
+path, which revives and resets death saves. The recipient need not be active and may
+be unconscious — only the giver's turn/action is consumed.
+
+**Companions / following.** A non-hostile NPC can be recruited with `recruit_npc`
+(between fights, not mid-combat); it sets a `companion` flag on the NPC.
+
+- *Recruit gating.* Out-of-combat only, and the NPC must already be non-hostile
+  (de-escalate via `influence_npc` first). Mid-combat recruiting would require
+  inserting a new actor into the live initiative order — deferred as not worth it.
+- *Cross-scene follow.* `move_scene` rebuilds `state.npcs` from the destination
+  scene; companions are carried forward (re-keyed on collision) so they travel with
+  the party. Their surprise flag is cleared — a new scene isn't a surprise round.
+- *Combat.* `resolve_npc_action` now resolves a companion's turn engine-side: it
+  attacks the lowest-HP living hostile, mirroring how a plain hostile attacks the
+  lowest-HP PC. The model includes companions in `start_combat`; their beats narrate
+  like any NPC's.
+- *Deliberate simplifications.* Hostiles still target **PCs only** — they ignore
+  companions. And a full party wipe is still a **defeat even if a companion
+  survives**: a companion augments the party, it doesn't substitute for it. Both keep
+  the win/lose condition anchored on the player characters and avoid an ally-only
+  victory/stalemate. Revisit if companions become central rather than a bonus.
+
+**Scope — unaffected.** Enforcement, turn order, and redaction are untouched; new
+fields serialize through the existing `asdict`/`from_dict` path (with the
+`max_spell_slots` default-on-absent shim).

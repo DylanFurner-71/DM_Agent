@@ -44,6 +44,9 @@ class Character:
     proficiency_bonus: int = 2
     # Spell slots by spell level, e.g. {1: 2, 2: 0}. Decremented on cast.
     spell_slots: dict[int, int] = field(default_factory=dict)
+    # Per-level slot cap; restore effects (e.g. Pearl of Power) cannot push a level
+    # above this. Defaults on load to the starting allotment when absent.
+    max_spell_slots: dict[int, int] = field(default_factory=dict)
     # Ability modifiers (not scores), e.g. {"str": 1, "dex": 2, "con": 0, "int": 3, "wis": 1, "cha": 0}
     ability_modifiers: dict[str, int] = field(default_factory=dict)
     inventory: list[str] = field(default_factory=list)
@@ -86,6 +89,7 @@ class NPC:
     social_attempted: bool = False      # one persuasion attempt allowed per NPC
     alertness_dc: int | None = None     # None = always alert (cannot be ambushed); numeric = stealth DC
     surprised: bool = False             # True during the surprise round; cleared when the NPC's slot is skipped
+    companion: bool = False             # recruited ally: travels across scenes, fights hostiles on the party's side
 
     @property
     def is_down(self) -> bool:
@@ -201,6 +205,13 @@ class GameState:
             # JSON keys are strings; spell_slots keys must be ints.
             v = dict(v)
             v["spell_slots"] = {int(lvl): n for lvl, n in v.get("spell_slots", {}).items()}
+            # Spell-slot cap: coerce JSON string keys to ints. When the key is ABSENT
+            # (a fresh scenario lists full slots), default the cap to that allotment;
+            # when PRESENT (a savegame, even empty), preserve it so round-trips are lossless.
+            if "max_spell_slots" in v:
+                v["max_spell_slots"] = {int(lvl): n for lvl, n in v["max_spell_slots"].items()}
+            else:
+                v["max_spell_slots"] = dict(v["spell_slots"])
             gs.party[k] = Character(**v)
         for k, v in npc_entries.items():
             gs.npcs[k] = expand_npc_entry(v)

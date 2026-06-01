@@ -365,20 +365,26 @@ TOOLS = [
     {
         "name": "use_item",
         "description": (
-            "Use a consumable item from a character's inventory on themselves. "
+            "Use a consumable item from a character's inventory — on themselves, or on "
+            "a party ally named in `target` (e.g. pour a healing potion down a downed "
+            "ally's throat to revive them; the heal revives and resets death saves). "
             "The item must be in character.inventory (ok=false 'not_in_inventory') AND "
             "in the CONSUMABLES table (ok=false 'not_consumable' — a mace is not drinkable). "
-            "In combat, using an item IS your action and is turn-guarded. "
+            "`target`, if given, must be a party member (ok=false 'unknown_target'). "
+            "In combat, using an item IS the USER's action and is turn-guarded — the "
+            "active character spends their turn administering it; the recipient need not "
+            "be active and may be unconscious. "
             "Out of combat, the guards no-op and the item is used freely. "
             "On a validation failure the action guard is undone so the character keeps their turn. "
-            "Applies the effect atomically via the engine (rolled == applied). "
-            "Self-use only — the character field must name the user, not a recipient."
+            "Applies the effect atomically via the engine (rolled == applied). A Pearl of "
+            "Power at full slots is refused ('slots_full') and not consumed."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "character": {"type": "string", "description": "Name of the character using the item"},
+                "character": {"type": "string", "description": "Name of the character using the item (spends the action)"},
                 "item":      {"type": "string", "description": "Item id to use, e.g. 'healing_potion'. Must be in character's inventory."},
+                "target":    {"type": "string", "description": "Optional party ally to receive the item. Omit for self-use."},
             },
             "required": ["character", "item"],
         },
@@ -407,6 +413,27 @@ TOOLS = [
                 "approach":  {"type": "string", "enum": ["persuade", "intimidate"], "description": "The social approach taken"},
             },
             "required": ["character", "npc", "approach"],
+        },
+    },
+    {
+        "name": "recruit_npc",
+        "description": (
+            "Recruit a non-hostile NPC as a travelling companion after the party has "
+            "won them over. The NPC must already be non-hostile (de-escalate first with "
+            "influence_npc) — ok=false 'hostile' otherwise. Recruit BETWEEN fights, not "
+            "mid-combat (ok=false 'in_combat'); also rejected if the NPC is down "
+            "('target_down') or already a companion ('already_companion'). "
+            "A companion follows the party across scenes and, once you include it in "
+            "start_combat, fights hostiles on the party's side (the engine resolves its "
+            "attacks automatically, like a hostile's). It does not replace a party member: "
+            "a full party wipe is still a defeat even if a companion survives."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "npc": {"type": "string", "description": "Name of the non-hostile NPC to recruit"},
+            },
+            "required": ["npc"],
         },
     },
 ]
@@ -552,26 +579,47 @@ def _select_npc_attack_target(state):
     return candidates[0][0]
 
 
+def _select_companion_attack_target(state):
+    """Select the best hostile target for a companion ally's attack: lowest-HP
+    living hostile, ties broken by initiative position."""
+    order_pos = {k: i for i, k in enumerate(state.combat_order)}
+    candidates = [
+        (npc, order_pos.get(key, len(state.combat_order)))
+        for key, npc in state.npcs.items()
+        if npc.hostile and not npc.is_down
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0].hp, item[1]))
+    return candidates[0][0]
+
+
 def resolve_npc_action(npc, state) -> tuple[dict, dict] | None:
-    """Engine-resolve a simple hostile NPC's turn without an LLM call.
+    """Engine-resolve a simple NPC's turn without an LLM call.
 
     Returns (input_args, dispatch_result) to append to tool_trace,
     or None to signal the model should decide instead.
 
+    A recruited companion (non-hostile, companion=True) fights on the party's side:
+    it attacks the lowest-HP living hostile. A plain hostile attacks the party.
+
     Falls back to None when:
-      - NPC is non-hostile (stands aside — no action)
-      - No conscious PC target exists
+      - NPC is a plain non-hostile (no companion flag) — stands aside, no action
+      - No valid target exists (companion: no living hostile; hostile: no conscious PC)
       - NPC has capabilities the engine doesn't model (e.g. spells)
     """
-    if not npc.hostile:
-        return None
     if getattr(npc, "spells", None):
         return None
-    target = _select_npc_attack_target(state)
+    if getattr(npc, "companion", False) and not npc.hostile:
+        target = _select_companion_attack_target(state)
+    elif npc.hostile:
+        target = _select_npc_attack_target(state)
+    else:
+        return None  # plain non-hostile NPC stands aside
     if target is None:
         return None
     # Pass defender explicitly — _resolve_offensive_target auto-pick only
-    # scans hostile NPCs (PC→NPC direction) and won't auto-target a PC.
+    # scans hostile NPCs (PC→NPC direction) and won't auto-target for these cases.
     args = {"attacker": npc.name, "defender": target.name}
     return args, dispatch("attack", args, state)
 
@@ -831,15 +879,27 @@ def dispatch(name: str, args: dict, state) -> dict:
             state.current_scene = scene_key
             state.location = scene_data.get("location", "")
             state.scene = scene_data.get("scene", "")
-            state.npcs = {k: expand_npc_entry(v) for k, v in scene_data.get("npcs", {}).items()}
+            new_npcs = {k: expand_npc_entry(v) for k, v in scene_data.get("npcs", {}).items()}
+            # Recruited companions follow the party into the new scene. Keep their key
+            # unless the destination already uses it, then suffix to avoid a clash.
+            followers = []
+            for key, npc in state.npcs.items():
+                if getattr(npc, "companion", False) and not npc.is_down:
+                    npc.surprised = False  # a fresh scene is not a surprise round
+                    new_key = key if key not in new_npcs else f"{key}_ally"
+                    new_npcs[new_key] = npc
+                    followers.append(npc.name)
+            state.npcs = new_npcs
             state.pending_ambush = False
             state.ambush_attempted = False
-            state.record(f"scene -> {scene_key} ({state.location})")
+            state.record(f"scene -> {scene_key} ({state.location})"
+                         + (f"; companions follow: {followers}" if followers else ""))
             return {
                 "ok": True,
                 "scene_key": scene_key,
                 "location": state.location,
                 "npcs": list(state.npcs),
+                **({"companions": followers} if followers else {}),
             }
         # Free-form fallback for scenarios without a scenes dict.
         if "location" not in args:
@@ -1210,11 +1270,29 @@ def dispatch(name: str, args: dict, state) -> dict:
                 "error": f"{item_key!r} is not a consumable item.",
             }
 
-        res = rules.apply_consumable(character, item_key)
-        # Remove ONE instance (inventory may hold duplicates).
+        # Resolve the recipient: self by default, or a named party ally.
+        recipient = character
+        target_arg = (args.get("target") or "").strip()
+        if target_arg:
+            recipient = state.find_actor(target_arg)
+            if recipient is None or recipient.name.lower() not in {c.name.lower() for c in state.party.values()}:
+                state.action_used = False
+                return {"ok": False, "reason": "unknown_target",
+                        "error": f"{target_arg!r} is not a party member; items may only be given to allies."}
+
+        res = rules.apply_consumable(recipient, item_key)
+        if not res.get("ok"):
+            # No effect (e.g. slots already full) — keep the turn alive and the item.
+            state.action_used = False
+            return res
+        # Consume ONE instance from the USER's inventory (may hold duplicates).
         idx = inv_lower.index(item_key)
         character.inventory.pop(idx)
-        state.record(f"{character.name} uses {item_key}: {res.get('effect')} ({res})")
+        if recipient is not character:
+            res["recipient"] = recipient.name
+            state.record(f"{character.name} uses {item_key} on {recipient.name}: {res.get('effect')} ({res})")
+        else:
+            state.record(f"{character.name} uses {item_key}: {res.get('effect')} ({res})")
         return res
 
     if name == "influence_npc":
@@ -1276,6 +1354,25 @@ def dispatch(name: str, args: dict, state) -> dict:
                 result["active_name"] = combat_res.get("active_name")
                 result["round"] = combat_res.get("round")
         return result
+
+    if name == "recruit_npc":
+        npc = state.find_actor(args.get("npc", ""))
+        if not npc or not hasattr(npc, "hostile"):
+            return {"ok": False, "error": f"Unknown NPC {args.get('npc')!r}; call get_state."}
+        if state.combat_round > 0:
+            return {"ok": False, "reason": "in_combat",
+                    "error": "Recruit allies between fights, not mid-combat."}
+        if npc.is_down:
+            return {"ok": False, "reason": "target_down", "error": f"{npc.name} is down."}
+        if npc.hostile:
+            return {"ok": False, "reason": "hostile",
+                    "error": f"{npc.name} is still hostile — win them over with influence_npc first."}
+        if npc.companion:
+            return {"ok": False, "reason": "already_companion",
+                    "error": f"{npc.name} is already travelling with the party."}
+        npc.companion = True
+        state.record(f"{npc.name} recruited as a companion")
+        return {"ok": True, "npc": npc.name, "companion": True}
 
     if name == "take_item":
         item_arg = args.get("item", "").strip().lower()

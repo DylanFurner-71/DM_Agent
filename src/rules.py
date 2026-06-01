@@ -598,7 +598,21 @@ def apply_consumable(character, item_id: str) -> dict:
 
     if effect == "restore_slot":
         level = item["level"]
-        new_count = character.spell_slots.get(level, 0) + 1
+        current = character.spell_slots.get(level, 0)
+        cap = getattr(character, "max_spell_slots", {}).get(level)
+        # At cap → refuse so the item isn't wasted (dispatch leaves it in inventory).
+        if cap is not None and current >= cap:
+            return {
+                "ok": False,
+                "reason": "slots_full",
+                "item": item["name"],
+                "effect": "restore_slot",
+                "level": level,
+                "slots_remaining": current,
+                "max": cap,
+                "error": f"{character.name} already has the maximum level-{level} slots ({cap}).",
+            }
+        new_count = current + 1 if cap is None else min(current + 1, cap)
         character.spell_slots[level] = new_count
         return {
             "ok": True,
@@ -606,6 +620,7 @@ def apply_consumable(character, item_id: str) -> dict:
             "effect": "restore_slot",
             "level": level,
             "slots_remaining": new_count,
+            "max": cap,
         }
 
     return {"ok": False, "reason": "unknown_effect", "error": f"Unhandled effect {effect!r} for {item_id!r}."}

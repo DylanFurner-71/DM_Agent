@@ -78,10 +78,14 @@ while down adds failures (a crit adds two); massive overkill is instant death;
 healing resets the whole state. A party wipe produces a defeat epilogue; clearing
 a terminal scene produces a victory epilogue. The engine decides when the run ends.
 
-**Social — talking your way out.** `influence_npc` allows one persuasion attempt
-per NPC against an author-set `disposition_dc` (`None` = unreachable by talk).
-Success flips a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and
-de-escalating the *last* hostile ends combat. In combat it costs the actor's action.
+**Social & companions.** `influence_npc` allows one persuasion attempt per NPC
+against an author-set `disposition_dc` (`None` = unreachable by talk). Success flips
+a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and de-escalating
+the *last* hostile ends combat. In combat it costs the actor's action. A won-over NPC
+can then be recruited with `recruit_npc`: a **companion** follows the party across
+scenes and, once added to `start_combat`, fights hostiles on the party's side (the
+engine resolves its attacks automatically). A companion doesn't replace a party
+member — a full party wipe is still a defeat even if it survives.
 
 **Stealth & ambush.** `attempt_ambush` rolls group stealth against the highest
 `alertness_dc` present (`None` = always alert, can't be ambushed). Winning grants a
@@ -97,10 +101,13 @@ player's words rather than supply the secret). Loot is author-placed and obvious
 look, picked up with `take_item`.
 
 **Spells & items.** A real spell-slot economy (`cast_spell` decrements actual slots
-and refuses when tapped out; cantrips are free). Damaging spells — magic missile,
-guiding bolt, chromatic orb — roll and apply atomically and thread crits.
-Consumables apply through `use_item` / `apply_consumable`, and `lookup_rule` serves
-an SRD-lite reference.
+and refuses when tapped out; cantrips are free). Slots are capped at the starting
+allotment, so a restoring item (Pearl of Power) can't over-fill — at the cap it's
+refused and not consumed. Damaging spells — magic missile, guiding bolt, chromatic
+orb — roll and apply atomically and thread crits. Consumables apply through
+`use_item` / `apply_consumable`; an item can be used on oneself or **administered to
+a party ally** — pouring a healing potion into a downed ally revives them and resets
+their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
 
 **Quest flags.** Boolean story markers recording that something happened (a clue
 read, a seal broken), surfaced each turn and used to gate ways and endings.
@@ -138,21 +145,37 @@ which sets the direction for the latency work below.
   `client` calls to it. Open question: whether the cheaper model picks tools/args
   reliably enough to keep enforcement clean.
 
-**Deliberately deferred (decided, not forgotten).**
+## Need to implement
 
-- A `max_spell_slots` cap — a slot-restoring item can currently over-fill past the
-  intended maximum.
-- Companions / following — a de-escalated NPC becoming an ally that travels with
-  the party across scenes (today "not hostile" means *stands aside*, not *joins*).
-- `use_item` on a downed ally — administering a potion to revive someone. The heal
-  path already supports it; the tool is self-use only for now.
+The core resolution gaps worth closing first:
 
-**Out of scope (future work — noted as judgment, not omission).**
-Advantage/disadvantage, movement & range, areas of effect, saving throws,
-conditions beyond unconscious, reactions/bonus actions, utility & healing spells,
-XP/leveling, resting, character creation, enemy-initiated stealth, equipment→AC;
-and the big swings: the full 5e ruleset, multiplayer, persistent multi-session
-campaigns, image/voice, a polished GUI, and procedural map generation.
+- **General ability saving throws:** `d20 + ability modifier` vs a DC to *resist* an
+  effect (DEX vs a trap, CON vs poison, WIS vs a fear spell) — the reactive twin of
+  the existing proactive `skill_check`. (A general ability/skill *check* tool already
+  exists, `skill_check`, so only the saving-throw side is missing.)
+- **Hazards & traps:** author-placed dangers in a scene that trigger a save or check
+  and deal dice damage through `apply_dice` — what gives checks and saves real stakes.
+
+## Potential implementations
+
+Future work, ranked roughly least → most difficult to implement:
+
+- **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
+- **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
+- **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks.
+- **Resting:** a short/long rest that restores HP and spell slots between encounters.
+- **Conditions beyond unconscious:** prone, poisoned, frightened, restrained, etc., with mechanical effects on rolls.
+- **Enemy-initiated stealth:** let foes ambush the party — the mirror of `attempt_ambush`.
+- **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
+- **Utility & healing spells:** expand the spell table beyond damage (shield, bless, cure wounds).
+- **Fail-forward system:** failed checks that advance the fiction with a cost or complication instead of dead-ending — partial-success outcomes baked into resolution.
+- **Structured quests:** tracked multi-step objectives with prerequisites and completion state, beyond today's single-flag gates.
+- **Reactions & bonus actions:** a richer action economy (opportunity attacks, off-hand attacks, reactions).
+- **Movement & range:** positioning, distances, and reach/range bands.
+- **Areas of effect:** templated multi-target spells and abilities (depends on positioning).
+- **XP & leveling:** experience, level-ups, and growing stats/slots across a session.
+- **Character creation:** build a party at the start of a session instead of authored pre-generated characters.
+- **The big swings:** the full 5e ruleset, multiplayer, persistent multi-session campaigns, image/voice, a polished GUI, and procedural map generation.
 
 ## Layout
 
