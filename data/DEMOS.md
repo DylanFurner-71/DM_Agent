@@ -29,6 +29,7 @@ far), `/roll <notation>` (open flavor roll), `/trace` (tools called per turn),
 | Stealth & ambush (group stealth, surprise round, always-alert foe) | `demo_stealth.json` |
 | Exploration: scenes, gates & loot + Quest flags (flag gate, answer gate, `take_item`) | `demo_gates_loot.json` |
 | Spells & items (slot economy "money shot", Pearl-of-Power cap, `use_item`, `lookup_rule`) | `demo_spells_items.json` |
+| Saving throws (`saving_throw` — resist an effect; reactive, proficiency-aware) | `demo_saving_throws.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
 | Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
 | Persistence & resume | any scenario — see the bottom section |
@@ -194,6 +195,40 @@ free cantrips, the **Pearl-of-Power cap** (refused when slots are already full, 
    to win.
 
 ---
+
+## demo_saving_throws.json — Saving throws
+
+**Party:** Aldric (proficient in WIS/CHA saves, carries a healing potion), Kael
+(DEX/INT saves), Wisp (INT/WIS saves). **Scene 1 (trapped_gallery):** a DEX dart-trap
+and a CON poison-spore cloud. **Scene 2 (fear_sanctum):** a WIS fear-ward guarding the
+relic — terminal victory.
+
+**Shows:** `saving_throw` (the reactive twin of `skill_check`) used to **resist** an
+effect, across three different abilities (DEX/CON/WIS); proficiency-aware saves (a
+character proficient in that save adds proficiency, a plain check never does); the
+fact that a save is **not an action and not turn-guarded** (everyone present saves at
+once, with no combat); and applying a failed save's consequence through
+`apply_dice`/`modify_hp`.
+
+> The hazards are authored in the scene text (each naming its save ability and DC),
+> because author-placed traps are the *next* roadmap item — until then the scene prose
+> is what cues the DM to call `saving_throw`. Watch `/trace` for the `saving_throw`
+> calls and the `apply_dice` damage that follows a failure.
+
+**Play it:**
+1. `we cross the gallery` → the DM calls a **DC 13 DEX** `saving_throw` for each PC.
+   Kael (proficient) rolls best; anyone who fails takes `2d6` darts via `apply_dice`.
+   (`/state` shows the HP drop; `/trace` shows save → damage.)
+2. `we push through the spores` → a **DC 12 CON** save for each PC (none are proficient,
+   so they roll raw ability). On a failure, `1d6` poison is applied.
+3. `Aldric drinks his healing potion` if someone is hurt (`use_item`), then
+   `take the healing draught` from the niche and `go through the far arch`.
+4. In the sanctum, `we approach the reliquary` → a **DC 13 WIS** save (Aldric and Wisp
+   are proficient; Kael isn't). Then `take the Pale Sigil` and `is there anywhere
+   further to go?` → leaving the terminal sanctum fires the **victory epilogue**.
+   - *Check vs save:* ask the DM to make a *check* instead (e.g. "Kael studies the
+     plate — perception check") to see `skill_check` add **no** proficiency, while the
+     DEX *save* on the same character does.
 
 ## demo_reinforcements.json — Reinforcements (`add_npc`)
 
