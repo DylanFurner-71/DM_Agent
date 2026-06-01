@@ -226,17 +226,79 @@ def _sanitize_narration(text: str) -> str:
     return tail
 
 
+def _screen_narration_text(text: str) -> str:
+    """Suppress an assembled narration string that looks like an internal state dump.
+
+    Returns "" (and logs a warning) when the text reads as a leaked state/JSON blob
+    rather than prose. The leading-bracket-plus-brace shape is the observed leak.
+    """
+    text = text.strip()
+    if text.startswith("[") and "{" in text:
+        logging.warning("_screen_narration_text: suppressed likely state-dump leak: %.80s", text)
+        return ""
+    return text
+
+
 def _extract_narration(content: list) -> str:
     """Join text blocks from an API response content list and return the narration string.
 
     Returns "" (and logs a warning) when the text looks like an internal state dump
     or engine preamble that slipped through the tool-use phase scrub.
     """
-    text = "".join(b.text for b in content if b.type == "text").strip()
-    if text.startswith("[") and "{" in text:
-        logging.warning("_extract_narration: suppressed likely state-dump leak: %.80s", text)
-        return ""
-    return text
+    text = "".join(b.text for b in content if b.type == "text")
+    return _screen_narration_text(text)
+
+
+class _NarrationGate:
+    """Streams narration deltas to a sink, holding the leading text until it is known
+    not to be a state dump.
+
+    Leak sentinels appear at the START of a leaked narration (the model prepends a
+    `[Current state]…{…}` blob before any prose). So we buffer the opening until we
+    can decide: text that does not begin with `[`/`{`/`"party"` is plain prose and is
+    released immediately, then passed through live; bracket/brace-leading text is held
+    until a paragraph boundary lets `_screen_narration_text` + `_sanitize_narration`
+    decide what (if anything) survives — keeping on-screen output equal to what is
+    stored. The realistic leak (dump-first) never reaches the sink.
+    """
+
+    def __init__(self, sink):
+        self.sink = sink
+        self.buffer = ""
+        self.emitting = False
+
+    def feed(self, delta: str) -> None:
+        if self.emitting:
+            self.sink(delta)
+            return
+        self.buffer += delta
+        stripped = self.buffer.lstrip()
+        looks_risky = stripped[:1] in ("[", "{") or stripped.startswith('"party"')
+        if not looks_risky:
+            # Plain prose — release the held opening and switch to live pass-through.
+            self._release(self.buffer)
+            self.buffer = ""
+            self.emitting = True
+        elif "\n\n" in self.buffer:
+            # A paragraph closed; let the screens trim any leading dump, emit the rest.
+            safe = _sanitize_narration(_screen_narration_text(self.buffer))
+            if safe:
+                self._release(safe)
+                self.buffer = ""
+                self.emitting = True
+            # else: still all-dump so far — keep buffering.
+
+    def close(self) -> None:
+        """Flush whatever remains once the stream ends."""
+        if self.emitting:
+            return
+        safe = _sanitize_narration(_screen_narration_text(self.buffer))
+        if safe:
+            self._release(safe)
+
+    def _release(self, text: str) -> None:
+        if text:
+            self.sink(text)
 
 
 def _usage_dict(usage) -> dict:
@@ -283,6 +345,10 @@ class DMAgent:
         self.state = state
         self.client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.model = model
+        # Optional sink for live narration deltas. When set, the dedicated narration
+        # calls stream their prose to it (behind a leak gate) for perceived latency;
+        # when None, narration is produced with the buffered create() path unchanged.
+        self.on_narration_delta = None
         self.messages: list[dict] = []
         self.tool_trace: list[dict] = []  # tool calls from the last turn
         self.api_stats: list[dict] = []   # per-API-call timing/usage for the current turn
@@ -433,6 +499,52 @@ class DMAgent:
                     break
         return narration
 
+    def _narration_call(self, max_tokens: int, phase: str) -> str:
+        """Make a text-only narration call (no tools) over the current self.messages.
+
+        When on_narration_delta is set, the prose is streamed to it live (behind a
+        _NarrationGate that holds the opening until a leading state-dump can be ruled
+        out); otherwise the buffered create() path is used unchanged so the no-API
+        tests and library callers see identical behavior. Records stats, appends the
+        assistant turn, and returns the leak-screened narration string either way.
+        """
+        _t0 = time.monotonic()
+        if self.on_narration_delta is None:
+            resp = self.client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=_SYSTEM,
+                messages=self.messages,
+            )
+            self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(resp.usage)})
+            self.messages.append({"role": "assistant", "content": resp.content})
+            return _extract_narration(resp.content)
+
+        gate = _NarrationGate(self.on_narration_delta)
+        with self.client.messages.stream(
+            model=self.model,
+            max_tokens=max_tokens,
+            system=_SYSTEM,
+            messages=self.messages,
+        ) as stream:
+            for delta in stream.text_stream:
+                gate.feed(delta)
+            final = stream.get_final_message()
+        gate.close()
+        self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(final.usage)})
+        self.messages.append({"role": "assistant", "content": final.content})
+        return _extract_narration(final.content)
+
+    def _emit(self, text: str) -> None:
+        """Push a pre-computed, already-leak-screened narration chunk to the live sink.
+
+        Used for the segments that are NOT produced by a streaming narration call —
+        the out-of-combat captured narration and the engine's closing prompt — so the
+        terminal receives the whole turn in order from one source.
+        """
+        if text and self.on_narration_delta is not None:
+            self.on_narration_delta(text)
+
     def _narrate_combat_over(self) -> str:
         """Post-combat narration: finishing blow, party stock, exploration prompt."""
         party_summary = "; ".join(
@@ -452,17 +564,7 @@ class DMAgent:
             "you do?' — not a combat-turn prompt."
         )
         self.messages.append({"role": "user", "content": prompt})
-        _t0 = time.monotonic()
-        resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=400,
-            system=_SYSTEM,
-            messages=self.messages,
-        )
-        _elapsed = time.monotonic() - _t0
-        self.api_stats.append({"phase": "narrating_combat_close", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
-        self.messages.append({"role": "assistant", "content": resp.content})
-        return _extract_narration(resp.content)
+        return self._narration_call(max_tokens=400, phase="narrating_combat_close")
 
     def _narrate_turn(self, player_input: str, combat_beats: list[dict]) -> str:
         """Single narration call for a combat turn: the player's action AND every
@@ -498,17 +600,7 @@ class DMAgent:
             f"{action_list}"
         )
         self.messages.append({"role": "user", "content": prompt})
-        _t0 = time.monotonic()
-        resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=min(256 * total, 1024),
-            system=_SYSTEM,
-            messages=self.messages,
-        )
-        _elapsed = time.monotonic() - _t0
-        self.api_stats.append({"phase": f"narrating_turn_{total}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
-        self.messages.append({"role": "assistant", "content": resp.content})
-        return _extract_narration(resp.content)
+        return self._narration_call(max_tokens=min(256 * total, 1024), phase=f"narrating_turn_{total}beats")
 
     def _maybe_end_combat(self) -> bool:
         """End combat automatically when one side is entirely down.
@@ -557,17 +649,7 @@ class DMAgent:
                 "follows, what was lost. No tool calls. No prompts. No meta-commentary."
             )
         self.messages.append({"role": "user", "content": prompt})
-        _t0 = time.monotonic()
-        resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=300,
-            system=_SYSTEM,
-            messages=self.messages,
-        )
-        _elapsed = time.monotonic() - _t0
-        self.api_stats.append({"phase": "narrating_epilogue", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
-        self.messages.append({"role": "assistant", "content": resp.content})
-        return _extract_narration(resp.content)
+        return self._narration_call(max_tokens=300, phase="narrating_epilogue")
 
     def _closing_prompt(self) -> str | None:
         """Engine-sourced closing prompt for the active combatant.
@@ -663,6 +745,11 @@ class DMAgent:
 
         # Check point 1: game_over from player phase (victory via move_scene, or party wipe).
         if self.state.game_over:
+            # The action narration (captured, not streamed) comes first; emit it, then
+            # the epilogue streams after it in order.
+            self._emit(player_narration)
+            if player_narration:
+                self._emit("\n\n")
             epilogue = self._narrate_epilogue(self.state.game_outcome)
             combined = _sanitize_narration("\n\n".join(n for n in [player_narration, epilogue] if n))
             self.narration_history.append((player_input, combined))
@@ -801,7 +888,13 @@ class DMAgent:
         # Check point 2: game_over from NPC phase (defeat). Narrate the exchange that
         # led here (player action + NPC beats, folded into one call), then the epilogue.
         if self.state.game_over:
-            exchange = self._narrate_turn(player_input, combat_beats) if combat_beats else player_narration
+            if combat_beats:
+                exchange = self._narrate_turn(player_input, combat_beats)  # streams live
+            else:
+                exchange = player_narration  # captured, not streamed
+                self._emit(exchange)
+            if exchange:
+                self._emit("\n\n")
             epilogue = self._narrate_epilogue(self.state.game_outcome)
             combined = _sanitize_narration("\n\n".join(n for n in [exchange, epilogue] if n))
             self.narration_history.append((player_input, combined))
@@ -816,12 +909,15 @@ class DMAgent:
         #  - combat ended this turn → dedicated two-paragraph close (covers the finishing blow);
         #  - in-combat turn with NPC beats → unified player-action + NPC-beats narration;
         #  - out-of-combat turn → the terminating turn already captured by _execute.
+        # The first two stream live inside their narration call; the last is captured
+        # (not streamed) and is emitted here as a chunk so the sink sees it in order.
         if combat_over_in_player_phase or combat_ended_in_npc_phase:
             narration = self._narrate_combat_over()
         elif combat_beats:
             narration = self._narrate_turn(player_input, combat_beats)
         else:
             narration = player_narration
+            self._emit(_sanitize_narration(narration))
 
         # Persist narration (not the closing prompt) to the rolling window.
         combined = _sanitize_narration(narration)
@@ -835,6 +931,8 @@ class DMAgent:
 
         # Engine-sourced closing prompt: kept separate so it's not stored in history.
         closing = self._closing_prompt()
+        if closing:
+            self._emit(("\n\n" if combined else "") + closing)
         return "\n\n".join(p for p in [combined, closing] if p)
 
 

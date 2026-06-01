@@ -319,3 +319,75 @@ def test_execute_capture_narration_keeps_terminal_prose():
         and any(getattr(b, "type", None) == "text" for b in msg["content"])
         for msg in agent.messages
     )
+
+
+# ---------------------------------------------------------------------------
+# Streaming narration (mocked client.messages.stream, no API)
+# ---------------------------------------------------------------------------
+
+class _FakeStream:
+    """Minimal stand-in for client.messages.stream(...)'s context manager."""
+
+    def __init__(self, deltas, final_text):
+        self._deltas = deltas
+        self._final_text = final_text
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    @property
+    def text_stream(self):
+        return iter(self._deltas)
+
+    def get_final_message(self):
+        block = MagicMock()
+        block.type = "text"
+        block.text = self._final_text
+        msg = MagicMock()
+        msg.content = [block]
+        msg.usage = _make_mock_usage()
+        return msg
+
+
+def test_narration_streams_prose_to_sink():
+    """With on_narration_delta set, _narration_call streams deltas live and returns
+    the same assembled prose."""
+    state = _make_state()
+    client = MagicMock()
+    client.messages.stream.return_value = _FakeStream(
+        ["Three bolts ", "of force ", "slam into Grik."], "Three bolts of force slam into Grik."
+    )
+    agent = DMAgent(state, client=client)
+    chunks: list[str] = []
+    agent.on_narration_delta = chunks.append
+    agent.messages = [{"role": "user", "content": "narrate"}]
+
+    out = agent._narration_call(max_tokens=256, phase="narrating_turn_1beats")
+
+    assert out == "Three bolts of force slam into Grik."
+    assert "".join(chunks) == "Three bolts of force slam into Grik."
+    # Streaming path was used, not the buffered create() path.
+    client.messages.create.assert_not_called()
+
+
+def test_narration_stream_gate_suppresses_leading_dump():
+    """A leading state dump must never reach the live sink — the gate holds the
+    opening, and the leak screen suppresses it (on-screen == stored == "")."""
+    state = _make_state()
+    client = MagicMock()
+    dump = '[Current state]\n{"location": "Dungeon", "party": {}}'
+    client.messages.stream.return_value = _FakeStream(
+        ['[Current state]\n', '{"location": "Dungeon", ', '"party": {}}'], dump
+    )
+    agent = DMAgent(state, client=client)
+    chunks: list[str] = []
+    agent.on_narration_delta = chunks.append
+    agent.messages = [{"role": "user", "content": "narrate"}]
+
+    out = agent._narration_call(max_tokens=256, phase="narrating_epilogue")
+
+    assert out == ""                 # leak screen suppressed the stored text
+    assert "".join(chunks) == ""     # the dump never reached the sink

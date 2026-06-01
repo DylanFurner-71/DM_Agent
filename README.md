@@ -41,7 +41,9 @@ every engine-resolved NPC beat in order. A compact, *redacted* state snapshot is
 injected every turn so the model always sees current numbers — but never the things
 it isn't supposed to know (hidden stealth DCs, gate passwords). Because prose is now
 produced with tool results in context, the leak screens (`_extract_narration` /
-`_sanitize_narration`) are load-bearing — see DECISIONS.md §5.
+`_sanitize_narration`) are load-bearing — see DECISIONS.md §5. In the terminal, that
+prose **streams** as it generates, behind a leak gate that holds the opening until a
+state-dump can be ruled out (DECISIONS.md §6).
 
 ## How enforcement works
 
@@ -122,12 +124,13 @@ which sets the direction for the latency work below.
 **In progress / specced.**
 
 
-- **Latency.** *(Done — see DECISIONS.md §5.)* The wasted terminating generation is
-  no longer thrown away: out of combat it *is* the narration, and in combat one call
-  narrates the player action plus all NPC beats. **Still open:** run the mechanical
-  tool-selection phase on a faster model while keeping the quality model for narration;
-  and stream narration for perceived latency. A profiling harness (`profile_api.py`)
-  measures the before/after.
+- **Latency.** *(Mostly done — see DECISIONS.md §5–6.)* The wasted terminating
+  generation is no longer thrown away: out of combat it *is* the narration, and in
+  combat one call narrates the player action plus all NPC beats. Narration also
+  **streams** to the terminal as it generates (behind a leak gate), so the player
+  reads from the first token. **Still open:** run the mechanical tool-selection phase
+  on a faster model while keeping the quality model for narration. A profiling harness
+  (`profile_api.py`) measures the before/after.
 
 **Deliberately deferred (decided, not forgotten).**
 

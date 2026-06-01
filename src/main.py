@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from .dm_agent import DMAgent
@@ -212,6 +213,12 @@ def main() -> None:
     state = GameState.load(args.scenario)
     agent = DMAgent(state)
 
+    # Stream narration to the terminal as it generates (perceived latency).
+    def _emit_delta(text: str) -> None:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    agent.on_narration_delta = _emit_delta
+
     print("=" * 60)
     print("  DM AGENT — type /state, /trace, /full_trace, /save, or /quit at any time")
     print(f"  Scenario: {args.scenario}")
@@ -280,8 +287,13 @@ def main() -> None:
                 print(f"  {val}")
             continue
 
-        narration = agent.take_turn(player)
-        print(f"\n{narration}\n")
+        # Narration streams to stdout via on_narration_delta as it generates; we
+        # just frame it with blank lines. (take_turn still returns the full text for
+        # history/logging — it is not re-printed here, to avoid doubling.)
+        sys.stdout.write("\n")
+        agent.take_turn(player)
+        sys.stdout.write("\n\n")
+        sys.stdout.flush()
         if state.game_over:
             print("— The End —")
             try:

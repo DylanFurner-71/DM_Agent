@@ -382,3 +382,50 @@ future refinement.
 **Reversibility.** Localized to `dm_agent.py` (`_execute`, `_narrate_turn`,
 `take_turn`) and the system-prompt protocol block. Reverting to a dedicated
 narration call is mechanical.
+
+---
+
+## 6. Stream narration to the terminal, behind a leak gate
+
+**Decision.** The DM agent exposes an optional `on_narration_delta` sink. When set
+(the terminal REPL sets it), the dedicated text-only narration calls — `_narrate_turn`,
+`_narrate_combat_over`, `_narrate_epilogue` — stream their prose via
+`client.messages.stream` and push tokens to the sink as they arrive, instead of
+returning the whole paragraph after a blocking `create`. When the sink is unset
+(library callers, the no-API test suite), the buffered `create` path runs unchanged,
+so behavior and mocks are identical to before.
+
+The out-of-combat captured narration (the tool loop's terminating turn, Decision 5)
+is **not** streamed: it is produced inside `_execute`, where a response isn't known
+to be the terminal (narration) turn until the stream completes — so there is nothing
+to safely stream live. It stays buffered + screened and is emitted to the sink as one
+chunk. Streaming covers every combat turn and the epilogue — the longest narrations
+in profiling (the multi-beat combat narration and the closing beats), where perceived
+latency matters most.
+
+**Why.** Profiling showed narration is decode-bound (~30 tok/s) and the largest
+single contributor to per-turn wall time. Streaming doesn't reduce tokens or total
+generation time, but it cuts *perceived* latency sharply: the player starts reading
+at the first token instead of waiting for the whole paragraph.
+
+**Trade-off — the leak gate.** Decision 5 already made the leak screens load-bearing.
+Streaming raw tokens would defeat them: a leaked `[Current state]…{…}` dump would hit
+the screen before any post-hoc screen could suppress it. So streamed deltas pass
+through a `_NarrationGate`: it holds the *opening* of the stream until it can rule out
+a leading dump (the observed leak shape is always dump-first). Plain prose (not
+starting with `[`/`{`/`"party"`) is released immediately and then passed through live;
+bracket/brace-leading text is held until a paragraph boundary lets the same screens
+(`_screen_narration_text` + `_sanitize_narration`) decide what survives. The realistic
+dump-first leak never reaches the sink, and on-screen output equals what is stored. The
+residual gap — clean prose *followed* by a mid-stream dump — is the same pathological
+case `_sanitize_narration` was always weak on, and is not the observed failure mode.
+
+**Scope — what's unaffected.** Pure presentation/transport. No tool, enforcement,
+redaction, or storage change; `take_turn` still returns the full assembled narration
+for history and logging, and the terminal simply stops re-printing it (the sink already
+showed it). The mechanical tool-selection-on-a-faster-model idea (README roadmap)
+remains open and independent.
+
+**Reversibility.** Leaving `on_narration_delta` unset reverts to fully buffered
+narration with no other change. Localized to `dm_agent.py` (`_narration_call`,
+`_NarrationGate`) and the REPL wiring in `main.py`.
