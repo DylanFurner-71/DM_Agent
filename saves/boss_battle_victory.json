@@ -1,0 +1,597 @@
+{
+  "location": "The Ashen Barrow \u2014 The Iron Chamber",
+  "scene": "Beyond the iron door the air turns to grit and grave-cold. The chamber is a perfect circle of black stone, its floor ankle-deep in fine grey ash that drinks every footfall. At its center, on a throne of fused bone, sits a figure wound in tarnished mail and centuries of dust \u2014 the Ash Warden, the thing the dead scout's journal feared. It does not stir. But the moment Aldric's torchlight spills across the threshold, the warden's hollow sockets kindle with a slow answering ember and a sound like settling cinders climbs out of its ribs \u2014 exactly as the journal warned: keep the flame away. Behind the throne, half-drowned in ash, a reliquary of tarnished silver catches the light, the thing this barrow was raised to keep.",
+  "current_scene": "iron_chamber",
+  "scenes": {
+    "barrow_entrance": {
+      "location": "The collapsed entrance of the Ashen Barrow",
+      "scene": "Torchlight gutters against damp stone. A goblin sentry, Snik, bars the only passage deeper, blade already drawn. Slumped in the rubble lies an earlier scout, long dead, a water-stained journal still clutched in one hand \u2014 its final legible entry warns that the iron door in the deep chamber yields to no key, only to a spoken word: 'ashfall.' Your party: Brother Aldric, a road-worn cleric, and Wisp, a half-elf mage whose spellbook is nearly spent.",
+      "npcs": {
+        "snik": {
+          "template": "goblin",
+          "name": "Snik",
+          "hostile": true,
+          "disposition_dc": 13,
+          "alertness_dc": 12
+        }
+      },
+      "loot": [],
+      "exits": {
+        "the passage descending deeper into the barrow": "ember_chamber"
+      }
+    },
+    "ember_chamber": {
+      "location": "The Ashen Barrow \u2014 The Ember Chamber",
+      "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals \u2014 they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
+      "npcs": {
+        "grik": {
+          "template": "goblin",
+          "name": "Grik",
+          "hostile": true,
+          "max_hp": 18,
+          "alertness_dc": 14
+        },
+        "narl": {
+          "template": "goblin",
+          "name": "Narl",
+          "hostile": true,
+          "alertness_dc": 12
+        }
+      },
+      "loot": [],
+      "exits": {
+        "the iron door, banded and glyph-marked": {
+          "to": "iron_chamber",
+          "requires_answer": "ashfall",
+          "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force \u2014 and you have not spoken the word."
+        }
+      }
+    },
+    "iron_chamber": {
+      "location": "The Ashen Barrow \u2014 The Iron Chamber",
+      "scene": "Beyond the iron door the air turns to grit and grave-cold. The chamber is a perfect circle of black stone, its floor ankle-deep in fine grey ash that drinks every footfall. At its center, on a throne of fused bone, sits a figure wound in tarnished mail and centuries of dust \u2014 the Ash Warden, the thing the dead scout's journal feared. It does not stir. But the moment Aldric's torchlight spills across the threshold, the warden's hollow sockets kindle with a slow answering ember and a sound like settling cinders climbs out of its ribs \u2014 exactly as the journal warned: keep the flame away. Behind the throne, half-drowned in ash, a reliquary of tarnished silver catches the light, the thing this barrow was raised to keep.",
+      "npcs": {
+        "ash_warden": {
+          "template": "skeleton",
+          "name": "The Ash Warden",
+          "hostile": true,
+          "max_hp": 30,
+          "ac": 15,
+          "attack_bonus": 6,
+          "ability_modifiers": {
+            "str": 3,
+            "dex": 2,
+            "con": 3,
+            "int": -2,
+            "wis": 0,
+            "cha": -2
+          },
+          "inventory": [
+            "greataxe"
+          ]
+        }
+      },
+      "loot": [
+        "healing_potion"
+      ],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 15,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "spell_slots": {
+        "1": 2
+      },
+      "ability_modifiers": {
+        "str": 2,
+        "dex": 0,
+        "con": 2,
+        "int": 1,
+        "wis": 3,
+        "cha": 1
+      },
+      "inventory": [
+        "mace",
+        "holy symbol",
+        "torch"
+      ],
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": [
+        "guiding_bolt"
+      ],
+      "death_save_successes": 0,
+      "death_save_failures": 0,
+      "dead": false,
+      "stable": false
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 1,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {
+        "1": 0,
+        "2": 0
+      },
+      "ability_modifiers": {
+        "str": -1,
+        "dex": 2,
+        "con": 0,
+        "int": 4,
+        "wis": 1,
+        "cha": 2
+      },
+      "inventory": [
+        "dagger",
+        "spellbook",
+        "50ft rope"
+      ],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": [
+        "magic_missile",
+        "chromatic_orb"
+      ],
+      "death_save_successes": 0,
+      "death_save_failures": 0,
+      "dead": false,
+      "stable": false
+    }
+  },
+  "npcs": {
+    "ash_warden": {
+      "name": "The Ash Warden",
+      "max_hp": 30,
+      "hp": 0,
+      "ac": 15,
+      "attack_bonus": 6,
+      "hostile": true,
+      "ability_modifiers": {
+        "str": 3,
+        "dex": 2,
+        "con": 3,
+        "int": -2,
+        "wis": 0,
+        "cha": -2
+      },
+      "inventory": [
+        "greataxe"
+      ],
+      "disposition_dc": null,
+      "social_attempted": false,
+      "alertness_dc": null,
+      "surprised": false
+    }
+  },
+  "quest_flags": {
+    "journal_read": true,
+    "password_known": "ashfall"
+  },
+  "turn": 27,
+  "log": [
+    "[turn 1] flag journal_read = True",
+    "[turn 2] flag password_known = 'ashfall'",
+    "[turn 3] Aldric persuades Snik (DC 13): failure \u2014 now_hostile=True",
+    "[turn 3] combat started round 1, order: ['snik', 'wisp', 'aldric'], first: snik",
+    "[turn 3] Snik attacks Wisp: miss",
+    "[turn 3] round 1, turn -> wisp (Wisp)",
+    "[turn 4] Wisp casts magic_missile at Snik: 3d4+3 -> [1, 3, 4] + 3 = 11",
+    "[turn 4] round 1, turn -> aldric (Aldric)",
+    "[turn 5] Aldric attacks Snik: miss",
+    "[turn 5] round 2, turn -> snik (Snik)",
+    "[turn 5] Snik attacks Wisp: miss",
+    "[turn 5] round 2, turn -> wisp (Wisp)",
+    "[turn 6] Wisp attacks Snik: hit",
+    "[turn 6] combat ended",
+    "[turn 7] Aldric takes healing_potion from scene 'barrow_entrance'",
+    "[turn 7] Wisp takes pearl_of_power from scene 'barrow_entrance'",
+    "[turn 8] Wisp uses pearl_of_power: restore_slot ({'ok': True, 'item': 'Pearl of Power', 'effect': 'restore_slot', 'level': 1, 'slots_remaining': 2})",
+    "[turn 9] scene -> ember_chamber (The Ashen Barrow \u2014 The Ember Chamber)",
+    "[turn 10] attempt_ambush bar=14 success=False",
+    "[turn 11] combat started round 1, order: ['grik', 'narl', 'wisp', 'aldric'], first: grik",
+    "[turn 11] Grik attacks Wisp: hit",
+    "[turn 11] round 1, turn -> narl (Narl)",
+    "[turn 11] Narl attacks Wisp: hit",
+    "[turn 11] round 1, turn -> wisp (Wisp)",
+    "[turn 13] Wisp casts magic_missile at Narl: 3d4+3 -> [1, 1, 3] + 3 = 8",
+    "[turn 13] round 1, turn -> aldric (Aldric)",
+    "[turn 14] Aldric attacks Grik: hit",
+    "[turn 14] round 2, turn -> grik (Grik)",
+    "[turn 14] Grik attacks Wisp: hit",
+    "[turn 14] round 2, turn -> narl (Narl)",
+    "[turn 14] Narl attacks Wisp: hit",
+    "[turn 14] round 2, turn -> wisp (Wisp)",
+    "[turn 14] Wisp death save: roll 1 \u2192 failure (S0/F2)",
+    "[turn 14] round 2, turn -> aldric (Aldric)",
+    "[turn 15] Aldric attacks Grik: hit",
+    "[turn 15] round 3, turn -> grik (Grik)",
+    "[turn 15] Grik attacks Aldric: hit",
+    "[turn 15] round 3, turn -> narl (Narl)",
+    "[turn 15] Narl attacks Aldric: miss",
+    "[turn 15] round 3, turn -> wisp (Wisp)",
+    "[turn 15] Wisp death save: roll 18 \u2192 success (S1/F2)",
+    "[turn 15] round 3, turn -> aldric (Aldric)",
+    "[turn 16] Aldric attacks Grik: hit",
+    "[turn 16] skipping downed grik (Grik)",
+    "[turn 16] round 4, turn -> narl (Narl)",
+    "[turn 16] Narl attacks Aldric: miss",
+    "[turn 16] round 4, turn -> wisp (Wisp)",
+    "[turn 16] Wisp death save: roll 17 \u2192 success (S2/F2)",
+    "[turn 16] round 4, turn -> aldric (Aldric)",
+    "[turn 17] Aldric attacks Narl: hit",
+    "[turn 17] combat ended",
+    "[turn 18] Aldric uses healing_potion: heal ({'ok': True, 'item': 'Potion of Healing', 'effect': 'heal', 'rolled': 6, 'roll_detail': '2d4+2 -> [1, 3] + 2 = 6', 'healed': 6, 'hp': 22})",
+    "[turn 19] Aldric takes healing_potion from scene 'ember_chamber'",
+    "[turn 20] Aldric uses healing_potion: heal ({'ok': True, 'item': 'Potion of Healing', 'effect': 'heal', 'rolled': 6, 'roll_detail': '2d4+2 -> [1, 3] + 2 = 6', 'healed': 6, 'hp': 24})",
+    "[turn 21] scene -> iron_chamber (The Ashen Barrow \u2014 The Iron Chamber)",
+    "[turn 22] combat started round 1, order: ['wisp', 'ash_warden', 'aldric'], first: wisp",
+    "[turn 22] Wisp death save: roll 20 \u2192 revived (S0/F0)",
+    "[turn 23] Wisp casts magic_missile at The Ash Warden: 3d4+3 -> [1, 3, 3] + 3 = 10",
+    "[turn 23] round 1, turn -> ash_warden (The Ash Warden)",
+    "[turn 23] The Ash Warden attacks Wisp: hit",
+    "[turn 23] round 1, turn -> aldric (Aldric)",
+    "[turn 24] Aldric attacks The Ash Warden: hit",
+    "[turn 24] round 2, turn -> wisp (Wisp)",
+    "[turn 24] Wisp death save: roll 10 \u2192 success (S1/F0)",
+    "[turn 24] round 2, turn -> ash_warden (The Ash Warden)",
+    "[turn 24] The Ash Warden attacks Aldric: miss",
+    "[turn 24] round 2, turn -> aldric (Aldric)",
+    "[turn 25] Aldric attacks The Ash Warden: miss",
+    "[turn 25] round 3, turn -> wisp (Wisp)",
+    "[turn 25] Wisp death save: roll 1 \u2192 failure (S1/F2)",
+    "[turn 25] round 3, turn -> ash_warden (The Ash Warden)",
+    "[turn 25] The Ash Warden attacks Aldric: hit",
+    "[turn 25] round 3, turn -> aldric (Aldric)",
+    "[turn 26] Aldric attacks The Ash Warden: hit",
+    "[turn 26] round 4, turn -> wisp (Wisp)",
+    "[turn 26] Wisp death save: roll 20 \u2192 revived (S0/F0)",
+    "[turn 27] Wisp casts chromatic_orb at The Ash Warden: 4d8 -> [4, 6, 7, 6] = 23",
+    "[turn 27] combat ended"
+  ],
+  "transcript": [
+    {
+      "kind": "player",
+      "text": "read the journal"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric turns the brittle pages carefully, the torchlight catching the desperate, spidery script of a man who clearly knew his end was near. The warning sinks in \u2014 the deep door is sealed by a name, and whatever slumbers below cannot be touched by ordinary blades. The journal exhales its last secret and falls silent, its pages threatening to dissolve to ash at the next breath."
+    },
+    {
+      "kind": "player",
+      "text": "learn the secret"
+    },
+    {
+      "kind": "dm",
+      "text": "The word *ashfall* settles over the chamber like settling dust \u2014 a key without teeth, a name without a face, but unmistakably the thing that will open whatever waits below. Wisp traces the letters in the margin of her spellbook with one careful fingertip, and Aldric repeats it once under his breath, the syllables tasting of cold stone and old smoke."
+    },
+    {
+      "kind": "player",
+      "text": "parley with the goblin"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's olive branch dies on his tongue as Snik snatches up its blade with a rattling screech, the collapsed stones of the entrance suddenly feeling far too close and far too small. The failed parley hangs in the air for exactly one heartbeat \u2014 then the goblin is already moving.\n\nSnik's rusty blade hisses through the air in a wild, overcommitted swing aimed at Wisp's throat \u2014 but the little wizard twists aside just enough, the corroded edge scraping nothing but cold air an inch from her ear."
+    },
+    {
+      "kind": "player",
+      "text": "fire magic missile"
+    },
+    {
+      "kind": "dm",
+      "text": "Three darts of pure arcane light streak from Wisp's outstretched fingers and slam into Snik in rapid succession \u2014 each one punching a tiny scorch mark into his ratty leather vest. The goblin staggers, barely upright, a thin wheeze escaping through bared and crooked teeth. He's still standing, but only just."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric brings his mace down in a heavy overhead swing, but Snik \u2014 barely clinging to consciousness \u2014 somehow ducks beneath it with a frantic, graceless lurch, the iron head cracking against the stone floor in a shower of sparks. The goblin lets out a wheeze that might almost be a laugh, swaying on legs that have no business still holding him upright.\n\nSnik hurls himself at Wisp with every last scrap of feral desperation he has left, rusted blade slashing in a wide arc \u2014 but his legs finally betray him mid-lunge, the strike going wide and wild, skidding harmlessly off the stone wall behind her."
+    },
+    {
+      "kind": "player",
+      "text": "use dagger"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp's dagger finds the gap between Snik's ribs with a wet, final sound, and the goblin folds like a wet rag, his rusted blade ringing against the flagstones a half-second after his knees do. The collapsed entrance settles back into silence \u2014 just the distant drip of water somewhere below and the slow gutter of Aldric's torch.\n\nBoth of them are unscathed, all things considered: Aldric's mace hand is still humming from where he cracked stone instead of skull, and Wisp has burned through two of her prepared spells chasing a single goblin with one hit point \u2014 a fact she will perhaps choose not to dwell on. Snik's body lies crumpled at the foot of the rubble, small and shabby in death. The collapsed stones of the entrance have well and truly sealed the way back to the surface. Ahead, a passage slopes downward into the dark belly of the Ashen Barrow, the air rising from it cool and faintly ashen, like the memory of an old fire. What do you do?"
+    },
+    {
+      "kind": "player",
+      "text": "search for loot"
+    },
+    {
+      "kind": "dm",
+      "text": "Rifling through Snik's threadbare pouches, Aldric's fingers close around a small glass vial \u2014 a healing potion, its crimson contents catching the torchlight with a warm, promising glow. Deeper in the folds of the goblin's vest, Wisp discovers something far more surprising: a perfectly smooth pearl that hums with quiet arcane resonance the moment it touches her skin, a pearl of power with no business being in a goblin's pocket."
+    },
+    {
+      "kind": "player",
+      "text": "wisp uses the pearl of power"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp closes her fingers around the pearl, and it pulses once \u2014 warm as an ember \u2014 before crumbling to fine white dust between her fingers. She feels the familiar coil of arcane potential snap back into place, a first-level spell slot restored and ready. Two bolts of force where a moment ago there were none \u2014 a fair trade for a handful of ash."
+    },
+    {
+      "kind": "player",
+      "text": "go further down the passage"
+    },
+    {
+      "kind": "dm",
+      "text": "The passage yawns open into a wide, low-ceilinged chamber where ancient sconces bleed rust-orange light across walls stained black with old smoke. Two orcs stand at the far end \u2014 thick-armed, scarred, and already turning at the scrape of boots on stone \u2014 their eyes catching the ember-glow like paired coals in the dark."
+    },
+    {
+      "kind": "player",
+      "text": "attempt to ambush the goblins"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's boot heel catches a loose stone with a crack that rings off every wall in the chamber \u2014 Wisp hisses a curse under her breath, but it's already too late. Both orcs wheel around, yellowed eyes locking onto the intruders with cold recognition, weapons already rising from their belts."
+    },
+    {
+      "kind": "player",
+      "text": "attack the goblins"
+    },
+    {
+      "kind": "dm",
+      "text": "The scrape of steel on stone fills the chamber as both orcs surge forward in a single brutal motion, Grik leading with a guttural roar that shakes the rust from the sconce brackets. The party barely has time to raise their guard before the bigger orc is already closing the distance to Aldric, jagged blade leveled like a promise of pain.\n\nGrik's jagged blade catches Wisp across the forearm in a vicious slash, drawing a sharp cry from the wizard as she stumbles back a step, blood welling dark against her sleeve.\n\nBefore she can recover, Narl barrels in from the left, driving a heavy shoulder-check that sends Wisp crashing into the chamber wall \u2014 bruised, bleeding, and breathing hard, but still on her feet."
+    },
+    {
+      "kind": "player",
+      "text": "fire magic missile"
+    },
+    {
+      "kind": "dm",
+      "text": "Wisp thrusts her bleeding arm forward, arcane syllables already forming on her lips \u2014 but her gaze snaps between the two orcs and for a split second her focus fractures, the spell's energy sputtering and swirling undirected at her fingertips like a handful of restless fireflies."
+    },
+    {
+      "kind": "player",
+      "text": "narl"
+    },
+    {
+      "kind": "dm",
+      "text": "Three bolts of cold light snap from Wisp's fingers in quick succession, each one finding Narl with unerring precision \u2014 the orc grunts and lurches sideways, a hand pressed to the smoking craters in his chest, fury and pain warring across his scarred face."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace at grik"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric lunges forward with a fierce grunt, his mace finding the meat of Grik's shoulder with a bone-rattling crack \u2014 the orc bellows and reels back half a step, dark blood seeping through a split in his hide armor. Grik's yellow eyes burn with fresh hatred as he straightens, wounded but far from finished.\n\nGrik, fury blazing in his eyes, lunges at Wisp with a savage downward slash \u2014 the jagged blade bites deep, and the wizard crumples to the stone floor in a heap, her spellbook skidding from her fingers.\n\nNarl follows without hesitation, driving a brutal kick into Wisp's ribs as she lies sprawled and motionless, ensuring she stays down.\n\nWisp's lips part in a faint, trembling exhale \u2014 barely a whisper of breath \u2014 and then even that falters, her body going terrifyingly still as death tightens its cold grip around her."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace at grik"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric drives his mace in a savage overhead arc, connecting squarely with Grik's collarbone with a sickening crack \u2014 the orc staggers hard to one knee, wheezing and slicked with dark blood. Grik hauls himself back upright on trembling legs, eyes bloodshot and burning with desperate, cornered fury.\n\nGrik, half-broken but seething, lunges at Aldric with a desperate slash \u2014 the jagged blade rakes across the cleric's side, drawing a hiss of pain and a fresh bloom of red through his tabard.\n\nNarl swings wide, his injured chest throwing off his balance, the heavy club whistling past Aldric's ear and cracking uselessly against the stone wall.\n\nOn the cold floor, Wisp's fingers twitch \u2014 just barely \u2014 and a shallow, rattling breath lifts her chest, the frail thread of her life holding on against the dark with grim, stubborn will."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace at grik"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace descends in a brutal, perfectly-placed arc \u2014 the crack of iron on bone rings out like a thunderclap through the Ember Chamber, and Grik drops without a sound, dead before his body finishes falling. The cleric straightens over the crumpled orc, chest heaving, blood soaking through his tabard, eyes already cutting across the smoky air to where Narl still stands \u2014 wounded, furious, and alone.\n\nNarl hurls himself at Aldric with a desperate, screaming lunge \u2014 but his wounded chest betrays him, his swing going wide and wild, the heavy club smashing sparks from the stone floor as Aldric sidesteps with grim economy.\n\nOn the cold flagstones, something deep and stubborn in Wisp refuses to yield \u2014 her color holds, her breath catches just enough, and the fragile thread of her life pulls back from the edge for one more moment, two successes now balanced against two failures on death's merciless ledger."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace at narl"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric's mace finds Narl's temple with a sickening crack, and the last orc drops without ceremony \u2014 his body hitting the flagstones with a dull, final thud that echoes once through the vaulted chamber and then fades into nothing. The torchlight stutters, the smoke drifts, and the Ember Chamber is quiet at last.\n\nAldric stands at sixteen wounds out of twenty-four, bloodied through his tabard but upright \u2014 both his healing prayers still unspent, a small mercy. Wisp, however, lies deathly still on the cold stone, her spellbook splayed open beside her limp hand, two orc bodies sprawled nearby like toppled statues. The silence is sudden and heavy after so much violence. Across the chamber, the iron door looms \u2014 banded, glyph-marked, its faint luminescence pulsing like a slow heartbeat \u2014 the only way forward. A healing potion glints somewhere among the fallen, worth finding before anything else. What do you do?"
+    },
+    {
+      "kind": "player",
+      "text": "consume healing potion"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric uncorks the small vial and tips it back, the warm, honey-thick liquid spreading through his chest like sunlight through stained glass \u2014 the gash in his side seals to a faint pink line, his breathing steadies, and he stands a little taller, restored nearly whole. He wipes his mouth with the back of his gauntlet and looks down at Wisp, still and pale on the flagstones, the silence of the chamber pressing in around them both."
+    },
+    {
+      "kind": "player",
+      "text": "pick up the other healing potion"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric crouches beside Narl's fallen bulk and tugs a small clay vial loose from the orc's belt \u2014 stoppered with wax and still warm from being carried, the faint red glow of the healing draught visible through its clouded walls. He tucks it into his own belt and straightens, the potion secured for when it's needed most."
+    },
+    {
+      "kind": "player",
+      "text": "give wisp the healing potion"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric drops to one knee beside Wisp, tilts her head back gently, and coaxes the warm draught between her pale lips \u2014 within moments color floods back into her cheeks, her eyes flutter open with a sharp, confused gasp, and she pushes herself upright on shaking arms, very much alive. Six points of vitality restored, the thread of her life no longer so terrifyingly thin."
+    },
+    {
+      "kind": "player",
+      "text": "enter the door with the password"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric steps before the iron door and speaks the word \u2014 *\"Ashfall\"* \u2014 low and deliberate, and the glyphs flare brilliant white, then go dark one by one as the heavy door grinds inward on ancient hinges, exhaling a breath of cold, ashen air from the chamber beyond. Aldric and Wisp cross the threshold together into a vaulted room of blackened stone, the air thick with old magic, a lone figure standing motionless at its center \u2014 the Ash Warden, wreathed in pale smoke, its hollow eyes turning slowly toward the intruders."
+    },
+    {
+      "kind": "player",
+      "text": "sneak attack on the ash warden"
+    },
+    {
+      "kind": "dm",
+      "text": "The Ash Warden's hollow gaze was already fixed on the threshold before Aldric's torchlight even crossed it \u2014 ancient, patient, utterly unambushable, the thing has been waiting in the dark for longer than the barrow's stones have been cold. Steel scrapes and spells crackle as the two sides lock eyes across the ash-carpeted floor, and the chamber fills with the slow, grinding sound of the Warden rising from its bone throne, greataxe dragging a furrow through the grey dust as it comes.\n\nThe color surges back into Wisp's face all at once \u2014 her eyes fly open with a ragged, desperate gasp, her fingers clawing at the ash-dusted floor as though she can drag herself back from the dark by sheer refusal, and somehow, impossibly, she's breathing again, blinking up at the vaulted ceiling with the wild, furious look of someone who has just argued with death and won."
+    },
+    {
+      "kind": "player",
+      "text": "use magic missile"
+    },
+    {
+      "kind": "dm",
+      "text": "The Ash Warden advances with dreadful, unhurried purpose, greataxe rising in a slow arc that catches the torchlight \u2014 its hollow gaze fixed on the most immediate threat as the ash swirls in its wake like a living shroud.\n\n[Tool-use phase]\n\nThe greataxe comes down in a brutal, inevitable arc \u2014 Wisp twists but not nearly fast enough, the massive blade catching her full across the side and hurling her into the chamber wall like a ragdoll, where she crumples to the ash-covered floor, utterly still, her single point of life snuffed out in one terrible blow."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric lunges forward with a roar, bringing his mace crashing into the Ash Warden's shoulder \u2014 the impact sends a crack of splintering bone through the chamber and showers grey dust in every direction. The Warden staggers half a step but does not fall, smoke seething from the wound as it turns its hollow gaze back on Aldric with something that might be fury.\n\nWisp's fingers twitch against the ash-cold floor, her lips parting in a shallow, shuddering breath \u2014 somewhere deep in the dark she finds a fraying thread and holds on, her body fighting for her even as her mind drifts.\n\nThe Ash Warden wheels on Aldric with a grinding shriek of ancient rage, its greataxe cleaving a savage arc through the smoky air \u2014 but Aldric throws himself back just far enough, the blade kissing nothing but shadow and cinders as it bites into the stone floor with a ringing clang."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace"
+    },
+    {
+      "kind": "dm",
+      "text": "Aldric swings with desperate force, but the Ash Warden seems to flow like smoke around the blow \u2014 the mace carves through nothing but cinders and cold air, the impact never coming, and Aldric stumbles forward a half-step, suddenly very aware of how alone he is in this chamber.\n\nWisp's fragile grip on the thread of life slips \u2014 her body shudders once against the ash-cold floor, a barely audible rattle escaping her lips, and then goes terrifyingly still, a second dark mark etched against her soul as the darkness presses closer.\n\nThe Ash Warden rounds on Aldric with grinding, inevitable fury, its greataxe biting deep into his shoulder and staggering him backward \u2014 nine points of brutal, bone-deep pain that sets his vision swimming and his torch arm trembling as grey dust rains down around them both."
+    },
+    {
+      "kind": "player",
+      "text": "swing mace"
+    },
+    {
+      "kind": "dm",
+      "text": "The mace finds its mark with a hollow, resonant crack, driving deep into the Warden's ashen sternum and sending a cascade of grey dust and splintered bone skittering across the iron floor. The creature staggers, a low grinding moan rising from somewhere inside its chest cavity \u2014 but those hollow eyes find Aldric again almost immediately, the greataxe rising with terrible patience as smoke curls from the fresh wound.\n\nWisp's eyes snap open like a shutter thrown wide in a storm \u2014 a great, shuddering gasp tears through her as colour floods back into her ash-pale cheeks, her fingers curling against the cold iron floor with white-knuckled desperation, dragged back from the edge of nothing by sheer, furious luck."
+    },
+    {
+      "kind": "player",
+      "text": "fire chromatic orb"
+    },
+    {
+      "kind": "dm",
+      "text": "The ash settles slowly in the silence of the Iron Chamber, drifting down through the torchlight like grey snow, and for a long moment Aldric and Wisp simply breathe \u2014 alive, improbably, against all the weight of the Ashen Barrow's dark patience. The Warden is dust. The ancient malice that held this place is broken. Wisp clutches the recovered healing potion against her chest and manages something close to a laugh, raw and exhausted, and Aldric \u2014 battered shoulder and all \u2014 lifts his torch high so the light catches the iron door ahead, the way out, the cold night air and open sky that waits beyond it. They fought through the dark with mace and spell and the last desperate dregs of will, and they won. Whatever evil was sealed in this barrow will not rise again. They walk out together into the night, two small figures trailing ash and triumph, the torchlight dwindling behind them until the iron door swings shut and the Barrow is still at last."
+    }
+  ],
+  "narrative": [
+    {
+      "turn": 1,
+      "text": "Aldric turns the brittle pages carefully, the torchlight catching the desperate, spidery script of a man who clearly knew his end was near. The warning sinks in \u2014 the deep door is sealed by a name, and whatever slumbers below cannot be touched by ordinary blades. The journal exhales its last secret and falls silent, its pages threatening to dissolve to ash at the next breath."
+    },
+    {
+      "turn": 2,
+      "text": "The word *ashfall* settles over the chamber like settling dust \u2014 a key without teeth, a name without a face, but unmistakably the thing that will open whatever waits below. Wisp traces the letters in the margin of her spellbook with one careful fingertip, and Aldric repeats it once under his breath, the syllables tasting of cold stone and old smoke."
+    },
+    {
+      "turn": 3,
+      "text": "Aldric's olive branch dies on his tongue as Snik snatches up its blade with a rattling screech, the collapsed stones of the entrance suddenly feeling far too close and far too small. The failed parley hangs in the air for exactly one heartbeat \u2014 then the goblin is already moving.\n\nSnik's rusty blade hisses through the air in a wild, overcommitted swing aimed at Wisp's throat \u2014 but the little wizard twists aside just enough, the corroded edge scraping nothing but cold air an inch from her ear."
+    },
+    {
+      "turn": 4,
+      "text": "Three darts of pure arcane light streak from Wisp's outstretched fingers and slam into Snik in rapid succession \u2014 each one punching a tiny scorch mark into his ratty leather vest. The goblin staggers, barely upright, a thin wheeze escaping through bared and crooked teeth. He's still standing, but only just."
+    },
+    {
+      "turn": 5,
+      "text": "Aldric brings his mace down in a heavy overhead swing, but Snik \u2014 barely clinging to consciousness \u2014 somehow ducks beneath it with a frantic, graceless lurch, the iron head cracking against the stone floor in a shower of sparks. The goblin lets out a wheeze that might almost be a laugh, swaying on legs that have no business still holding him upright.\n\nSnik hurls himself at Wisp with every last scrap of feral desperation he has left, rusted blade slashing in a wide arc \u2014 but his legs finally betray him mid-lunge, the strike going wide and wild, skidding harmlessly off the stone wall behind her."
+    },
+    {
+      "turn": 6,
+      "text": "Wisp's dagger finds the gap between Snik's ribs with a wet, final sound, and the goblin folds like a wet rag, his rusted blade ringing against the flagstones a half-second after his knees do. The collapsed entrance settles back into silence \u2014 just the distant drip of water somewhere below and the slow gutter of Aldric's torch.\n\nBoth of them are unscathed, all things considered: Aldric's mace hand is still humming from where he cracked stone instead of skull, and Wisp has burned through two of her prepared spells chasing a single goblin with one hit point \u2014 a fact she will perhaps choose not to dwell on. Snik's body lies crumpled at the foot of the rubble, small and shabby in death. The collapsed stones of the entrance have well and truly sealed the way back to the surface. Ahead, a passage slopes downward into the dark belly of the Ashen Barrow, the air rising from it cool and faintly ashen, like the memory of an old fire. What do you do?"
+    },
+    {
+      "turn": 7,
+      "text": "Rifling through Snik's threadbare pouches, Aldric's fingers close around a small glass vial \u2014 a healing potion, its crimson contents catching the torchlight with a warm, promising glow. Deeper in the folds of the goblin's vest, Wisp discovers something far more surprising: a perfectly smooth pearl that hums with quiet arcane resonance the moment it touches her skin, a pearl of power with no business being in a goblin's pocket."
+    },
+    {
+      "turn": 8,
+      "text": "Wisp closes her fingers around the pearl, and it pulses once \u2014 warm as an ember \u2014 before crumbling to fine white dust between her fingers. She feels the familiar coil of arcane potential snap back into place, a first-level spell slot restored and ready. Two bolts of force where a moment ago there were none \u2014 a fair trade for a handful of ash."
+    },
+    {
+      "turn": 9,
+      "text": "The passage yawns open into a wide, low-ceilinged chamber where ancient sconces bleed rust-orange light across walls stained black with old smoke. Two orcs stand at the far end \u2014 thick-armed, scarred, and already turning at the scrape of boots on stone \u2014 their eyes catching the ember-glow like paired coals in the dark."
+    },
+    {
+      "turn": 10,
+      "text": "Aldric's boot heel catches a loose stone with a crack that rings off every wall in the chamber \u2014 Wisp hisses a curse under her breath, but it's already too late. Both orcs wheel around, yellowed eyes locking onto the intruders with cold recognition, weapons already rising from their belts."
+    },
+    {
+      "turn": 11,
+      "text": "The scrape of steel on stone fills the chamber as both orcs surge forward in a single brutal motion, Grik leading with a guttural roar that shakes the rust from the sconce brackets. The party barely has time to raise their guard before the bigger orc is already closing the distance to Aldric, jagged blade leveled like a promise of pain.\n\nGrik's jagged blade catches Wisp across the forearm in a vicious slash, drawing a sharp cry from the wizard as she stumbles back a step, blood welling dark against her sleeve.\n\nBefore she can recover, Narl barrels in from the left, driving a heavy shoulder-check that sends Wisp crashing into the chamber wall \u2014 bruised, bleeding, and breathing hard, but still on her feet."
+    },
+    {
+      "turn": 12,
+      "text": "Wisp thrusts her bleeding arm forward, arcane syllables already forming on her lips \u2014 but her gaze snaps between the two orcs and for a split second her focus fractures, the spell's energy sputtering and swirling undirected at her fingertips like a handful of restless fireflies."
+    },
+    {
+      "turn": 13,
+      "text": "Three bolts of cold light snap from Wisp's fingers in quick succession, each one finding Narl with unerring precision \u2014 the orc grunts and lurches sideways, a hand pressed to the smoking craters in his chest, fury and pain warring across his scarred face."
+    },
+    {
+      "turn": 14,
+      "text": "Aldric lunges forward with a fierce grunt, his mace finding the meat of Grik's shoulder with a bone-rattling crack \u2014 the orc bellows and reels back half a step, dark blood seeping through a split in his hide armor. Grik's yellow eyes burn with fresh hatred as he straightens, wounded but far from finished.\n\nGrik, fury blazing in his eyes, lunges at Wisp with a savage downward slash \u2014 the jagged blade bites deep, and the wizard crumples to the stone floor in a heap, her spellbook skidding from her fingers.\n\nNarl follows without hesitation, driving a brutal kick into Wisp's ribs as she lies sprawled and motionless, ensuring she stays down.\n\nWisp's lips part in a faint, trembling exhale \u2014 barely a whisper of breath \u2014 and then even that falters, her body going terrifyingly still as death tightens its cold grip around her."
+    },
+    {
+      "turn": 15,
+      "text": "Aldric drives his mace in a savage overhead arc, connecting squarely with Grik's collarbone with a sickening crack \u2014 the orc staggers hard to one knee, wheezing and slicked with dark blood. Grik hauls himself back upright on trembling legs, eyes bloodshot and burning with desperate, cornered fury.\n\nGrik, half-broken but seething, lunges at Aldric with a desperate slash \u2014 the jagged blade rakes across the cleric's side, drawing a hiss of pain and a fresh bloom of red through his tabard.\n\nNarl swings wide, his injured chest throwing off his balance, the heavy club whistling past Aldric's ear and cracking uselessly against the stone wall.\n\nOn the cold floor, Wisp's fingers twitch \u2014 just barely \u2014 and a shallow, rattling breath lifts her chest, the frail thread of her life holding on against the dark with grim, stubborn will."
+    },
+    {
+      "turn": 16,
+      "text": "Aldric's mace descends in a brutal, perfectly-placed arc \u2014 the crack of iron on bone rings out like a thunderclap through the Ember Chamber, and Grik drops without a sound, dead before his body finishes falling. The cleric straightens over the crumpled orc, chest heaving, blood soaking through his tabard, eyes already cutting across the smoky air to where Narl still stands \u2014 wounded, furious, and alone.\n\nNarl hurls himself at Aldric with a desperate, screaming lunge \u2014 but his wounded chest betrays him, his swing going wide and wild, the heavy club smashing sparks from the stone floor as Aldric sidesteps with grim economy.\n\nOn the cold flagstones, something deep and stubborn in Wisp refuses to yield \u2014 her color holds, her breath catches just enough, and the fragile thread of her life pulls back from the edge for one more moment, two successes now balanced against two failures on death's merciless ledger."
+    },
+    {
+      "turn": 17,
+      "text": "Aldric's mace finds Narl's temple with a sickening crack, and the last orc drops without ceremony \u2014 his body hitting the flagstones with a dull, final thud that echoes once through the vaulted chamber and then fades into nothing. The torchlight stutters, the smoke drifts, and the Ember Chamber is quiet at last.\n\nAldric stands at sixteen wounds out of twenty-four, bloodied through his tabard but upright \u2014 both his healing prayers still unspent, a small mercy. Wisp, however, lies deathly still on the cold stone, her spellbook splayed open beside her limp hand, two orc bodies sprawled nearby like toppled statues. The silence is sudden and heavy after so much violence. Across the chamber, the iron door looms \u2014 banded, glyph-marked, its faint luminescence pulsing like a slow heartbeat \u2014 the only way forward. A healing potion glints somewhere among the fallen, worth finding before anything else. What do you do?"
+    },
+    {
+      "turn": 18,
+      "text": "Aldric uncorks the small vial and tips it back, the warm, honey-thick liquid spreading through his chest like sunlight through stained glass \u2014 the gash in his side seals to a faint pink line, his breathing steadies, and he stands a little taller, restored nearly whole. He wipes his mouth with the back of his gauntlet and looks down at Wisp, still and pale on the flagstones, the silence of the chamber pressing in around them both."
+    },
+    {
+      "turn": 19,
+      "text": "Aldric crouches beside Narl's fallen bulk and tugs a small clay vial loose from the orc's belt \u2014 stoppered with wax and still warm from being carried, the faint red glow of the healing draught visible through its clouded walls. He tucks it into his own belt and straightens, the potion secured for when it's needed most."
+    },
+    {
+      "turn": 20,
+      "text": "Aldric drops to one knee beside Wisp, tilts her head back gently, and coaxes the warm draught between her pale lips \u2014 within moments color floods back into her cheeks, her eyes flutter open with a sharp, confused gasp, and she pushes herself upright on shaking arms, very much alive. Six points of vitality restored, the thread of her life no longer so terrifyingly thin."
+    },
+    {
+      "turn": 21,
+      "text": "Aldric steps before the iron door and speaks the word \u2014 *\"Ashfall\"* \u2014 low and deliberate, and the glyphs flare brilliant white, then go dark one by one as the heavy door grinds inward on ancient hinges, exhaling a breath of cold, ashen air from the chamber beyond. Aldric and Wisp cross the threshold together into a vaulted room of blackened stone, the air thick with old magic, a lone figure standing motionless at its center \u2014 the Ash Warden, wreathed in pale smoke, its hollow eyes turning slowly toward the intruders."
+    },
+    {
+      "turn": 22,
+      "text": "The Ash Warden's hollow gaze was already fixed on the threshold before Aldric's torchlight even crossed it \u2014 ancient, patient, utterly unambushable, the thing has been waiting in the dark for longer than the barrow's stones have been cold. Steel scrapes and spells crackle as the two sides lock eyes across the ash-carpeted floor, and the chamber fills with the slow, grinding sound of the Warden rising from its bone throne, greataxe dragging a furrow through the grey dust as it comes.\n\nThe color surges back into Wisp's face all at once \u2014 her eyes fly open with a ragged, desperate gasp, her fingers clawing at the ash-dusted floor as though she can drag herself back from the dark by sheer refusal, and somehow, impossibly, she's breathing again, blinking up at the vaulted ceiling with the wild, furious look of someone who has just argued with death and won."
+    },
+    {
+      "turn": 23,
+      "text": "The Ash Warden advances with dreadful, unhurried purpose, greataxe rising in a slow arc that catches the torchlight \u2014 its hollow gaze fixed on the most immediate threat as the ash swirls in its wake like a living shroud.\n\n[Tool-use phase]\n\nThe greataxe comes down in a brutal, inevitable arc \u2014 Wisp twists but not nearly fast enough, the massive blade catching her full across the side and hurling her into the chamber wall like a ragdoll, where she crumples to the ash-covered floor, utterly still, her single point of life snuffed out in one terrible blow."
+    },
+    {
+      "turn": 24,
+      "text": "Aldric lunges forward with a roar, bringing his mace crashing into the Ash Warden's shoulder \u2014 the impact sends a crack of splintering bone through the chamber and showers grey dust in every direction. The Warden staggers half a step but does not fall, smoke seething from the wound as it turns its hollow gaze back on Aldric with something that might be fury.\n\nWisp's fingers twitch against the ash-cold floor, her lips parting in a shallow, shuddering breath \u2014 somewhere deep in the dark she finds a fraying thread and holds on, her body fighting for her even as her mind drifts.\n\nThe Ash Warden wheels on Aldric with a grinding shriek of ancient rage, its greataxe cleaving a savage arc through the smoky air \u2014 but Aldric throws himself back just far enough, the blade kissing nothing but shadow and cinders as it bites into the stone floor with a ringing clang."
+    },
+    {
+      "turn": 25,
+      "text": "Aldric swings with desperate force, but the Ash Warden seems to flow like smoke around the blow \u2014 the mace carves through nothing but cinders and cold air, the impact never coming, and Aldric stumbles forward a half-step, suddenly very aware of how alone he is in this chamber.\n\nWisp's fragile grip on the thread of life slips \u2014 her body shudders once against the ash-cold floor, a barely audible rattle escaping her lips, and then goes terrifyingly still, a second dark mark etched against her soul as the darkness presses closer.\n\nThe Ash Warden rounds on Aldric with grinding, inevitable fury, its greataxe biting deep into his shoulder and staggering him backward \u2014 nine points of brutal, bone-deep pain that sets his vision swimming and his torch arm trembling as grey dust rains down around them both."
+    },
+    {
+      "turn": 26,
+      "text": "The mace finds its mark with a hollow, resonant crack, driving deep into the Warden's ashen sternum and sending a cascade of grey dust and splintered bone skittering across the iron floor. The creature staggers, a low grinding moan rising from somewhere inside its chest cavity \u2014 but those hollow eyes find Aldric again almost immediately, the greataxe rising with terrible patience as smoke curls from the fresh wound.\n\nWisp's eyes snap open like a shutter thrown wide in a storm \u2014 a great, shuddering gasp tears through her as colour floods back into her ash-pale cheeks, her fingers curling against the cold iron floor with white-knuckled desperation, dragged back from the edge of nothing by sheer, furious luck."
+    },
+    {
+      "turn": 27,
+      "text": "The ash settles slowly in the silence of the Iron Chamber, drifting down through the torchlight like grey snow, and for a long moment Aldric and Wisp simply breathe \u2014 alive, improbably, against all the weight of the Ashen Barrow's dark patience. The Warden is dust. The ancient malice that held this place is broken. Wisp clutches the recovered healing potion against her chest and manages something close to a laugh, raw and exhausted, and Aldric \u2014 battered shoulder and all \u2014 lifts his torch high so the light catches the iron door ahead, the way out, the cold night air and open sky that waits beyond it. They fought through the dark with mace and spell and the last desperate dregs of will, and they won. Whatever evil was sealed in this barrow will not rise again. They walk out together into the night, two small figures trailing ash and triumph, the torchlight dwindling behind them until the iron door swings shut and the Barrow is still at last."
+    }
+  ],
+  "combat_order": [],
+  "combat_index": 0,
+  "combat_round": 0,
+  "action_used": true,
+  "combat_initiatives": {},
+  "game_over": true,
+  "game_outcome": "victory"
+}

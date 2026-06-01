@@ -236,7 +236,9 @@ TOOLS = [
             "against the most alert hostile in the scene. The engine rolls each member's Dex check vs "
             "the highest alertness DC and records the outcome. "
             "Success: pending surprise is queued — call start_combat and the hostiles will lose round 1. "
-            "Failure: the approach is blown — no surprise. "
+            "Failure: the approach is blown — combat starts immediately (same as a failed parley): "
+            "the response contains combat_started=true, combat_order, active, active_name. "
+            "Announce the order and stop; do NOT call start_combat yourself. "
             "Rejected (ok=false) when: combat is already in progress ('in_combat'); an attempt was "
             "already made this scene ('already_attempted'); no living hostiles present ('no_target'); "
             "any hostile is always-alert ('cannot_ambush'). "
@@ -842,13 +844,27 @@ def dispatch(name: str, args: dict, state) -> dict:
             state.pending_ambush = True
         hostile_names = [h.name for h in hostiles]
         state.record(f"attempt_ambush bar={bar} success={success}")
-        return {
+        result = {
             "ok": True,
             "success": success,
             "bar": bar,
             "rolls": rolls,
             "hostiles": hostile_names,
         }
+        # Failed ambush: enemies noticed — auto-initiate combat, same as a failed parley.
+        if not success:
+            combatant_keys = (
+                [k for k, c in state.party.items() if not c.is_down] +
+                [k for k, n in state.npcs.items() if n.hostile and not n.is_down]
+            )
+            if combatant_keys:
+                combat_res = dispatch("start_combat", {"combatants": combatant_keys}, state)
+                result["combat_started"] = True
+                result["combat_order"] = combat_res.get("combat_order")
+                result["active"] = combat_res.get("active")
+                result["active_name"] = combat_res.get("active_name")
+                result["round"] = combat_res.get("round")
+        return result
 
     if name == "start_combat":
         all_actors = {**state.party, **state.npcs}

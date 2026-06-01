@@ -9,7 +9,7 @@
                     "template": "goblin",
                     "name": "Snik",
                     "hostile": true,
-                    "disposition_dc": 13,
+                    "disposition_dc": 1,
                     "alertness_dc": 12
                 }
             },

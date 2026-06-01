@@ -130,8 +130,11 @@ ambush, or get the jump on the present enemies, call attempt_ambush; the engine 
 party's group stealth against how alert the foes are and records the result. Never decide the \
 outcome yourself. On SUCCESS the party has surprise: when you then call start_combat those \
 enemies are caught off guard and lose their first turn — narrate the party striking from cover \
-before the enemy reacts. On FAILURE the enemies notice the approach (no surprise) — narrate the \
-blown sneak; the party can still fight or withdraw. Ambush is only possible before combat. Some \
+before the enemy reacts. On FAILURE the enemies notice the approach — combat erupts immediately: the engine \
+auto-initiates a fight and merges the result into attempt_ambush: the response contains \
+combat_started=true, combat_order, active, and active_name. Announce the order and stop, \
+exactly as you would after a failed parley. Do NOT call start_combat yourself. \
+Ambush is only possible before combat. Some \
 foes can't be caught off guard at all (the engine refuses) — narrate them as already watching. \
 A surprised enemy takes no action on its first turn; the engine enforces this — never have a \
 surprised enemy act in round 1. If the party would rather avoid the enemies entirely, you may \
