@@ -214,3 +214,48 @@ def test_format_cost_unknown_model_flagged():
     trace = _trace({"input": 1000, "output": 200})
     out = views.format_cost(trace, "some-other-model")
     assert "unknown id" in out.lower()
+
+
+# --- /export: transcript → Markdown -----------------------------------------
+
+def test_format_transcript_markdown_empty():
+    assert views.format_transcript_markdown(GameState(location="Void")) == ""
+
+
+def test_format_transcript_markdown_renders_exchange():
+    gs = GameState(location="Crypt")
+    gs.transcript = [
+        {"kind": "player", "text": "Aldric opens the door."},
+        {"kind": "dm", "text": "The door groans wide onto darkness."},
+        {"kind": "player", "text": "He steps through."},
+        {"kind": "dm", "text": "Cold air rushes past. *Something* stirs ahead."},
+    ]
+    md = views.format_transcript_markdown(gs)
+    assert md.startswith("# DM Agent — Session Log")
+    assert "*2 turns*" in md                       # two player turns
+    assert "**You:** Aldric opens the door." in md
+    assert "The door groans wide onto darkness." in md
+    assert "**You:** He steps through." in md
+    assert "*Something* stirs ahead." in md         # DM markdown preserved verbatim
+    assert md.endswith("\n")
+
+
+def test_format_transcript_markdown_singular_turn():
+    gs = GameState(location="Hall")
+    gs.transcript = [
+        {"kind": "player", "text": "Look around."},
+        {"kind": "dm", "text": "A bare stone hall."},
+    ]
+    md = views.format_transcript_markdown(gs)
+    assert "*1 turn*" in md                          # singular, not "1 turns"
+
+
+def test_format_transcript_markdown_skips_blank_entries():
+    gs = GameState(location="Hall")
+    gs.transcript = [
+        {"kind": "player", "text": "  "},            # whitespace-only → skipped
+        {"kind": "dm", "text": "The torch gutters."},
+    ]
+    md = views.format_transcript_markdown(gs)
+    assert "**You:**" not in md
+    assert "The torch gutters." in md

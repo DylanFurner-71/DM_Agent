@@ -6,7 +6,7 @@ Usage:
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --plain   # no color/Markdown/spinner
 
-In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /cost  /save [path]  /quit
+In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /cost  /export [path]  /save [path]  /quit
 
 Output is colorized and Markdown-rendered with `rich` when stdout is a terminal;
 pass --plain (or pipe/redirect output) for plain text. The game autosaves to
@@ -30,6 +30,7 @@ from .views import (
     banner,
     format_cost,
     format_hud,
+    format_transcript_markdown,
     print_full_trace,
     print_full_trace_verbose,
     print_help,
@@ -45,11 +46,12 @@ SAVE_DIR = Path("saves")
 AUTOSAVE_NAME = "autosave"   # rolling per-turn save in SAVE_DIR (saves/autosave.json)
 
 
-def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR) -> Path:
-    """Return the full Path for a save file, creating base_dir if needed.
+def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR, ext: str = ".json") -> Path:
+    """Return the full Path for a save/export file, creating base_dir if needed.
 
     Raises ValueError for empty/whitespace-only names. Strips directory
-    components (path-traversal guard) and appends .json if absent.
+    components (path-traversal guard) and appends `ext` if absent (e.g. .json for
+    savegames, .md for transcript exports).
     """
     name = raw.strip()
     if not name:
@@ -57,8 +59,8 @@ def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR) -> Path:
     name = Path(name).name  # basename only — discards any leading ../
     if not name:
         raise ValueError("Save name resolved to empty after stripping directory components.")
-    if not name.lower().endswith(".json"):
-        name = name + ".json"
+    if not name.lower().endswith(ext.lower()):
+        name = name + ext
     base_dir.mkdir(parents=True, exist_ok=True)
     return base_dir / name
 
@@ -107,6 +109,31 @@ def _do_save(
                 json.dump(stats_trace, _f, indent=2)
         except Exception:
             pass
+    return ("saved", path)
+
+
+def _do_export(state, raw: str, base_dir: Path = SAVE_DIR, overwrite: bool = False) -> tuple:
+    """Write the transcript as a Markdown session log; return (status, path_or_message).
+
+    status values: "saved", "exists" (no-clobber), "empty" (nothing played yet),
+    "error". Never raises — mirrors _do_save so the REPL handler can share its shape.
+    Writes a .md alongside saves (the dir is git-ignored); unlike /save it is pure
+    story prose — no game state, no sidecars.
+    """
+    markdown = format_transcript_markdown(state)
+    if not markdown:
+        return ("empty", "Nothing to export yet — play a turn first.")
+    try:
+        path = _resolve_save_path(raw, base_dir, ext=".md")
+    except Exception as e:
+        return ("error", str(e))
+    if path.exists() and not overwrite:
+        return ("exists", path)
+    try:
+        with open(path, "w") as f:
+            f.write(markdown)
+    except Exception as e:
+        return ("error", str(e))
     return ("saved", path)
 
 
@@ -238,6 +265,31 @@ def main() -> None:
         if player == "/cost":
             print(format_cost(agent.full_trace, agent.model))
             print()
+            continue
+        if player.startswith("/export"):
+            parts = player.split(maxsplit=1)
+            if len(parts) > 1:
+                raw = parts[1]
+            else:
+                try:
+                    raw = input("Export as: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+            status, val = _do_export(state, raw)
+            if status == "saved":
+                print(f"  Exported to {val}\n")
+            elif status == "exists":
+                try:
+                    confirm = input(f"  {val} exists — overwrite? (y/N): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    continue
+                if confirm == "y":
+                    status2, val2 = _do_export(state, raw, overwrite=True)
+                    print(f"  {'Exported to ' + str(val2) if status2 == 'saved' else val2}\n")
+            else:  # "empty" or "error"
+                print(f"  {val}\n")
             continue
         if player.startswith("/save"):
             parts = player.split(maxsplit=1)

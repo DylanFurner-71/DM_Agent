@@ -109,6 +109,7 @@ _COMMANDS = [
     ("/trace", "show the tools the agent called each turn"),
     ("/full_trace", "show the tool trace with per-call timing and token usage"),
     ("/cost", "summarize session token usage and estimated cost"),
+    ("/export [path]", "write the story so far to a shareable Markdown log"),
     ("/save [path]", "save the game (prompts for a name if omitted)"),
     ("/quit", "end the session"),
 ]
@@ -452,3 +453,37 @@ def format_cost(full_trace: list, model: str) -> str:
     lines.append(f"    {'Total':<12} {total_tokens:>9,} tok   ${c['total']:.4f}")
     lines.append("    (estimate; cache write 1.25x / read 0.10x base input rate)")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# /export — the playthrough as a shareable Markdown session log
+# ---------------------------------------------------------------------------
+
+def format_transcript_markdown(state: GameState) -> str:
+    """Render the session transcript as a shareable Markdown document.
+
+    Reads state.transcript ([{kind: 'player'|'dm', text}], chronological) — the same
+    record /recap replays — and lays the exchange out as Markdown: each player input
+    as a bold "You:" line, each DM beat as its own prose paragraph(s). Pure string
+    builder (no I/O), and returns "" when nothing has been played yet so the caller
+    can skip writing an empty file. The DM text is already leak-screened in storage.
+    """
+    transcript = state.transcript
+    if not transcript:
+        return ""
+    turns = sum(1 for e in transcript if e.get("kind") == "player")
+    lines = [
+        "# DM Agent — Session Log",
+        "",
+        f"*{turns} turn{'s' * (turns != 1)}*",
+        "",
+        "---",
+        "",
+    ]
+    for entry in transcript:
+        text = (entry.get("text") or "").strip()
+        if not text:
+            continue
+        lines.append(f"**You:** {text}" if entry.get("kind") == "player" else text)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"

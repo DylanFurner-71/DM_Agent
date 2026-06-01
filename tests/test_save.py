@@ -8,13 +8,22 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.main import _resolve_save_path, _do_save
+from src.main import _resolve_save_path, _do_save, _do_export
 from src.game_state import Character, GameState
 
 
 def _simple_state():
     gs = GameState(location="Test")
     gs.party["aldric"] = Character(name="Aldric")
+    return gs
+
+
+def _played_state():
+    gs = _simple_state()
+    gs.transcript = [
+        {"kind": "player", "text": "Aldric opens the door."},
+        {"kind": "dm", "text": "It groans wide onto darkness."},
+    ]
     return gs
 
 
@@ -171,3 +180,58 @@ def test_do_save_empty_name_returns_error(tmp_path):
     assert status == "error"
     assert isinstance(val, str)
     assert list(tmp_path.iterdir()) == []  # nothing written
+
+
+# --- _resolve_save_path with a custom extension ------------------------------
+
+def test_resolve_appends_md_extension(tmp_path):
+    p = _resolve_save_path("log", base_dir=tmp_path, ext=".md")
+    assert p == tmp_path / "log.md"
+
+
+def test_resolve_no_double_md_extension(tmp_path):
+    p = _resolve_save_path("log.md", base_dir=tmp_path, ext=".md")
+    assert p == tmp_path / "log.md"
+
+
+# --- _do_export --------------------------------------------------------------
+
+def test_do_export_writes_markdown(tmp_path):
+    status, path = _do_export(_played_state(), "story", base_dir=tmp_path)
+    assert status == "saved"
+    assert path == tmp_path / "story.md"
+    text = path.read_text()
+    assert text.startswith("# DM Agent — Session Log")
+    assert "**You:** Aldric opens the door." in text
+    assert "It groans wide onto darkness." in text
+
+
+def test_do_export_empty_transcript_writes_nothing(tmp_path):
+    status, val = _do_export(_simple_state(), "story", base_dir=tmp_path)
+    assert status == "empty"
+    assert isinstance(val, str)
+    assert list(tmp_path.iterdir()) == []  # no file created for an empty session
+
+
+def test_do_export_no_clobber_without_flag(tmp_path):
+    target = tmp_path / "story.md"
+    target.write_text("ORIGINAL")
+    status, val = _do_export(_played_state(), "story", base_dir=tmp_path, overwrite=False)
+    assert status == "exists"
+    assert val == target
+    assert target.read_text() == "ORIGINAL"  # untouched
+
+
+def test_do_export_overwrites_when_flag_set(tmp_path):
+    target = tmp_path / "story.md"
+    target.write_text("STALE")
+    status, path = _do_export(_played_state(), "story", base_dir=tmp_path, overwrite=True)
+    assert status == "saved"
+    assert "Session Log" in path.read_text()
+
+
+def test_do_export_empty_name_returns_error(tmp_path):
+    status, val = _do_export(_played_state(), "", base_dir=tmp_path)
+    assert status == "error"
+    assert isinstance(val, str)
+    assert not list(tmp_path.iterdir())  # nothing written
