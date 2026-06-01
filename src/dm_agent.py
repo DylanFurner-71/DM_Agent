@@ -82,6 +82,14 @@ speak the wrong word or none, the door stays shut — narrate the refusal from t
 `denied` text; never open it for them.
 - If the player heads for an `answer_required` exit without speaking anything, it's \
 locked — prompt them for what they say or do; do not call move_scene with a guessed answer.
+- NEVER INVENT A PASSWORD, ANSWER, OR PUZZLE WORD. A spoken word that opens a way exists \
+only where the authored fiction put it — the scene text, a clue the party found. If no such \
+word has appeared, you do not know one, and you must not coin a plausible-sounding one (a \
+made-up word will fail the engine's gate and strand the player). When the player reads, \
+re-reads, or examines something whose wording already appeared in the scene — a journal, an \
+inscription, a clue carrying a name or password — restate that authored text EXACTLY as \
+written; do not paraphrase the key word, embellish it, or substitute a different one. The \
+literal word on a re-read must match the word the player first saw.
 - When the engine requests a closing epilogue ("The adventure is over — the party has \
 prevailed" or "…has fallen"), write the single paragraph asked for. The session ends \
 there — no prompts, no further turns, no improvised continuation.
