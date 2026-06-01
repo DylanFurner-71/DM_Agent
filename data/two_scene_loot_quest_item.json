@@ -9,7 +9,7 @@
           "template": "goblin",
           "name": "Snik",
           "hostile": true,
-          "disposition_dc": 13,
+          "disposition_dc": 1,
           "alertness_dc": 12
         }      },
       "loot": ["healing_potion", "pearl_of_power"],
@@ -21,8 +21,8 @@
       "location": "The Ashen Barrow — The Ember Chamber",
       "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
       "npcs": {
-        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18, "alertness_dc": 14},
-        "narl": { "template": "goblin", "name": "Narl", "hostile": true, "alertness_dc": 12 }
+        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18, "alertness_dc": 1},
+        "narl": { "template": "goblin", "name": "Narl", "hostile": true, "alertness_dc": 1 }
       },
       "loot": ["healing_potion"],
       "exits": {
