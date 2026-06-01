@@ -65,6 +65,10 @@ def _normalize_answer(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s
 
+
+def _redact_quest_flags(flags: dict) -> dict:
+    return {k: "<redacted>" if isinstance(v, str) else v for k, v in flags.items()}
+
 TOOLS = [
     {
         "name": "roll_dice",
@@ -682,6 +686,15 @@ def dispatch(name: str, args: dict, state) -> dict:
                 "error": f"{key!r} is reserved for engine mechanics; choose a different flag name.",
             }
         value = args.get("value", True)
+        if isinstance(value, str) and (key.endswith("_password") or key.endswith("_answer")):
+            return {
+                "ok": False,
+                "reason": "reserved_answer_key",
+                "error": (
+                    f"{key!r} is an answer-gate flag; its value is set by the scenario, "
+                    f"not by the model. Use a boolean or integer if you need to track state."
+                ),
+            }
         if not (value is None or isinstance(value, (bool, str, int, float))):
             return {
                 "ok": False,
@@ -693,7 +706,7 @@ def dispatch(name: str, args: dict, state) -> dict:
             }
         state.quest_flags[key] = value
         state.record(f"flag {key} = {value!r}")
-        return {"ok": True, "flag": key, "value": value}
+        return {"ok": True, "flag": key, "value": "<redacted>" if isinstance(value, str) else value}
 
     if name == "clear_quest_flag":
         raw_key = args.get("flag", "")
@@ -814,6 +827,7 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "get_state":
         d = state.to_dict()
+        d["quest_flags"] = _redact_quest_flags(d.get("quest_flags", {}))
         if state.scenes:
             del d["scenes"]   # omit verbose definitions from model context
             current_scene_data = (

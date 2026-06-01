@@ -12,6 +12,7 @@ The model never sees more than one action per narration call, so it cannot reord
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 
@@ -186,6 +187,36 @@ Keep the player's agency central: present situations, then react to what they ch
 _SYSTEM = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
 _TOOLS_CACHED = [*tools.TOOLS[:-1], {**tools.TOOLS[-1], "cache_control": {"type": "ephemeral"}}]
 
+_DUMP_SENTINELS = ('[Current state]', '[Engine:', '{"location"', '"party":')
+
+
+def _sanitize_narration(text: str) -> str:
+    """Guard against state-dump leaks reaching persistent storage.
+
+    Checks every line for known internal preambles. If one is found, splits on
+    the first blank paragraph boundary and returns only what follows. If nothing
+    survives, returns "". Logs a warning whenever text is trimmed.
+    """
+    if not any(line.lstrip().startswith(s) for line in text.splitlines() for s in _DUMP_SENTINELS):
+        return text
+    tail = text.split("\n\n", 1)[1].strip() if "\n\n" in text else ""
+    logging.warning("_sanitize_narration: trimmed likely state-dump from narration: %.80s", text)
+    return tail
+
+
+def _extract_narration(content: list) -> str:
+    """Join text blocks from an API response content list and return the narration string.
+
+    Returns "" (and logs a warning) when the text looks like an internal state dump
+    or engine preamble that slipped through the tool-use phase scrub.
+    """
+    text = "".join(b.text for b in content if b.type == "text").strip()
+    if text.startswith("[") and "{" in text:
+        logging.warning("_extract_narration: suppressed likely state-dump leak: %.80s", text)
+        return ""
+    return text
+
+
 def _usage_dict(usage) -> dict:
     d: dict = {"input": usage.input_tokens, "output": usage.output_tokens}
     cr = getattr(usage, "cache_read_input_tokens", 0) or 0
@@ -348,6 +379,20 @@ class DMAgent:
                     })
             self.messages.append({"role": "user", "content": tool_results})
 
+        # Scrub text blocks the model emitted during the tool-use phase from the
+        # last assistant turn — premature prose must not reach the narration phase.
+        for i in range(len(self.messages) - 1, -1, -1):
+            msg = self.messages[i]
+            if msg["role"] == "assistant":
+                if isinstance(msg["content"], list):
+                    msg["content"] = [
+                        b for b in msg["content"]
+                        if not (hasattr(b, "type") and b.type == "text")
+                    ]
+                    if not msg["content"]:
+                        self.messages.pop(i)
+                break
+
     def _narrate(self) -> str:
         """Narration phase: single text-only call; returns 1-3 in-world sentences."""
         self.messages.append({"role": "user", "content": _NARRATE_ONLY})
@@ -361,7 +406,7 @@ class DMAgent:
         _elapsed = time.monotonic() - _t0
         self.api_stats.append({"phase": "narrating", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
+        return _extract_narration(resp.content)
 
     def _narrate_combat_over(self) -> str:
         """Post-combat narration: finishing blow, party stock, exploration prompt."""
@@ -392,7 +437,7 @@ class DMAgent:
         _elapsed = time.monotonic() - _t0
         self.api_stats.append({"phase": "narrating_combat_close", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
+        return _extract_narration(resp.content)
 
     def _narrate_for(self, trace_len: int) -> str:
         """Pick regular or post-combat narration based on calls added since trace_len."""
@@ -437,7 +482,7 @@ class DMAgent:
         _elapsed = time.monotonic() - _t0
         self.api_stats.append({"phase": f"narrating_combat_{n}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
+        return _extract_narration(resp.content)
 
     def _maybe_end_combat(self) -> bool:
         """End combat automatically when one side is entirely down.
@@ -496,7 +541,7 @@ class DMAgent:
         _elapsed = time.monotonic() - _t0
         self.api_stats.append({"phase": "narrating_epilogue", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
+        return _extract_narration(resp.content)
 
     def _closing_prompt(self) -> str | None:
         """Engine-sourced closing prompt for the active combatant.
@@ -707,7 +752,7 @@ class DMAgent:
         if self.state.game_over:
             epilogue = self._narrate_epilogue(self.state.game_outcome)
             narration_beats.append(epilogue)
-            combined = "\n\n".join(n for n in narration_beats if n)
+            combined = _sanitize_narration("\n\n".join(n for n in narration_beats if n))
             self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
@@ -724,7 +769,7 @@ class DMAgent:
                 narration_beats.append(self._narrate_combat_batch(combat_beats))
 
         # Persist narration (not the closing prompt) to the rolling window.
-        combined = "\n\n".join(n for n in narration_beats if n)
+        combined = _sanitize_narration("\n\n".join(n for n in narration_beats if n))
         self.narration_history.append((player_input, combined))
         if len(self.narration_history) > NARRATION_WINDOW:
             self.narration_history = self.narration_history[-NARRATION_WINDOW:]
@@ -734,12 +779,8 @@ class DMAgent:
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
 
         # Engine-sourced closing prompt: kept separate so it's not stored in history.
-        output = list(narration_beats)
         closing = self._closing_prompt()
-        if closing:
-            output.append(closing)
-
-        return "\n\n".join(n for n in output if n)
+        return "\n\n".join(p for p in [combined, closing] if p)
 
 
 def _json(obj) -> str:
