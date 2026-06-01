@@ -1,12 +1,20 @@
 """The DM agent: a tool-use loop around the Anthropic Messages API.
 
-Each action resolved in a turn cycle goes through two separate model calls:
-  1. _execute  — tool-use loop; state mutates, no prose emitted.
-  2. _narrate  — single text-only call; returns 1-3 sentences of in-world narration.
+Narration is folded into the tool loop rather than spent on a separate call:
+  - Out of combat, the tool loop's terminating turn IS the narration. The model
+    resolves the action with tools, then its final (non-tool) message is the
+    in-world prose — the generation that used to be thrown away now does the work.
+  - In combat, the player's action is resolved tool-only, the engine then runs the
+    following NPC beats, and ONE unified narration call (_narrate_turn) covers the
+    player's action plus every NPC beat in order, so none are reordered or skipped.
 
-take_turn runs these pairs for the player's action then for each auto-run NPC action,
-then appends an engine-sourced closing prompt addressed to the next active player.
-The model never sees more than one action per narration call, so it cannot reorder or skip.
+Combat-over and end-of-run still use dedicated calls (_narrate_combat_over,
+_narrate_epilogue) because their prose is shaped differently and is resolved after
+the action. take_turn appends an engine-sourced closing prompt for the next player.
+
+The leak guards (_extract_narration / _sanitize_narration) are load-bearing here:
+because prose is now produced with tool JSON in immediate context, they are the
+primary defense against a state dump reaching the player. See DECISIONS.md.
 """
 
 from __future__ import annotations
@@ -37,7 +45,7 @@ ok=false because the caster is out of slots, the spell FAILS — narrate the fiz
 do not let it succeed anyway.
 - When an action tool returns ok=false because the action itself is invalid — attacking \
 with a weapon the attacker doesn't own, casting a spell the caster doesn't know, or \
-casting with no slot of that level — SURFACE the failure in the narration phase in plain \
+casting with no slot of that level — SURFACE the failure in your narration in plain \
 language and re-prompt that same character, e.g. "Aldric has no dagger — he's carrying a \
 mace. What does Aldric do?" The engine keeps that character's turn alive; do NOT treat \
 this as a turn change. Never silently substitute a different weapon or spell, and never \
@@ -152,16 +160,20 @@ A surprised enemy takes no action on its first turn; the engine enforces this �
 surprised enemy act in round 1. If the party would rather avoid the enemies entirely, you may \
 narrate them slipping past and move on without combat — that needs no tool.
 
-TWO-PHASE PROTOCOL — every action uses two separate prompts:
-TOOL-USE PHASE  (prompt contains [Tool-use phase]): call tools to resolve the action. \
-Write no prose — your only output in this phase is tool calls. \
-When a single action implies multiple INDEPENDENT tool calls (e.g. taking several items plus \
-setting a quest flag), emit them as parallel tool_use blocks in one response instead of one \
-tool per hop. Keep dependent/sequential calls (start_combat before attack, etc.) sequential.
-NARRATION PHASE ("Narrate what just happened..."): write 1-3 sentences of in-world prose \
-describing what the most recent action achieved — damage dealt, spell effect, hit or miss, \
-movement, etc. No tool calls. No prompts. No "what do you do". No turn banners. \
-No meta-commentary. One action per call.
+RESOLVING AN ACTION — every action prompt is a [Tool-use phase]: call the tools that \
+resolve the action. The prompt tells you how to finish, in one of two styles:
+- "write your FINAL message as narration": once EVERY tool has resolved, your final \
+message is 1-3 sentences of in-world prose describing what just happened — damage dealt, \
+spell effect, hit or miss, movement. Emit prose ONLY in that final message: never in the \
+same response as a tool call, never before the tools are done.
+- "write no prose": emit tool calls only; the turn's narration is requested separately \
+afterward (this is how combat turns work — the engine narrates the whole exchange at once).
+Either way, during the tool phase output no tool JSON, no state dumps, no "[Current state]", \
+no prompts, no "what do you do", no turn banners, no meta-commentary. When a single action \
+implies multiple INDEPENDENT tool calls (e.g. taking several items plus setting a quest flag), \
+emit them as parallel tool_use blocks in one response instead of one tool per hop. Keep \
+dependent/sequential calls (start_combat before attack, etc.) sequential, and narrate (when \
+asked) only after the last one resolves.
 
 COMBAT FLOW:
 1. STARTING: Before the first attack or offensive spell, call `start_combat` with every \
@@ -237,12 +249,6 @@ def _usage_dict(usage) -> dict:
         d["cache_write"] = cw
     return d
 
-
-
-_NARRATE_ONLY = (
-    "Narrate what just happened in 1–3 sentences of in-world prose. "
-    "No tool calls. No prompts. No 'what do you do'. No meta-commentary."
-)
 
 
 def _record_turn(game_state, player_text: str, dm_text: str) -> None:
@@ -366,9 +372,19 @@ class DMAgent:
             messages.append({"role": "assistant", "content": narration})
         return messages
 
-    def _execute(self, prompt: str) -> None:
-        """Tool-use phase for one action. Runs the loop; state mutates; no narration."""
+    def _execute(self, prompt: str, capture_narration: bool = False) -> str:
+        """Tool-use phase for one action. Runs the loop; state mutates.
+
+        When capture_narration is True, the model's terminating (non-tool) response
+        IS the in-world narration of the action: it is leak-screened by
+        _extract_narration and returned. This folds the old dedicated narration call
+        into the tool loop's terminating turn — the generation that used to be thrown
+        away now does the work. When False (combat turns, whose prose is produced
+        later by the unified turn narration, and NPC fallback turns), the terminating
+        text is scrubbed so premature prose can't leak forward, and "" is returned.
+        """
         self.messages.append({"role": "user", "content": prompt})
+        narration = ""
         for _ in range(MAX_TOOL_HOPS):
             _t0 = time.monotonic()
             resp = self.client.messages.create(
@@ -379,9 +395,13 @@ class DMAgent:
                 messages=self.messages,
             )
             _elapsed = time.monotonic() - _t0
-            self.api_stats.append({"phase": "thinking", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
+            terminal = resp.stop_reason != "tool_use"
+            phase = "narrating" if (terminal and capture_narration) else "thinking"
+            self.api_stats.append({"phase": phase, "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
-            if resp.stop_reason != "tool_use":
+            if terminal:
+                if capture_narration:
+                    narration = _extract_narration(resp.content)
                 break
             tool_results = []
             for block in resp.content:
@@ -395,34 +415,23 @@ class DMAgent:
                     })
             self.messages.append({"role": "user", "content": tool_results})
 
-        # Scrub text blocks the model emitted during the tool-use phase from the
-        # last assistant turn — premature prose must not reach the narration phase.
-        for i in range(len(self.messages) - 1, -1, -1):
-            msg = self.messages[i]
-            if msg["role"] == "assistant":
-                if isinstance(msg["content"], list):
-                    msg["content"] = [
-                        b for b in msg["content"]
-                        if not (hasattr(b, "type") and b.type == "text")
-                    ]
-                    if not msg["content"]:
-                        self.messages.pop(i)
-                break
-
-    def _narrate(self) -> str:
-        """Narration phase: single text-only call; returns 1-3 in-world sentences."""
-        self.messages.append({"role": "user", "content": _NARRATE_ONLY})
-        _t0 = time.monotonic()
-        resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=256,
-            system=_SYSTEM,
-            messages=self.messages,  # no tools= → text only
-        )
-        _elapsed = time.monotonic() - _t0
-        self.api_stats.append({"phase": "narrating", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
-        self.messages.append({"role": "assistant", "content": resp.content})
-        return _extract_narration(resp.content)
+        # When NOT capturing narration, scrub text the model emitted in its
+        # terminating turn — premature prose must not leak into the later unified
+        # narration. When capturing, that terminating text IS the narration (already
+        # leak-screened) and is kept in the conversation for continuity.
+        if not capture_narration:
+            for i in range(len(self.messages) - 1, -1, -1):
+                msg = self.messages[i]
+                if msg["role"] == "assistant":
+                    if isinstance(msg["content"], list):
+                        msg["content"] = [
+                            b for b in msg["content"]
+                            if not (hasattr(b, "type") and b.type == "text")
+                        ]
+                        if not msg["content"]:
+                            self.messages.pop(i)
+                    break
+        return narration
 
     def _narrate_combat_over(self) -> str:
         """Post-combat narration: finishing blow, party stock, exploration prompt."""
@@ -455,55 +464,56 @@ class DMAgent:
         self.messages.append({"role": "assistant", "content": resp.content})
         return _extract_narration(resp.content)
 
-    def _narrate_for(self, trace_len: int) -> str:
-        """Pick regular or post-combat narration based on calls added since trace_len."""
-        if any(c["name"] == "end_combat" for c in self.tool_trace[trace_len:]):
-            return self._narrate_combat_over()
-        return self._narrate()
+    def _narrate_turn(self, player_input: str, combat_beats: list[dict]) -> str:
+        """Single narration call for a combat turn: the player's action AND every
+        NPC beat that followed, in order. Folds what used to be two calls (a player
+        narration plus a separate NPC-beat batch) into one.
 
-    def _narrate_combat_batch(self, combat_beats: list[dict]) -> str:
-        """Single narration call covering all NPC actions and death saves this cycle.
-
-        Collapses N beats into 1 API call. NPC-action beats: model already has the
-        tool results in context so only name + round are needed. Death-save beats:
-        engine outcome is injected as ground truth so the model dramatizes without
-        inventing the roll.
+        The player's tool results and each NPC's [Engine: …] outcome are already in
+        self.messages; the prompt just enumerates the beats so none are skipped,
+        merged, or reordered. NPC-action beats need only name + round; death-save
+        beats carry the engine outcome as ground truth so the model dramatizes it
+        without inventing the roll.
         """
-        lines = []
+        lines = [
+            f'1. The party\'s action — "{player_input}". Narrate the actual outcome '
+            f"shown in the tool results above (hit or miss, damage, spell effect, movement)."
+        ]
         for i, beat in enumerate(combat_beats):
+            n = i + 2
             if beat["kind"] == "npc_action":
-                lines.append(f"{i + 1}. {beat['name']} (Round {beat['round']})")
+                lines.append(f"{n}. {beat['name']} (Round {beat['round']})")
             else:  # death_save
                 lines.append(
-                    f"{i + 1}. {beat['name']} death save (Round {beat['round']}): {beat['outcome']}"
+                    f"{n}. {beat['name']} death save (Round {beat['round']}): {beat['outcome']}"
                 )
         action_list = "\n".join(lines)
-        n = len(combat_beats)
+        total = len(lines)
         prompt = (
-            f"Narrate each of the following {n} combat beat(s) in order. "
+            f"Narrate each of the following {total} beat(s) in order. "
             f"Write 1–3 sentences of in-world prose per beat — exactly one beat per entry, "
             f"none skipped, none merged, no reordering. "
             f"For death save beats, dramatize the given outcome — do not change or invent the roll. "
-            f"No tool calls. No prompts. No meta-commentary.\n\n"
+            f"No tool calls. No prompts. No meta-commentary. No state dumps.\n\n"
             f"{action_list}"
         )
         self.messages.append({"role": "user", "content": prompt})
         _t0 = time.monotonic()
         resp = self.client.messages.create(
             model=self.model,
-            max_tokens=min(256 * n, 1024),
+            max_tokens=min(256 * total, 1024),
             system=_SYSTEM,
             messages=self.messages,
         )
         _elapsed = time.monotonic() - _t0
-        self.api_stats.append({"phase": f"narrating_combat_{n}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
+        self.api_stats.append({"phase": f"narrating_turn_{total}beats", "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
         self.messages.append({"role": "assistant", "content": resp.content})
         return _extract_narration(resp.content)
 
     def _maybe_end_combat(self) -> bool:
         """End combat automatically when one side is entirely down.
 
-        Fires end_combat via dispatch so _narrate_for routes to the post-combat
+        Fires end_combat via dispatch so take_turn routes to the post-combat
         wrap-up narration. Idempotent — no-op when not in combat.
         Returns True if combat was ended, False otherwise.
         """
@@ -606,10 +616,13 @@ class DMAgent:
         _execute loops the tool results accumulate as normal so the agent can finish
         the multi-hop resolution coherently.
 
-        Narration uses two calls per turn cycle:
-          1. Player's action — dedicated _narrate_for (coverage guarantee, unchanged).
-          2. All NPC actions — single _narrate_npc_batch in resolution order.
-        Returns narration beats joined with the engine-sourced closing prompt.
+        Narration is folded into as few calls as possible:
+          - Out of combat: the player-action _execute captures its terminating turn
+            as the narration (no separate call).
+          - In combat: the player action is resolved tool-only, then ONE unified
+            _narrate_turn covers the player action plus every NPC beat in order.
+          - Combat-over / end-of-run: dedicated _narrate_combat_over / _narrate_epilogue.
+        Returns narration joined with the engine-sourced closing prompt.
         """
         self.tool_trace = []
         self.api_stats = []
@@ -620,34 +633,55 @@ class DMAgent:
         self.messages = self._build_turn_context()
 
         # --- Player's action ---
+        # In combat, NPC beats are resolved after this _execute and folded into one
+        # unified narration, so resolve the action tool-only here. Out of combat there
+        # are no following beats, so the tool loop's terminating turn IS the narration
+        # (capture_narration=True) — no separate narration call is spent.
+        in_combat = bool(self.state.combat_order) and self.state.combat_round > 0
+        if in_combat:
+            finish = (
+                "[Tool-use phase] Call the appropriate tools to resolve this action. "
+                "Write no prose — the turn's narration is requested separately."
+            )
+        else:
+            finish = (
+                "[Tool-use phase] Call the appropriate tools to resolve this action. "
+                "Once every tool has resolved, write your FINAL message as 1–3 sentences "
+                "of in-world narration of what just happened (hit or miss, damage, spell "
+                "effect, movement). Emit prose ONLY in that final message — never alongside "
+                "a tool call. No tool JSON, no state dumps, no prompts, no meta-commentary."
+            )
         player_prompt = (
             f"[Current state]\n{self._state_snapshot()}\n\n"
             f"Player: {player_input}\n\n"
-            f"[Tool-use phase] Call the appropriate tools to resolve this action. "
-            f"Write no prose — narration is requested separately."
+            f"{finish}"
         )
         trace_len = len(self.tool_trace)
-        self._execute(player_prompt)
+        player_narration = self._execute(player_prompt, capture_narration=not in_combat)
         self._maybe_end_combat()
         self.state.combat_starting = False  # clear barrier before NPC loop so NPCs can act
 
         # Check point 1: game_over from player phase (victory via move_scene, or party wipe).
         if self.state.game_over:
             epilogue = self._narrate_epilogue(self.state.game_outcome)
-            self.narration_history.append((player_input, epilogue))
+            combined = _sanitize_narration("\n\n".join(n for n in [player_narration, epilogue] if n))
+            self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
-            _record_turn(self.state, player_input, epilogue)
-            self.state.narrative.append({"turn": self.state.turn, "text": epilogue})
+            _record_turn(self.state, player_input, combined)
+            self.state.narrative.append({"turn": self.state.turn, "text": combined})
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
-            return epilogue
+            return combined
 
-        narration_beats: list[str] = []
-        narration_beats.append(self._narrate_for(trace_len))
+        # Did combat end during the player's own action (e.g. the killing blow)?
+        combat_over_in_player_phase = any(
+            c["name"] == "end_combat" for c in self.tool_trace[trace_len:]
+        )
 
         # --- NPC turns and automatic death saves (only while combat is active) ---
-        # Accumulate ordered combat beats (NPC actions and PC death saves); a single
-        # narration call is issued after the loop instead of one per beat.
+        # Accumulate ordered combat beats (NPC actions and PC death saves); they are
+        # folded into the single unified turn narration after the loop, alongside the
+        # player's action — one narration call covers the whole exchange.
         combat_beats: list[dict] = []
         combat_ended_in_npc_phase = False
 
@@ -735,7 +769,7 @@ class DMAgent:
                     # Engine-resolved: no API call.
                     npc_args, npc_result = resolution
                     self.tool_trace.append({"name": "attack", "input": npc_args, "result": npc_result})
-                    # Inject a brief context message so _narrate_combat_batch has
+                    # Inject a brief context message so _narrate_turn has
                     # the same hit/miss/damage facts it would see from a tool_result.
                     _hit = npc_result.get("hit", False)
                     _detail = (
@@ -764,11 +798,12 @@ class DMAgent:
             # Flush any remaining fallbacks after the loop completes.
             _flush_fallbacks()
 
-        # Check point 2: game_over from NPC phase (defeat). Include player beat + epilogue.
+        # Check point 2: game_over from NPC phase (defeat). Narrate the exchange that
+        # led here (player action + NPC beats, folded into one call), then the epilogue.
         if self.state.game_over:
+            exchange = self._narrate_turn(player_input, combat_beats) if combat_beats else player_narration
             epilogue = self._narrate_epilogue(self.state.game_outcome)
-            narration_beats.append(epilogue)
-            combined = _sanitize_narration("\n\n".join(n for n in narration_beats if n))
+            combined = _sanitize_narration("\n\n".join(n for n in [exchange, epilogue] if n))
             self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
                 self.narration_history = self.narration_history[-NARRATION_WINDOW:]
@@ -777,15 +812,19 @@ class DMAgent:
             self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
             return combined
 
-        # Single batched narration call for all combat beats this cycle.
-        if combat_beats:
-            if combat_ended_in_npc_phase:
-                narration_beats.append(self._narrate_combat_over())
-            else:
-                narration_beats.append(self._narrate_combat_batch(combat_beats))
+        # One narration call for the whole turn:
+        #  - combat ended this turn → dedicated two-paragraph close (covers the finishing blow);
+        #  - in-combat turn with NPC beats → unified player-action + NPC-beats narration;
+        #  - out-of-combat turn → the terminating turn already captured by _execute.
+        if combat_over_in_player_phase or combat_ended_in_npc_phase:
+            narration = self._narrate_combat_over()
+        elif combat_beats:
+            narration = self._narrate_turn(player_input, combat_beats)
+        else:
+            narration = player_narration
 
         # Persist narration (not the closing prompt) to the rolling window.
-        combined = _sanitize_narration("\n\n".join(n for n in narration_beats if n))
+        combined = _sanitize_narration(narration)
         self.narration_history.append((player_input, combined))
         if len(self.narration_history) > NARRATION_WINDOW:
             self.narration_history = self.narration_history[-NARRATION_WINDOW:]

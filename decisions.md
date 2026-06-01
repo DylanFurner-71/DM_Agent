@@ -327,3 +327,58 @@ the old free-form `template`/`name` arguments are gone from the schema.
 KNOWN ROUGH EDGE (leave for now): a de-escalated NPC stays in combat_order if other hostiles
 remain, so its turn still comes up — the system-prompt rule above handles it (narrate it standing
 aside). Cleanly removing it from the order is a later refinement; do not modify next_turn here.
+
+---
+
+## 5. Fold narration into the tool loop; one narration call per turn
+
+**Decision.** Narration is no longer a dedicated second model call per action.
+Instead:
+
+- **Out of combat**, the tool loop's *terminating turn* IS the narration. The
+  model resolves the action with tools, then writes its final (non-tool) message
+  as the in-world prose. `_execute(capture_narration=True)` returns that text. The
+  call that used to be spent generating a throwaway terminator now does the work.
+- **In combat**, the player's action is resolved tool-only, the engine runs the
+  following NPC beats (engine-resolved, no API call), and **one** unified call
+  (`_narrate_turn`) narrates the player's action *and* every NPC beat in order.
+- **Combat-over** and **end-of-run** keep dedicated calls (`_narrate_combat_over`,
+  `_narrate_epilogue`): their prose is shaped differently and is only known after
+  the action resolves.
+
+This supersedes the player-action half of **Decision 2**: the player beat is no
+longer on its own dedicated call. Decision 2's batching of NPC beats into one call
+stands — it is now the same call that carries the player beat.
+
+**Why.** Profiling a full run (see the per-call stats sidecar) showed the dedicated
+narration phase was ~25 calls / ~92s / ~28.6k uncached input across 26 turns, *on
+top of* a terminating tool-loop generation that was scrubbed and thrown away. The
+two together were the dominant, serial per-turn cost. Merging removes the dedicated
+player-narration call (out of combat) and collapses player + NPC narration into one
+call (in combat): ~3.5 API calls/turn → ~2 out of combat, ~3 in combat.
+
+**Trade-off — the leak guards become load-bearing.** The two-phase split previously
+gave defense-in-depth against the model dumping raw state/JSON into prose: a clean
+"now just narrate" reframe *and* the `_extract_narration` / `_sanitize_narration`
+screens. Producing prose in the same breath as tool reasoning, with tool JSON fresh
+in context, raises the odds of a leaked dump — so those two screens go from
+belt-and-suspenders to the **primary** defense. A regex regression there is now
+directly player-facing. We accept this: the screens are unit-tested
+(`test_narration_leak_regression`, plus the `_extract`/`_sanitize` suites), the
+engine still owns every number regardless of prose, and the latency win is large.
+
+**Trade-off — NPC-beat coverage.** Same as Decision 2: folding beats into one call
+means the model could drop or merge a beat. The enumerated, numbered beat list in
+`_narrate_turn` mitigates it; engine state stays authoritative, so the worst case is
+incomplete *prose*, never wrong *numbers*.
+
+**Scope — what's unaffected.** Purely how prose is produced. Tool dispatch,
+enforcement, turn order, redaction, and the engine's authority over numbers are
+untouched. The terminating generation in combat turns is still spent (the API can't
+signal "done with tools" without a final response) — eliminating that too would mean
+injecting NPC beats mid-`_execute` so its terminator narrates everything; left as a
+future refinement.
+
+**Reversibility.** Localized to `dm_agent.py` (`_execute`, `_narrate_turn`,
+`take_turn`) and the system-prompt protocol block. Reverting to a dedicated
+narration call is mechanical.

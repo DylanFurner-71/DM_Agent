@@ -219,13 +219,14 @@ def _make_mock_usage():
 
 
 def test_narration_leak_regression():
-    """Regression: trace-8 failure mode — state dump mixed into a tool-use response
-    must never reach state.narrative, state.transcript, or the take_turn return value.
+    """Regression: a state dump must never reach state.narrative, state.transcript,
+    or the take_turn return value.
 
-    Reproduces the exact pattern:
-    - tool-use phase first response: [TextBlock(state_dump), ToolUseBlock(get_state)]
-    - tool-use phase second response: stop_reason=end_turn (model is done with tools)
-    - narration phase response: model echoes state text before actual prose (defense-in-depth)
+    Since narration is merged into the tool loop's terminating turn (out of combat),
+    the leak guards are now load-bearing on that response. Reproduces:
+    - tool-use first response: [TextBlock(state_dump), ToolUseBlock(get_state)]
+    - terminating turn: the model leaks a state dump ahead of its prose — _extract_narration
+      / _sanitize_narration must strip it before it reaches storage.
 
     Should FAIL if _extract_narration or _sanitize_narration are removed.
     """
@@ -250,26 +251,19 @@ def test_narration_leak_regression():
     resp_tool_use.content = [dump_block, tool_use_block]
     resp_tool_use.usage = usage
 
-    # --- tool-use phase: second call — model ends tool loop ---
-    resp_tool_done = MagicMock()
-    resp_tool_done.stop_reason = "end_turn"
-    resp_tool_done.content = []
-    resp_tool_done.usage = usage
+    # --- terminating turn (captured as narration) — model leaks a state dump ahead
+    # of the prose. The guards must strip it before it reaches storage. ---
+    leak_block = MagicMock()
+    leak_block.type = "text"
+    leak_block.text = '[Current state]\n{"location": "Dungeon"}\n\nGrik lunges at Wisp.'
 
-    # --- narration phase — model echoes state info before actual prose ---
-    # Simulates the observed failure: _extract_narration and _sanitize_narration
-    # together block this from reaching storage.
-    narr_block = MagicMock()
-    narr_block.type = "text"
-    narr_block.text = '[Current state]\n{"location": "Dungeon"}\n\nGrik lunges at Wisp.'
-
-    resp_narr = MagicMock()
-    resp_narr.stop_reason = "end_turn"
-    resp_narr.content = [narr_block]
-    resp_narr.usage = usage
+    resp_terminal = MagicMock()
+    resp_terminal.stop_reason = "end_turn"
+    resp_terminal.content = [leak_block]
+    resp_terminal.usage = usage
 
     client = MagicMock()
-    client.messages.create.side_effect = [resp_tool_use, resp_tool_done, resp_narr]
+    client.messages.create.side_effect = [resp_tool_use, resp_terminal]
 
     state = GameState(
         party={"wisp": Character(name="Wisp", hp=8, max_hp=8)},
@@ -284,3 +278,44 @@ def test_narration_leak_regression():
     assert '{"location"' not in state.narrative[-1]["text"]
     assert "[Current state]" not in state.transcript[-1]["text"]
     assert '{"location"' not in state.transcript[-1]["text"]
+
+
+def test_execute_capture_narration_keeps_terminal_prose():
+    """With capture_narration=True, the tool loop's terminating turn IS the
+    narration: its text is returned (leak-screened) and NOT scrubbed from messages."""
+    state = _make_state()
+
+    tool_use_block = MagicMock()
+    tool_use_block.type = "tool_use"
+    tool_use_block.id = "tu_1"
+    tool_use_block.name = "get_state"
+    tool_use_block.input = {}
+
+    usage = _make_mock_usage()
+    resp1 = MagicMock()
+    resp1.stop_reason = "tool_use"
+    resp1.content = [tool_use_block]
+    resp1.usage = usage
+
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "The door grinds open onto darkness."
+    resp2 = MagicMock()
+    resp2.stop_reason = "end_turn"
+    resp2.content = [narr_block]
+    resp2.usage = usage
+
+    client = MagicMock()
+    client.messages.create.side_effect = [resp1, resp2]
+
+    agent = DMAgent(state, client=client)
+    narration = agent._execute("[Tool-use phase] test", capture_narration=True)
+
+    assert narration == "The door grinds open onto darkness."
+    # The terminal prose is kept in the conversation (not scrubbed).
+    assert any(
+        msg["role"] == "assistant"
+        and isinstance(msg["content"], list)
+        and any(getattr(b, "type", None) == "text" for b in msg["content"])
+        for msg in agent.messages
+    )

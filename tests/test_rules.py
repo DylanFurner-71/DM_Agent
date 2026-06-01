@@ -873,12 +873,14 @@ def test_tool_results_present_in_context_during_execute_loop():
 
 def test_npc_turns_batched_into_single_narration_call():
     """A cycle resolving [player, npc_A, npc_B, next_player] must produce exactly
-    two narration API calls — one for the player action, one batched call carrying
-    both NPC actions in resolution order — followed by one closing player prompt.
+    ONE narration API call — the unified turn narration that folds the player's
+    action together with both NPC actions in resolution order — followed by one
+    closing player prompt.
 
-    With engine-resolved NPC turns (Change 1+2), the two NPC turns generate ZERO
-    additional execute (tool-use) API calls. Only the player's action needs the LLM
-    for tool use. Both NPC attack results are injected into messages as context.
+    With engine-resolved NPC turns, the two NPC turns generate ZERO additional
+    execute (tool-use) API calls. Only the player's action needs the LLM for tool
+    use. Both NPC attack results are injected into messages as context, and the
+    single unified narration (folding player + NPC beats, Change 1+2) names both.
 
     Narration calls are identified as client.messages.create invocations that have
     no 'tools' kwarg; tool-use executions always pass tools=TOOLS.
@@ -920,19 +922,20 @@ def test_npc_turns_batched_into_single_narration_call():
         f"got {len(execute_calls)}"
     )
 
-    assert len(narration_calls) == 2, (
-        f"expected 2 narration calls, got {len(narration_calls)} "
+    assert len(narration_calls) == 1, (
+        f"expected 1 unified narration call, got {len(narration_calls)} "
         f"(total API calls: {len(all_calls)})"
     )
 
-    # The batched narration prompt (second narration call) must name both NPCs.
-    batch_messages = narration_calls[1][1]["messages"]
+    # The unified narration prompt must cover the player's action AND both NPCs.
+    batch_messages = narration_calls[0][1]["messages"]
     last_user_prompt = next(
         m["content"] for m in reversed(batch_messages)
         if m["role"] == "user" and isinstance(m["content"], str)
     )
-    assert "Snik" in last_user_prompt, "batch prompt must name Snik"
-    assert "Narl" in last_user_prompt, "batch prompt must name Narl"
+    assert "Aldric swings at Snik" in last_user_prompt, "unified prompt must include the player's action"
+    assert "Snik" in last_user_prompt, "unified prompt must name Snik"
+    assert "Narl" in last_user_prompt, "unified prompt must name Narl"
 
     # Engine-sourced closing prompt must address the next active player.
     assert "Wisp, what do you do?" in narration
@@ -1012,9 +1015,11 @@ def test_agent_re_prompts_after_failed_cast_not_success():
     Structural assertions:
     - Engine did not apply damage (HP unchanged).
     - Tool trace records ok=False.
-    - The second API call (execute-loop continuation) carries a tool_result whose
-      JSON content contains 'ok': false — proving the agent re-prompted with the failure.
-    - Exactly three API calls: two for the execute phase, one for narration.
+    - The second API call (the terminating turn) carries a tool_result whose JSON
+      content contains 'ok': false — proving the failure was fed back before the
+      model narrated.
+    - Exactly two API calls: out of combat the terminating turn IS the narration
+      (merge of Change 1), so no separate narration call is spent.
     """
     from unittest.mock import MagicMock
     from src.dm_agent import DMAgent
@@ -1031,21 +1036,18 @@ def test_agent_re_prompts_after_failed_cast_not_success():
     exec_resp = MagicMock()
     exec_resp.stop_reason = "tool_use"; exec_resp.content = [cs_block]
 
-    # Call 2 (_execute loop): model sees ok=False result, stops
-    stop_block = MagicMock(); stop_block.type = "text"; stop_block.text = ""
-    stop_resp = MagicMock(); stop_resp.stop_reason = "end_turn"; stop_resp.content = [stop_block]
-
-    # Call 3 (_narrate): model narrates the fizzle (content doesn't affect assertions)
+    # Call 2 (terminating turn): model sees ok=False and narrates the fizzle in its
+    # final message — out of combat this terminal response IS the narration.
     narr_block = MagicMock()
     narr_block.type = "text"
     narr_block.text = "Wisp reaches for the magic but finds only silence — the spell fizzles."
     narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
 
     fake_client = MagicMock()
-    fake_client.messages.create.side_effect = [exec_resp, stop_resp, narr_resp]
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
 
     agent = DMAgent(gs, client=fake_client)
-    agent.take_turn("Wisp casts magic missile at Snik")
+    narration = agent.take_turn("Wisp casts magic missile at Snik")
 
     # Engine enforced the failure — no HP change.
     assert gs.npcs["snik"].hp == 10
@@ -1056,7 +1058,7 @@ def test_agent_re_prompts_after_failed_cast_not_success():
     assert cast_calls[0]["result"]["ok"] is False
 
     # The second API call must carry the tool_result with the ok=False payload.
-    # This is the "re-prompt": the agent fed the failure back before asking for narration.
+    # This is the "re-prompt": the agent fed the failure back before the model narrated.
     call2_msgs = fake_client.messages.create.call_args_list[1][1]["messages"]
     tool_result_content = next(
         (c["content"]
@@ -1069,8 +1071,11 @@ def test_agent_re_prompts_after_failed_cast_not_success():
         f"tool_result must contain ok=false, got: {tool_result_content!r}"
     )
 
-    # Two-phase protocol: 2 execute calls + 1 narrate call.
-    assert fake_client.messages.create.call_count == 3
+    # The terminating turn was captured as the narration.
+    assert "fizzles" in narration
+
+    # Merge: terminating turn IS the narration — 2 calls, not 3.
+    assert fake_client.messages.create.call_count == 2
 
 
 def test_invalid_action_does_not_advance_turn():
@@ -2229,7 +2234,7 @@ def test_attack_ambiguous_target_asks():
 
 def test_engine_auto_ends_combat_when_last_enemy_downed():
     """Player attack downs the last hostile → _maybe_end_combat fires, combat_round=0,
-    _narrate_for routes to post-combat wrap-up, no combat-turn closing prompt emitted.
+    take_turn routes to the post-combat wrap-up, no combat-turn closing prompt emitted.
     Scene has exits so the run does not end here (game_over stays False)."""
     from unittest.mock import MagicMock, patch
     from src.dm_agent import DMAgent
