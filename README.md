@@ -140,6 +140,17 @@ read, a seal broken), surfaced each turn and used to gate ways and endings.
 combat, flags), mid-session resume, sensible defaults for older saves, and
 template-based NPC spawning from the scenario file.
 
+**Scenario validator.** `python -m src.validate <scenario.json>` lints an authored
+scenario before play, catching content bugs that would otherwise only surface
+mid-session: exits that point at nonexistent scenes, NPC/reinforcement `template`s
+not in `MONSTERS`, hazard `damage` that isn't valid dice or an unknown save ability,
+scene/party entries whose keys would crash the loader, and the subtle one — a gate
+`requires` flag that isn't in normalized form, which `set_quest_flag` could never
+satisfy. Every check is derived from how the engine actually consumes the data, so it
+can't drift from a separate schema. Issues are split into **errors** (the scenario
+will misbehave or fail to load) and **warnings** (a likely mistake with an engine
+fallback); exit status is non-zero only on errors.
+
 **Observability & CLI.** A tool trace (`/trace`, `/full_trace`) shows exactly what
 the agent decided each turn, alongside a per-call stats sidecar capturing latency and
 token usage — including prompt-cache reads and writes. In-session commands include
@@ -172,13 +183,6 @@ which sets the direction for the latency work below.
   reliably enough to keep enforcement clean.
 
 ## Need to implement
-
-The core resolution gaps worth closing first:
-
-- **Scenario validator:** a `python -m src.validate <scenario.json>` lint that checks
-  every exit `to` points to a real scene, NPC `template`s exist in `MONSTERS`, loot
-  ids are known, monster weapons are in `WEAPONS`, answer-gates carry `denied` text,
-  and gated exits name a real flag — catching authored-content bugs before play.
 
 ## Potential implementations
 
@@ -225,6 +229,7 @@ src/
   tools.py             # Anthropic tool schemas + dispatch() against live state
   dm_agent.py          # tool-use loop with folded narration, caching, instrumentation
   main.py              # terminal REPL: /state /undo /trace /full_trace /save /quit + autosave
+  validate.py          # scenario linter: python -m src.validate <scenario.json>
 data/
   scenario.json        # the demo adventure
   demo_*.json          # per-feature demo scenarios
