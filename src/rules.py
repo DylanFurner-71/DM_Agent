@@ -383,6 +383,43 @@ def skill_check(character, ability: str, dc: int) -> dict:
     }
 
 
+def saving_throw(character, ability: str, dc: int) -> dict:
+    """Roll a saving throw: d20 + ability modifier (+ proficiency if proficient in
+    that save) against a DC. Always resolves.
+
+    The reactive twin of ``skill_check``: a *check* is a proactive action a character
+    takes (perception, persuasion, athletics), while a *save* is rolled to RESIST an
+    effect that happens to them (DEX vs a trap, CON vs poison, WIS vs fear). The two
+    differ mechanically here in one way: a character proficient in the save (the
+    ability appears in its ``save_proficiencies``) adds ``proficiency_bonus``, whereas
+    a plain ability check never adds proficiency. NPCs (no proficiency_bonus / save
+    list) simply roll d20 + ability modifier. There is no natural-1/20 auto-fail/
+    auto-succeed, matching ``skill_check``.
+    """
+    ability = ability.strip().lower()
+    modifier = character.ability_modifiers.get(ability, 0)
+    proficient = ability in {a.strip().lower() for a in getattr(character, "save_proficiencies", [])}
+    if proficient:
+        modifier += getattr(character, "proficiency_bonus", 0)
+    r = roll("1d20")
+    nat = r.rolls[0]
+    total = nat + modifier
+    sign = "+" if modifier >= 0 else ""
+    return {
+        "ok": True,
+        "kind": "saving_throw",
+        "character": character.name,
+        "ability": ability,
+        "modifier": modifier,
+        "proficient": proficient,
+        "roll": nat,
+        "total": total,
+        "dc": dc,
+        "success": total >= dc,
+        "detail": f"{ability.upper()} save: d20({nat}) {sign}{modifier} = {total} vs DC {dc}",
+    }
+
+
 def roll_initiative(combatants: dict) -> tuple[list[str], dict[str, int]]:
     """Return (ordered_keys, {key: initiative_total}), highest initiative first.
 
@@ -759,6 +796,7 @@ SRD_RULES = {
     "advantage": "Roll 2d20, take the higher. Granted by favorable circumstances.",
     "disadvantage": "Roll 2d20, take the lower. From hindrances or impairment.",
     "death_saves": "At 0 HP a character is unconscious and makes death saves (DC 10). Three successes stabilize; three failures kill.",
+    "saving_throws": "To resist an effect, roll d20 + the relevant ability modifier (+ proficiency if proficient in that save) vs a DC. Use the saving_throw tool — not skill_check, which is a proactive action. A save is reactive: not an action, and rolled by whoever is affected.",
     "spell_slots": "Casting a leveled spell consumes one slot of that level or higher. Cantrips are free. Slots refresh on a long rest.",
     "armor_class": "An attack hits if the d20 roll plus attack bonus meets or exceeds the target's AC.",
     "magic_missile": "1st-level force evocation, auto-hit, no attack roll. Damage: 3d4+3 (L1); each slot level above 1st adds one missile (+1d4+1). Use cast_spell with spell_name='magic_missile' and a target.",

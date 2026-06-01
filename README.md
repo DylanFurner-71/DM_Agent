@@ -112,6 +112,15 @@ Consumables apply through
 a party ally** — pouring a healing potion into a downed ally revives them and resets
 their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
 
+**Checks & saves.** `skill_check` resolves a *proactive* `d20 + ability modifier` vs
+a DC (perception, persuasion, athletics, stealth…) and, in combat, is the acting
+character's turn-guarded action. `saving_throw` is its *reactive* twin for **resisting**
+an effect (DEX vs a trap, CON vs poison, WIS vs fear): it is not an action, isn't
+turn-guarded, and can be rolled for any affected character on anyone's turn — and a
+character proficient in the save (its `save_proficiencies`) adds proficiency, which a
+plain check never does. The engine owns the roll; the model applies the consequence of a
+failed save through `apply_dice`/`modify_hp`.
+
 **Quest flags.** Boolean story markers recording that something happened (a clue
 read, a seal broken), surfaced each turn and used to gate ways and endings.
 *(Hardening to strict-boolean values is in progress — see roadmap.)*
@@ -154,10 +163,6 @@ which sets the direction for the latency work below.
 
 The core resolution gaps worth closing first:
 
-- **General ability saving throws:** `d20 + ability modifier` vs a DC to *resist* an
-  effect (DEX vs a trap, CON vs poison, WIS vs a fear spell) — the reactive twin of
-  the existing proactive `skill_check`. (A general ability/skill *check* tool already
-  exists, `skill_check`, so only the saving-throw side is missing.)
 - **Hazards & traps:** author-placed dangers in a scene that trigger a save or check
   and deal dice damage through `apply_dice` — what gives checks and saves real stakes.
 - **`/undo` + per-turn autosave:** snapshot `GameState` (via the existing

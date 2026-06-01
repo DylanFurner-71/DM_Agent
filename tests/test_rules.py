@@ -1290,6 +1290,90 @@ def test_skill_check_case_insensitive():
     assert res["modifier"] == 3
 
 
+# --- saving throws (reactive twin of skill_check) ----------------------------
+
+def test_saving_throw_uses_ability_modifier():
+    c = Character(name="Wisp", ability_modifiers={"dex": 2})
+    rules.force_rolls([15])
+    res = rules.saving_throw(c, "dex", dc=12)
+    assert res["ok"] is True
+    assert res["kind"] == "saving_throw"
+    assert res["modifier"] == 2
+    assert res["proficient"] is False
+    assert res["roll"] == 15
+    assert res["total"] == 17
+    assert res["success"] is True
+
+
+def test_saving_throw_proficient_adds_proficiency():
+    # Proficient save adds proficiency_bonus; a plain check on the same ability never does.
+    c = Character(name="Aldric", ability_modifiers={"wis": 1}, proficiency_bonus=2,
+                  save_proficiencies=["wis"])
+    rules.force_rolls([10])
+    save = rules.saving_throw(c, "wis", dc=13)
+    assert save["proficient"] is True
+    assert save["modifier"] == 3          # 1 ability + 2 proficiency
+    assert save["total"] == 13 and save["success"] is True
+    rules.force_rolls([10])
+    check = rules.skill_check(c, "wis", dc=13)
+    assert check["modifier"] == 1         # check never adds proficiency
+    assert check["total"] == 11 and check["success"] is False
+
+
+def test_saving_throw_not_proficient_no_bonus():
+    c = Character(name="Aldric", ability_modifiers={"con": 2}, proficiency_bonus=3,
+                  save_proficiencies=["wis"])  # proficient in wis, NOT con
+    rules.force_rolls([7])
+    res = rules.saving_throw(c, "con", dc=10)
+    assert res["proficient"] is False
+    assert res["modifier"] == 2           # no proficiency for a non-proficient save
+    assert res["total"] == 9 and res["success"] is False
+
+
+def test_saving_throw_missing_ability_defaults_to_zero():
+    c = Character(name="Hero", ability_modifiers={})
+    rules.force_rolls([12])
+    res = rules.saving_throw(c, "int", dc=10)
+    assert res["modifier"] == 0
+    assert res["total"] == 12
+
+
+def test_saving_throw_npc_has_no_proficiency():
+    # NPC lacks proficiency_bonus / save_proficiencies — just d20 + ability mod.
+    npc = NPC(name="Snik", ability_modifiers={"dex": 1})
+    rules.force_rolls([14])
+    res = rules.saving_throw(npc, "dex", dc=10)
+    assert res["proficient"] is False
+    assert res["modifier"] == 1
+    assert res["total"] == 15
+
+
+def test_saving_throw_dispatch_is_not_turn_guarded():
+    # A save is reactive: it must resolve for any actor regardless of whose turn it is,
+    # unlike skill_check which is the active actor's action and IS turn-guarded.
+    rules.seed(0)
+    gs = _make_combat_state()
+    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    gs.combat_starting = False  # take_turn clears the barrier before resolving actions
+    active = tools._active_actor_name(gs)
+    # Pick a party member who is NOT the active combatant.
+    off_turn = next(c.name for c in gs.party.values() if c.name != active)
+    res = tools.dispatch("saving_throw", {"character": off_turn, "ability": "dex", "dc": 10}, gs)
+    assert res["ok"] is True
+    assert res["character"] == off_turn
+
+    # Same off-turn actor via skill_check IS refused by the turn guard.
+    guarded = tools.dispatch("skill_check", {"character": off_turn, "ability": "dex", "dc": 10}, gs)
+    assert guarded["ok"] is False
+    assert "not" in guarded["error"].lower() and "turn" in guarded["error"].lower()
+
+
+def test_saving_throw_dispatch_unknown_character():
+    gs = _make_combat_state()
+    res = tools.dispatch("saving_throw", {"character": "Nobody", "ability": "dex", "dc": 10}, gs)
+    assert res["ok"] is False
+
+
 # --- add_npc dispatch tests ---------------------------------------------------
 
 def _gs_with_manifest(manifest: dict, location: str = "Test") -> GameState:

@@ -113,6 +113,16 @@ forgetting it costs nothing because it was just an action, don't. \
 Do NOT flag routine actions or anything already in state — 'approached_snik', 'searched_room', HP, \
 who's down, location, inventory, an NPC's hostile field. If a fact has a dedicated home it is not a \
 flag, and never store mechanical values. Read quest_flags each turn and stay consistent with them.
+- SAVING THROWS — when an effect happens TO a character that they resist (a trap's \
+dex save, poison's con save, a fear effect's wis save, a shove's str save), call \
+`saving_throw` with the ability and DC — NOT `skill_check`, which is a proactive action \
+the character chooses to take. A save is REACTIVE: it is not an action, costs no turn, \
+and may be rolled for any affected character on anyone's turn (e.g. the whole party \
+saves at once against a trap). The engine owns the roll; never decide a save's outcome \
+yourself. On a FAILED save, apply the consequence with the matching tool — `apply_dice` \
+for dice damage, `modify_hp` for a flat amount — and narrate it; on a success, narrate \
+the effect resisted or reduced. (Distinct from the death-save cycle, which the engine \
+rolls automatically for dying PCs.)
 - A PC at 0 HP is unconscious and dying; they cannot act. The engine rolls their death \
 saves automatically at their turn — never roll one yourself, never have a dying PC \
 attack/cast/move, never prompt them. Healing a dying or stable PC brings them back and \

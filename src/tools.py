@@ -307,6 +307,30 @@ TOOLS = [
         },
     },
     {
+        "name": "saving_throw",
+        "description": (
+            "Roll a saving throw for a character to RESIST an effect — d20 + ability "
+            "modifier vs a DC. Use this (NOT skill_check) whenever something happens TO a "
+            "character that they try to resist: a trap (usually dex), poison or disease "
+            "(con), a fear or charm effect (wis or cha), being shoved (str), and the like. "
+            "A saving throw is REACTIVE, not an action: it is not turn-guarded, costs no "
+            "action, and may be rolled for ANY affected character regardless of whose turn "
+            "it is. Proficient saves add proficiency automatically. The engine owns the "
+            "roll — never decide the outcome yourself; on a failed save, apply the "
+            "consequence with the matching tool (apply_dice for dice damage, modify_hp for "
+            "a flat amount)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the character making the save"},
+                "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha"},
+                "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
+            },
+            "required": ["character", "ability", "dc"],
+        },
+    },
+    {
         "name": "lookup_rule",
         "description": "Look up a rules topic (e.g. 'advantage', 'death_saves', 'spell_slots') in the SRD reference.",
         "input_schema": {
@@ -1118,6 +1142,21 @@ def dispatch(name: str, args: dict, state) -> dict:
         res = rules.skill_check(character, args["ability"], int(args["dc"]))
         if res["ok"]:
             state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
+        return res
+
+    if name == "saving_throw":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        # A saving throw is reactive — it resists an effect and is NOT the actor's
+        # action. Deliberately no turn/action/combat_starting guard: any affected
+        # character may save on anyone's turn (e.g. everyone saves vs a trap).
+        res = rules.saving_throw(character, args["ability"], int(args["dc"]))
+        if res["ok"]:
+            state.record(
+                f"{character.name} {args['ability']} save DC {args['dc']}: "
+                f"{'success' if res['success'] else 'failure'}"
+            )
         return res
 
     if name == "lookup_rule":

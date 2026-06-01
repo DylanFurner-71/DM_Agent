@@ -69,6 +69,7 @@ def _make_midgame_state() -> GameState:
         conditions=["prone"],
         spellcasting_ability="wis",
         spells=["guiding_bolt"],
+        save_proficiencies=["wis", "cha"],
     )
     # Wisp: full HP, slots intact, no conditions.
     gs.party["wisp"] = Character(
@@ -202,6 +203,15 @@ def test_conditions_preserved(tmp_path):
     loaded = _save_load(gs, tmp_path)
     assert loaded.party["aldric"].conditions == ["prone"]
     assert loaded.party["wisp"].conditions == []
+
+
+def test_save_proficiencies_preserved(tmp_path):
+    """save_proficiencies must survive the round-trip — a populated list and the
+    default empty list (absent-key default applies for older saves)."""
+    gs = _make_midgame_state()
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.party["aldric"].save_proficiencies == ["wis", "cha"]
+    assert loaded.party["wisp"].save_proficiencies == []
 
 
 # --- savegame branch guard ---------------------------------------------------
