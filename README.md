@@ -160,6 +160,11 @@ dying/dead/companion tags (toggle with `/hud` or start with `--no-hud`). In-sess
 commands include `/help`, `/state`, `/recap` (replay the story so far),
 `/roll <notation>` (open flavor rolls), `/undo` (rewind the last turn), and `/save`.
 The game **autosaves** to `saves/autosave.json` after every turn for crash-safe resume.
+Output is **color- and Markdown-rendered** with [`rich`](https://github.com/Textualize/rich)
+when stdout is a terminal — scene/recap prose as Markdown, NPC names colored by
+disposition, inline dice highlighted, and a *thinking* spinner over the pre-stream API
+latency — with `--plain` (auto-on when piped or non-tty) for clean text in pipes/CI.
+`rich` is a soft dependency: absent it, the app degrades to plain text.
 
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
@@ -198,7 +203,6 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 *CLI & quality-of-life (all terminal, mostly cheap):*
 
-- **Color & Markdown output:** render scene text, NPC names, and inline dice via `rich` (with a `--plain` fallback for pipes/CI), plus a spinner during the pre-stream API latency.
 - **`/cost` and `/export`:** summarize session tokens + estimated cost from the stats sidecar, and write the transcript to a shareable Markdown session log.
 - **Input history:** `readline` (stdlib) for arrow-key recall and line editing at the prompt.
 - **`--seed` flag:** fix the dice RNG for a whole session for reproducible demos and bug reports.

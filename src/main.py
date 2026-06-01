@@ -4,11 +4,13 @@ Usage:
     python -m src.main                              # load data/scenario.json
     python -m src.main data/my_scenario.json        # load a custom scenario
     python -m src.main savegame.json                # resume a saved game
-    python -m src.main data/my_scenario.json --debug
+    python -m src.main data/my_scenario.json --plain   # no color/Markdown/spinner
 
 In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /save [path]  /quit
 
-The game autosaves to saves/autosave.json after every turn; resume with
+Output is colorized and Markdown-rendered with `rich` when stdout is a terminal;
+pass --plain (or pipe/redirect output) for plain text. The game autosaves to
+saves/autosave.json after every turn; resume with
 `python -m src.main saves/autosave.json`.
 """
 
@@ -23,7 +25,9 @@ from pathlib import Path
 from .dm_agent import DMAgent
 from .game_state import GameState
 from .views import (
+    Spinner,
     _build_stats_trace,
+    banner,
     format_hud,
     print_full_trace,
     print_full_trace_verbose,
@@ -31,6 +35,8 @@ from .views import (
     print_recap,
     print_roll,
     print_state,
+    render_markdown,
+    set_plain,
 )
 
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
@@ -145,27 +151,38 @@ def main() -> None:
         action="store_true",
         help="don't show the compact status HUD before each prompt (toggle in-session with /hud)",
     )
+    parser.add_argument(
+        "--plain",
+        action="store_true",
+        help="disable color/Markdown/spinner (also auto-on when output isn't a terminal)",
+    )
     args = parser.parse_args()
+    set_plain(args.plain or not sys.stdout.isatty())
     state = GameState.load(args.scenario)
     agent = DMAgent(state)
 
-    # Stream narration to the terminal as it generates (perceived latency).
+    # A 'thinking' spinner fills the pre-stream API latency; the first narration
+    # token stops it, then prose streams straight to stdout for low perceived latency.
+    spinner = Spinner("  The DM considers…")
+
     def _emit_delta(text: str) -> None:
+        spinner.stop()
         sys.stdout.write(text)
         sys.stdout.flush()
     agent.on_narration_delta = _emit_delta
 
-    print("=" * 60)
-    print("  DM AGENT — type /help for commands")
-    print(f"  Scenario: {args.scenario}")
-    print("=" * 60)
+    banner(args.scenario)
     mode = _launch_mode(state)
     if mode == "resume":
         opening = _resume_opening(state)
         if opening:
-            print(f"\n{opening}\n")
+            print()
+            render_markdown(opening)
+            print()
     elif state.scene:
-        print(f"\n{state.scene}\n")
+        print()
+        render_markdown(state.scene)
+        print()
 
     hud_enabled = not args.no_hud
 
@@ -206,7 +223,8 @@ def main() -> None:
                 print("\n  ↩  Reverted the last turn.\n")
                 opening = _resume_opening(state)
                 if opening:
-                    print(f"{opening}\n")
+                    render_markdown(opening)
+                    print()
             else:
                 print("\n  Nothing to undo.\n")
             continue
@@ -255,8 +273,14 @@ def main() -> None:
         # Narration streams to stdout via on_narration_delta as it generates; we
         # just frame it with blank lines. (take_turn still returns the full text for
         # history/logging — it is not re-printed here, to avoid doubling.)
+        # The spinner covers the wait until the first streamed token, then stops.
         sys.stdout.write("\n")
-        agent.take_turn(player)
+        sys.stdout.flush()
+        spinner.start()
+        try:
+            agent.take_turn(player)
+        finally:
+            spinner.stop()
         sys.stdout.write("\n\n")
         sys.stdout.flush()
         _autosave(state)

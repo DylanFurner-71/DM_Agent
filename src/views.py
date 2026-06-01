@@ -8,8 +8,96 @@ write to stdout; the REPL controller lives in `main.py`.
 
 from __future__ import annotations
 
+import sys
+
 from .game_state import GameState
 from .rules import CONSUMABLES, roll
+
+# Optional rich rendering. The app degrades to plain text when rich isn't
+# installed, so it stays a soft dependency — every helper checks _rich_on().
+try:
+    from rich.console import Console
+    from rich.markdown import Markdown
+    from rich.markup import escape
+    _RICH = True
+except ImportError:  # pragma: no cover - exercised only without rich installed
+    _RICH = False
+
+_PLAIN = False          # forced off by --plain
+_CONSOLE: "Console | None" = None
+
+
+def set_plain(plain: bool) -> None:
+    """Force plain output (no color/Markdown/spinner). main() also passes True
+    automatically when stdout isn't a terminal, so pipes and CI stay clean."""
+    global _PLAIN
+    _PLAIN = plain
+
+
+def _rich_on() -> bool:
+    """True only when rich is installed, not forced plain, and stdout is a tty."""
+    return _RICH and not _PLAIN and sys.stdout.isatty()
+
+
+def _console() -> "Console":
+    global _CONSOLE
+    if _CONSOLE is None:
+        _CONSOLE = Console()
+    return _CONSOLE
+
+
+def render_markdown(text: str) -> None:
+    """Render prose (scene text, narration recap) as Markdown when rich is active,
+    else print it verbatim. Caller owns the surrounding blank lines."""
+    if not text:
+        return
+    if _rich_on():
+        _console().print(Markdown(text))
+    else:
+        print(text)
+
+
+def banner(scenario: str) -> None:
+    """The launch header."""
+    if _rich_on():
+        con = _console()
+        con.rule("[bold]DM AGENT[/bold]")
+        con.print(f"  type [cyan]/help[/cyan] for commands  ·  scenario: {escape(scenario)}")
+        con.rule()
+    else:
+        print("=" * 60)
+        print("  DM AGENT — type /help for commands")
+        print(f"  Scenario: {scenario}")
+        print("=" * 60)
+
+
+class Spinner:
+    """A pre-stream 'thinking' spinner. Active during the API latency before the
+    first narration token; the caller stops it when streaming begins. A no-op in
+    plain/non-tty mode or without rich, so it never interferes with piped output."""
+
+    def __init__(self, message: str):
+        self.message = message
+        self._status = None
+
+    def start(self) -> None:
+        if self._status is None and _rich_on():
+            self._status = _console().status(self.message, spinner="dots")
+            self._status.start()
+
+    def stop(self) -> None:
+        if self._status is not None:
+            self._status.stop()
+            self._status = None
+
+    def __enter__(self) -> "Spinner":
+        self.start()
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.stop()
+        return False
+
 
 _COMMANDS = [
     ("/help", "show this list of commands"),
@@ -38,8 +126,13 @@ def print_recap(state: GameState) -> None:
         print("\n  Nothing has happened yet.\n")
         return
     print("\n  — The story so far —\n")
-    for beat in state.narrative:
-        print(f"  {beat['text']}\n")
+    if _rich_on():
+        for beat in state.narrative:
+            render_markdown(beat["text"])
+            print()
+    else:
+        for beat in state.narrative:
+            print(f"  {beat['text']}\n")
 
 
 def print_roll(notation: str) -> None:
@@ -52,10 +145,20 @@ def print_roll(notation: str) -> None:
     except ValueError as e:
         print(f"  {e}\n")
         return
-    print(f"  🎲 {r.describe()}\n")
+    if _rich_on():
+        _console().print(f"  🎲 [bold cyan]{escape(r.describe())}[/bold cyan]\n")
+    else:
+        print(f"  🎲 {r.describe()}\n")
 
 
 def print_state(state: GameState) -> None:
+    if _rich_on():
+        _print_state_rich(state)
+    else:
+        _print_state_plain(state)
+
+
+def _print_state_plain(state: GameState) -> None:
     print(f"\n  Location: {state.location}")
     for c in state.party.values():
         slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
@@ -86,6 +189,52 @@ def print_state(state: GameState) -> None:
     else:
         print("  Combat: not in combat")
     print()
+
+
+def _print_state_rich(state: GameState) -> None:
+    """Same content as _print_state_plain, with colored names/dispositions. Every
+    interpolated string is escape()d so scenario/player text can't inject markup."""
+    con = _console()
+    con.print(f"\n  Location: [bold]{escape(state.location)}[/bold]")
+    for c in state.party.values():
+        slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
+        status = ", ".join(c.conditions) or "ok"
+        con.print(
+            f"  [bold cyan]{escape(c.name)}[/bold cyan]: "
+            f"HP {c.hp}/{c.max_hp} | slots {escape(slots)} | {escape(status)}"
+        )
+        def _fmt_item(item: str) -> str:
+            return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
+        inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
+        con.print(f"    Inventory: {escape(inv)}")
+        if c.spells:
+            ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
+            con.print(f"    Spells{escape(ability)}: {escape(', '.join(c.spells))}")
+    for n in state.npcs.values():
+        color = "red" if n.hostile else "green"
+        disposition = "hostile" if n.hostile else "friendly"
+        status = " [dim](down)[/dim]" if n.is_down else ""
+        con.print(
+            f"  [{color}]{escape(n.name)}[/{color}] (NPC){status}: "
+            f"HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}"
+        )
+        if n.inventory:
+            con.print(f"    Inventory: {escape(', '.join(n.inventory))}")
+    if state.combat_round > 0:
+        all_actors = {**state.party, **state.npcs}
+        order = " → ".join(
+            all_actors[k].name if k in all_actors else k
+            for k in state.combat_order
+        )
+        active_key = state.combat_order[state.combat_index]
+        active_name = all_actors[active_key].name if active_key in all_actors else active_key
+        con.print(
+            f"  Combat: round {state.combat_round} | {escape(order)} | "
+            f"up: [bold]{escape(active_name)}[/bold]"
+        )
+    else:
+        con.print("  Combat: not in combat")
+    con.print()
 
 
 def _hp_bar(hp: int, max_hp: int, width: int = 10) -> str:
