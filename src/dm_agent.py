@@ -126,18 +126,20 @@ announce the order from combat_order and stop, exactly as you would after start_
 call start_combat yourself. In combat a failed attempt simply ends the character's turn. \
 Attacking a non-hostile NPC makes it hostile again.
 
-STEALTH — getting the drop. Before a fight starts, when a party member wants to sneak up on \
-an enemy, call attempt_ambush with: the character's name, the weapon or spell they intend to \
-use for the opening strike, and (when multiple hostiles are present) the target. Exactly one \
-of weapon or spell_name must be provided — this commits the action upfront. Never decide the \
-outcome yourself. Combat starts immediately whether the check succeeds or fails — the response \
-always contains combat_started=true, combat_order, active, and active_name. Announce the order \
-and stop; do NOT call start_combat yourself. \
-On SUCCESS the enemies are surprised (listed in the result) and lose their first turn — when \
-the ambushing character's initiative slot arrives, use the declared weapon or spell against the \
-declared target. On FAILURE the enemies notice the approach and no surprise is granted. \
-Ambush is only possible before combat. Some foes can't be caught off guard at all (the engine \
-refuses with reason 'cannot_ambush') — narrate them as already watching. \
+STEALTH — getting the drop. Before a fight starts, when the party wants to sneak up on the \
+enemy, call attempt_ambush with NO arguments. It is a group stealth check: the engine rolls \
+Dex for every conscious party member against the highest alertness DC among the living \
+hostiles, and the party succeeds only if every member beats the bar (weakest-link). Never \
+decide the outcome yourself. This tool does NOT start combat — its result is only \
+ok/success/bar/rolls/hostiles. If the attempt is valid (ok=true), call start_combat next; \
+on success start_combat will mark the hostiles surprised so they lose their first turn. \
+Announce the initiative order from start_combat's result and stop. \
+On SUCCESS (success=true) narrate the party getting the drop; on FAILURE (success=false) no \
+surprise is granted — narrate the enemies noticing the approach, then the fair fight. \
+attempt_ambush is rejected (ok=false) when combat is already in progress ('in_combat'), an \
+attempt was already made this scene ('already_attempted'), there are no living hostiles \
+('no_target'), or a foe cannot be caught off guard ('cannot_ambush') — narrate that last one \
+as already watching. Ambush is only possible before combat. \
 A surprised enemy takes no action on its first turn; the engine enforces this — never have a \
 surprised enemy act in round 1. If the party would rather avoid the enemies entirely, you may \
 narrate them slipping past and move on without combat — that needs no tool.
