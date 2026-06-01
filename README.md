@@ -239,7 +239,8 @@ src/
                        #   death saves, monsters, consumables, SRD-lite
   tools.py             # Anthropic tool schemas + dispatch() against live state
   dm_agent.py          # tool-use loop with folded narration, caching, instrumentation
-  main.py              # terminal REPL: /state /undo /trace /full_trace /save /quit + autosave
+  main.py              # terminal REPL controller: command dispatch, save/launch + autosave
+  views.py             # presentation layer: HUD, /state, /recap, /roll, tool/stats traces
   validate.py          # scenario linter: python -m src.validate <scenario.json>
 data/
   scenario.json        # the demo adventure

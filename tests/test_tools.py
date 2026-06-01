@@ -682,7 +682,7 @@ def test_snapshot_surfaces_flags():
     import io, contextlib, json as _json
     from unittest.mock import MagicMock
     from src.dm_agent import DMAgent
-    from src.main import print_state
+    from src.views import print_state
 
     gs = GameState(location="Test Hall")
     gs.party["aldric"] = Character(name="Aldric")

@@ -1,4 +1,4 @@
-"""Tests for the compact status HUD (src.main.format_hud) — no API, no I/O.
+"""Tests for the compact status HUD (src.views.format_hud) — no API, no I/O.
 
 The HUD is pure reformatting of state /state already exposes, so it's tested as a
 string builder: HP bars, slots, conditions, and the in-combat initiative line with
@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.main import format_hud, _hp_bar, _combatant_marker
+from src.views import format_hud, _hp_bar, _combatant_marker
 from src.game_state import Character, NPC, GameState
 
 
