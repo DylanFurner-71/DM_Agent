@@ -32,6 +32,7 @@ from . import tools
 MODEL = "claude-sonnet-4-6"
 MAX_TOOL_HOPS = 12      # safety cap on tool calls per _execute call
 NARRATION_WINDOW = 4    # past (player_input, narration) pairs kept in model context
+UNDO_DEPTH = 20         # how many completed turns /undo can rewind
 
 SYSTEM_PROMPT = """\
 You are the Dungeon Master for a single-session tabletop RPG. You narrate vividly \
@@ -395,6 +396,7 @@ class DMAgent:
         self.tool_trace: list[dict] = []  # tool calls from the last turn
         self.api_stats: list[dict] = []   # per-API-call timing/usage for the current turn
         self.full_trace: list[dict] = []  # cumulative [{turn, calls, api_calls}] across all turns; read by /trace
+        self._undo_stack: list[dict] = []  # pre-turn snapshots for /undo (bounded to UNDO_DEPTH)
         self.narration_history: list[tuple[str, str]] = []  # rolling (player_input, narration) window
         # Seed the rolling window from the transcript tail so a resumed session
         # starts with the same recent-narrative context as a live one.
@@ -784,6 +786,44 @@ class DMAgent:
             return f"{name}, you're up — what do you do?"
         return f"{name}, what do you do?"
 
+    def _push_undo(self) -> None:
+        """Snapshot pre-turn state so /undo can rewind the last completed turn.
+
+        Captures the full game state (via to_dict, so it round-trips losslessly)
+        plus the agent-side rolling histories that live OUTSIDE GameState — the
+        narration window and the length of the cumulative tool trace. Bounded to
+        UNDO_DEPTH so a long session doesn't grow the stack without limit.
+
+        The state dict is deep-copied via a JSON round-trip — to_dict returns live
+        references to the state's mutable lists/dicts, so without this the very
+        next append (narrative, log, quest_flags) would mutate the snapshot too.
+        This mirrors exactly what save→load does on disk.
+        """
+        self._undo_stack.append({
+            "state": json.loads(json.dumps(self.state.to_dict())),
+            "narration_history": list(self.narration_history),
+            "full_trace_len": len(self.full_trace),
+        })
+        if len(self._undo_stack) > UNDO_DEPTH:
+            self._undo_stack = self._undo_stack[-UNDO_DEPTH:]
+
+    def undo(self) -> bool:
+        """Rewind to the state before the most recent completed turn.
+
+        Restores the game state IN PLACE (so external references stay valid) and
+        the agent-side histories, then drops the next-turn context so the rebuilt
+        window matches the rewound narration. Returns False when there is nothing
+        left to undo.
+        """
+        if not self._undo_stack:
+            return False
+        snap = self._undo_stack.pop()
+        self.state.restore(snap["state"])
+        self.narration_history = list(snap["narration_history"])
+        del self.full_trace[snap["full_trace_len"]:]
+        self.messages = []
+        return True
+
     def take_turn(self, player_input: str) -> str:
         """Resolve the player's action, then auto-run any following NPC turns.
 
@@ -801,6 +841,7 @@ class DMAgent:
           - Combat-over / end-of-run: dedicated _narrate_combat_over / _narrate_epilogue.
         Returns narration joined with the engine-sourced closing prompt.
         """
+        self._push_undo()  # snapshot pre-turn state so /undo can rewind this turn
         self.tool_trace = []
         self.api_stats = []
         self.state.turn += 1

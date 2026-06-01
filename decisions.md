@@ -550,3 +550,37 @@ turn. The hard parts (declared-only, gating, once, save+damage math) are unit-te
 the model's choice of when to spring a hazard is soft. `demo_saving_throws` is converted from
 the prose-DC stopgap to a real manifest, retaining one bare `saving_throw` (the fear ward) to
 show the distinction: not every save is a hazard.
+
+## ADR: /undo and per-turn autosave
+
+**Status:** Accepted
+
+**Context:** A single-session game with an LLM in the loop will occasionally produce a turn
+the player wants to take back — a misread intent, an unlucky narration, a fat-fingered input
+— and a crash or closed terminal mid-session lost all progress (the only persistence was the
+manual `/save`). `GameState` already round-trips losslessly through `to_dict`/`from_dict`
+(proven by `test_persistence`), so both rewind and crash-safety are mostly plumbing on top of
+machinery that already exists.
+
+**Decision.** Two REPL-layer features, no new engine mechanics. (1) **`/undo`** — `DMAgent`
+pushes a pre-turn snapshot at the top of `take_turn` into a bounded `_undo_stack`
+(`UNDO_DEPTH = 20`). A snapshot is the state `to_dict()` *deep-copied through a JSON round-trip*
+(`to_dict` returns live references to the state's mutable lists, so the next `narrative`/`log`
+append would otherwise mutate the snapshot) plus the two rolling histories that live *outside*
+`GameState` — the narration window (copied) and the length of the cumulative tool trace
+(truncated on undo). `undo()` restores via a new `GameState.restore(d)` that does
+`self.__dict__.update(GameState.from_dict(d).__dict__)` — mutating the state object **in place**
+so existing references (the REPL's local, `agent.state`) stay valid without reassignment.
+(2) **Autosave** — after every `take_turn` (and after an `/undo`) the REPL writes
+`saves/autosave.json`, state only (no trace sidecar), overwriting the previous turn; resume with
+`python -m src.main saves/autosave.json`. Autosave is best-effort: a disk error is reported but
+never raised, so it can't end the session.
+
+**Consequences.** Undo lives in the agent (it owns the turn lifecycle and the narration/trace
+histories), autosave lives in `main.py` (file I/O is a REPL concern, kept out of the agent so the
+no-API tests stay pure). Snapshots are full state copies, not deltas — simple and correct, and
+bounded depth caps memory; a long session keeps only the last 20. Transient runtime flags
+(`combat_starting`, `pending_ambush`, `ambush_attempted`) are not serialized and reset to their
+defaults on restore, which is correct at a turn boundary. `restore` is the in-place twin of
+`load`: both go through `from_dict`, but `load` builds a new object while `restore` keeps the
+identity. Scope kept to whole-turn granularity — there is no mid-turn or redo stack.

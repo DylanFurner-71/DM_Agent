@@ -144,7 +144,8 @@ template-based NPC spawning from the scenario file.
 the agent decided each turn, alongside a per-call stats sidecar capturing latency and
 token usage — including prompt-cache reads and writes. In-session commands include
 `/help`, `/state`, `/recap` (replay the story so far), `/roll <notation>` (open
-flavor rolls), and `/save`.
+flavor rolls), `/undo` (rewind the last turn), and `/save`. The game **autosaves**
+to `saves/autosave.json` after every turn for crash-safe resume.
 
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
@@ -174,10 +175,6 @@ which sets the direction for the latency work below.
 
 The core resolution gaps worth closing first:
 
-- **`/undo` + per-turn autosave:** snapshot `GameState` (via the existing
-  `to_dict`/`from_dict`) into a ring buffer each turn so a turn can be reverted, and
-  autosave every turn for crash-safe resume. High play-quality payoff on plumbing
-  that already exists.
 - **Scenario validator:** a `python -m src.validate <scenario.json>` lint that checks
   every exit `to` points to a real scene, NPC `template`s exist in `MONSTERS`, loot
   ids are known, monster weapons are in `WEAPONS`, answer-gates carry `denied` text,
@@ -227,7 +224,7 @@ src/
                        #   death saves, monsters, consumables, SRD-lite
   tools.py             # Anthropic tool schemas + dispatch() against live state
   dm_agent.py          # tool-use loop with folded narration, caching, instrumentation
-  main.py              # terminal REPL: /state /trace /full_trace /save /quit
+  main.py              # terminal REPL: /state /undo /trace /full_trace /save /quit + autosave
 data/
   scenario.json        # the demo adventure
   demo_*.json          # per-feature demo scenarios

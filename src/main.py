@@ -6,7 +6,10 @@ Usage:
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --debug
 
-In-session commands: /help  /state  /recap  /roll  /trace  /full_trace  /save [path]  /quit
+In-session commands: /help  /state  /recap  /roll  /undo  /trace  /full_trace  /save [path]  /quit
+
+The game autosaves to saves/autosave.json after every turn; resume with
+`python -m src.main saves/autosave.json`.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from .rules import CONSUMABLES, roll
 
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
 SAVE_DIR = Path("saves")
+AUTOSAVE_NAME = "autosave"   # rolling per-turn save in SAVE_DIR (saves/autosave.json)
 
 
 def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR) -> Path:
@@ -95,11 +99,25 @@ _COMMANDS = [
     ("/state", "show party HP, slots, inventory, NPCs, and combat status"),
     ("/recap", "replay the story so far (the DM's narration beats)"),
     ("/roll <notation>", "roll dice openly, e.g. /roll 2d6+3 (flavor only — not enforced state)"),
+    ("/undo", "rewind the last turn (the game autosaves after every turn)"),
     ("/trace", "show the tools the agent called each turn"),
     ("/full_trace", "show the tool trace with per-call timing and token usage"),
     ("/save [path]", "save the game (prompts for a name if omitted)"),
     ("/quit", "end the session"),
 ]
+
+
+def _autosave(state) -> None:
+    """Refresh the rolling per-turn autosave. Best-effort: never interrupts play.
+
+    Writes only the game state (no trace sidecars) to saves/autosave.json,
+    overwriting the previous turn's snapshot. Resume with
+    `python -m src.main saves/autosave.json`. Disk errors are reported quietly
+    but never raise, so a failed autosave can't end the session.
+    """
+    status, val = _do_save(state, AUTOSAVE_NAME, overwrite=True, trace=[])
+    if status == "error":
+        print(f"  (autosave failed: {val})")
 
 
 def print_help() -> None:
@@ -296,6 +314,16 @@ def main() -> None:
         if player.startswith("/roll"):
             print_roll(player.split(maxsplit=1)[1].strip() if " " in player else "")
             continue
+        if player == "/undo":
+            if agent.undo():
+                _autosave(state)
+                print("\n  ↩  Reverted the last turn.\n")
+                opening = _resume_opening(state)
+                if opening:
+                    print(f"{opening}\n")
+            else:
+                print("\n  Nothing to undo.\n")
+            continue
         if player == "/trace":
             print_full_trace(agent.full_trace)
             continue
@@ -345,6 +373,7 @@ def main() -> None:
         agent.take_turn(player)
         sys.stdout.write("\n\n")
         sys.stdout.flush()
+        _autosave(state)
         if state.game_over:
             print("— The End —")
             try:

@@ -169,6 +169,19 @@ class GameState:
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
+    def restore(self, d: dict) -> None:
+        """Replace every field in place from a serialized dict (used by /undo).
+
+        Mutates this instance rather than returning a new object so existing
+        references (the REPL's local, the agent's self.state) stay valid after a
+        rewind. Round-trips losslessly through from_dict/to_dict, so a snapshot
+        taken with to_dict restores exactly — including live NPC HP, spent slots,
+        and mid-combat pointers. Transient runtime flags (combat_starting,
+        pending_ambush, ambush_attempted) are not serialized and reset to their
+        defaults, which is correct at a turn boundary.
+        """
+        self.__dict__.update(GameState.from_dict(d).__dict__)
+
     @classmethod
     def from_dict(cls, d: dict) -> "GameState":
         current_scene = d.get("current_scene", "")
