@@ -32,6 +32,13 @@
     "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
   }
 }
+    },
+    "iron_chamber": {
+      "location": "The Ashen Barrow — The Iron Chamber",
+      "scene": "Beyond the iron door the air turns to grit and grave-cold. The chamber is a perfect circle of black stone, its floor ankle-deep in fine grey ash that drinks every footfall. There is no guardian here — only a stillness centuries deep. At the center, on a throne of fused bone, rests a reliquary of tarnished silver, half-drowned in ash, the thing this barrow was raised to keep. The journal's warning has spent itself; whatever once kept watch is long gone to dust. The reliquary is yours for the taking, and beyond it the barrow holds no further depth.",
+      "npcs": {},
+      "loot": ["silver_reliquary"],
+      "exits": {}
     }
   },
   "party": {
