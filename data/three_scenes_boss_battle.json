@@ -21,22 +21,35 @@
                 "the passage descending deeper into the barrow": "ember_chamber"
             }
         },
-            "ember_chamber": {
-      "location": "The Ashen Barrow — The Ember Chamber",
-      "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
-      "npcs": {
-        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "max_hp": 18, "alertness_dc": 14},
-        "narl": { "template": "goblin", "name": "Narl", "hostile": true, "alertness_dc": 12 }
-      },
-      "loot": ["healing_potion"],
-      "exits": {
-  "the iron door, banded and glyph-marked": {
-    "to": "iron_chamber",
-    "requires_answer": "ashfall",
-    "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
-  }
-}
-    },
+        "ember_chamber": {
+            "location": "The Ashen Barrow — The Ember Chamber",
+            "scene": "The tunnel opens into a low, wide chamber where a stone brazier burns with a sourceless orange flame, throwing restless shadows that make the walls seem to breathe. Two goblins crouch by the far wall, whetstones rasping against notched blades, muttering to one another in low gutturals — they haven't looked up yet. Crude glyphs are gouged into the stone above a heavy door, banded with iron, set in the far wall. Then the scraping stops.",
+            "npcs": {
+                "grik": {
+                    "template": "goblin",
+                    "name": "Grik",
+                    "hostile": true,
+                    "max_hp": 18,
+                    "alertness_dc": 1
+                },
+                "narl": {
+                    "template": "goblin",
+                    "name": "Narl",
+                    "hostile": true,
+                    "alertness_dc": 1
+                }
+            },
+            "loot": [
+                "healing_potion"
+            ],
+            "exits": {
+                "the iron door, banded and glyph-marked": {
+                    "to": "iron_chamber",
+                    "requires_answer": "ashfall",
+                    "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
+                }
+            }
+        },
         "iron_chamber": {
             "location": "The Ashen Barrow — The Iron Chamber",
             "scene": "Beyond the iron door the air turns to grit and grave-cold. The chamber is a perfect circle of black stone, its floor ankle-deep in fine grey ash that drinks every footfall. At its center, on a throne of fused bone, sits a figure wound in tarnished mail and centuries of dust — the Ash Warden, the thing the dead scout's journal feared. It does not stir. But the moment Aldric's torchlight spills across the threshold, the warden's hollow sockets kindle with a slow answering ember and a sound like settling cinders climbs out of its ribs — exactly as the journal warned: keep the flame away. Behind the throne, half-drowned in ash, a reliquary of tarnished silver catches the light, the thing this barrow was raised to keep.",
