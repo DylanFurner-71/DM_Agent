@@ -6,7 +6,7 @@ Usage:
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --debug
 
-In-session commands: /help  /state  /recap  /roll  /undo  /trace  /full_trace  /save [path]  /quit
+In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /save [path]  /quit
 
 The game autosaves to saves/autosave.json after every turn; resume with
 `python -m src.main saves/autosave.json`.
@@ -97,6 +97,7 @@ def _do_save(
 _COMMANDS = [
     ("/help", "show this list of commands"),
     ("/state", "show party HP, slots, inventory, NPCs, and combat status"),
+    ("/hud", "toggle the compact status HUD shown before each prompt"),
     ("/recap", "replay the story so far (the DM's narration beats)"),
     ("/roll <notation>", "roll dice openly, e.g. /roll 2d6+3 (flavor only — not enforced state)"),
     ("/undo", "rewind the last turn (the game autosaves after every turn)"),
@@ -181,6 +182,75 @@ def print_state(state: GameState) -> None:
     else:
         print("  Combat: not in combat")
     print()
+
+
+def _hp_bar(hp: int, max_hp: int, width: int = 10) -> str:
+    """A compact filled/empty HP bar. A sliver always shows while hp > 0 so a
+    badly-wounded actor never reads as full-empty until they're actually down."""
+    if max_hp <= 0:
+        return "░" * width
+    filled = max(0, min(width, round(hp / max_hp * width)))
+    if hp > 0 and filled == 0:
+        filled = 1
+    return "█" * filled + "░" * (width - filled)
+
+
+def _combatant_marker(actor, key: str, state: GameState) -> str:
+    """Initiative-order marker: dying/dead for PCs, down/ally for NPCs ('' if none)."""
+    if key in state.party:
+        if getattr(actor, "dead", False):
+            return "(dead)"
+        if actor.hp <= 0:
+            return "(dying)"
+        return ""
+    if actor.is_down:
+        return "(down)"
+    if getattr(actor, "companion", False):
+        return "(ally)"
+    return ""
+
+
+def format_hud(state: GameState, width: int = 60) -> str:
+    """A compact status header for display before each prompt.
+
+    Shows each PC's HP bar, spell slots, and conditions, and — in combat — the
+    round plus the initiative order with the active actor marked (▶) and
+    dying/dead/companion markers. Pure reformatting of data `/state` already
+    exposes; returns "" for an empty party so the caller can skip printing.
+    """
+    pcs = list(state.party.values())
+    if not pcs:
+        return ""
+    namew = max(len(c.name) for c in pcs)
+    rule = "─" * width
+    lines = [rule]
+    for c in pcs:
+        seg = f"  {c.name:<{namew}}  {_hp_bar(c.hp, c.max_hp)} {c.hp:>3}/{c.max_hp:<3}"
+        slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
+        if slots:
+            seg += f"  {slots}"
+        tags = []
+        if c.dead:
+            tags.append("dead")
+        elif c.hp <= 0:
+            tags.append("dying")
+        tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
+        if tags:
+            seg += f"  [{', '.join(tags)}]"
+        lines.append(seg)
+    if state.combat_round > 0 and state.combat_order:
+        all_actors = {**state.party, **state.npcs}
+        active_key = state.combat_order[state.combat_index]
+        parts = []
+        for k in state.combat_order:
+            a = all_actors.get(k)
+            label = (a.name if a else k) + (_combatant_marker(a, k, state) if a else "")
+            if k == active_key:
+                label = f"▶{label}"
+            parts.append(label)
+        lines.append(f"  ⚔ Round {state.combat_round}: " + " → ".join(parts))
+    lines.append(rule)
+    return "\n".join(lines)
 
 
 def _launch_mode(gs) -> str:
@@ -269,6 +339,11 @@ def main() -> None:
         default=DEFAULT_SCENARIO,
         help="path to a scenario or saved-game JSON (default: data/scenario.json)",
     )
+    parser.add_argument(
+        "--no-hud",
+        action="store_true",
+        help="don't show the compact status HUD before each prompt (toggle in-session with /hud)",
+    )
     args = parser.parse_args()
     state = GameState.load(args.scenario)
     agent = DMAgent(state)
@@ -291,7 +366,13 @@ def main() -> None:
     elif state.scene:
         print(f"\n{state.scene}\n")
 
+    hud_enabled = not args.no_hud
+
     while True:
+        if hud_enabled:
+            hud = format_hud(state)
+            if hud:
+                print(hud)
         try:
             player = input("> ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -304,6 +385,10 @@ def main() -> None:
             break
         if player == "/help":
             print_help()
+            continue
+        if player == "/hud":
+            hud_enabled = not hud_enabled
+            print(f"  HUD {'on' if hud_enabled else 'off'}.\n")
             continue
         if player == "/state":
             print_state(state)

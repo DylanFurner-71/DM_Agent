@@ -153,10 +153,13 @@ fallback); exit status is non-zero only on errors.
 
 **Observability & CLI.** A tool trace (`/trace`, `/full_trace`) shows exactly what
 the agent decided each turn, alongside a per-call stats sidecar capturing latency and
-token usage — including prompt-cache reads and writes. In-session commands include
-`/help`, `/state`, `/recap` (replay the story so far), `/roll <notation>` (open
-flavor rolls), `/undo` (rewind the last turn), and `/save`. The game **autosaves**
-to `saves/autosave.json` after every turn for crash-safe resume.
+token usage — including prompt-cache reads and writes. A compact **status HUD**
+prints before each prompt — per-PC HP bars, spell slots, and conditions, plus, in
+combat, the round and initiative order with the active actor marked and
+dying/dead/companion tags (toggle with `/hud` or start with `--no-hud`). In-session
+commands include `/help`, `/state`, `/recap` (replay the story so far),
+`/roll <notation>` (open flavor rolls), `/undo` (rewind the last turn), and `/save`.
+The game **autosaves** to `saves/autosave.json` after every turn for crash-safe resume.
 
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
@@ -196,7 +199,6 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 *CLI & quality-of-life (all terminal, mostly cheap):*
 
-- **Status HUD:** a compact header/footer each prompt — party HP bars, slots, conditions, and in combat the round + initiative order with the active actor highlighted and dying/dead/companion markers. Reformats data `/state` already has.
 - **Color & Markdown output:** render scene text, NPC names, and inline dice via `rich` (with a `--plain` fallback for pipes/CI), plus a spinner during the pre-stream API latency.
 - **`/cost` and `/export`:** summarize session tokens + estimated cost from the stats sidecar, and write the transcript to a shareable Markdown session log.
 - **Input history:** `readline` (stdlib) for arrow-key recall and line editing at the prompt.

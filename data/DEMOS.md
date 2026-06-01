@@ -9,8 +9,9 @@ python -m src.main data/demos/demo_combat.json
 ```
 
 In every session you can use the CLI commands to observe what the engine did:
-`/help`, `/state` (HP, slots, inventory, NPCs, combat order), `/recap` (story so
-far), `/roll <notation>` (open flavor roll), `/undo` (rewind the last turn),
+`/help`, `/state` (HP, slots, inventory, NPCs, combat order), `/hud` (toggle the
+compact status header shown before each prompt), `/recap` (story so far),
+`/roll <notation>` (open flavor roll), `/undo` (rewind the last turn),
 `/trace` (tools called per turn), `/full_trace` (adds timing + token usage),
 `/save [name]`, `/quit`.
 
