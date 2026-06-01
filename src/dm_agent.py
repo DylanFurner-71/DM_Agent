@@ -332,7 +332,10 @@ class DMAgent:
                 if reinf:
                     snap["reinforcements"] = reinf
         if s.quest_flags:
-            snap["quest_flags"] = s.quest_flags
+            # Redact string-valued flags (e.g. answer-gate passwords) the same way
+            # get_state does — this snapshot is injected into model context every
+            # turn, so a raw string secret here would leak continuously.
+            snap["quest_flags"] = tools._redact_quest_flags(s.quest_flags)
         if s.combat_round > 0:
             all_actors = {**s.party, **s.npcs}
             snap["combat"] = {

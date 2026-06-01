@@ -3333,7 +3333,12 @@ def test_clear():
 
 
 def test_snapshot_surfaces_flags():
-    """_state_snapshot includes quest_flags for the model; print_state (/state) omits them."""
+    """_state_snapshot includes quest_flags for the model; print_state (/state) omits them.
+
+    String-valued flags are redacted the same way get_state redacts them — the
+    snapshot is injected every turn, so a raw string secret here would leak
+    continuously. Boolean/numeric flags pass through so the model can read them.
+    """
     import io, contextlib, json as _json
     from unittest.mock import MagicMock
     from src.dm_agent import DMAgent
@@ -3345,11 +3350,13 @@ def test_snapshot_surfaces_flags():
     tools.dispatch("set_quest_flag", {"flag": "oracle_spoke", "value": "warned"}, gs)
 
     agent = DMAgent(gs, client=MagicMock())
-    snap = _json.loads(agent._state_snapshot())
+    raw_snap = agent._state_snapshot()
+    snap = _json.loads(raw_snap)
 
-    # Model's per-turn context must contain both flags.
+    # Boolean flags pass through; string flags are redacted (no secret leak).
     assert snap["quest_flags"]["lever_pulled"] is True
-    assert snap["quest_flags"]["oracle_spoke"] == "warned"
+    assert snap["quest_flags"]["oracle_spoke"] == "<redacted>"
+    assert "warned" not in raw_snap
 
     # Player-facing /state must not expose any quest flag (flags may be DM-secrets).
     buf = io.StringIO()
@@ -3358,6 +3365,23 @@ def test_snapshot_surfaces_flags():
     player_view = buf.getvalue()
     assert "lever_pulled" not in player_view
     assert "oracle_spoke" not in player_view
+
+
+def test_snapshot_redacts_string_password_flag():
+    """A password accidentally stored as a string flag never reaches the per-turn
+    snapshot verbatim — regression for the get_state/snapshot redaction parity gap."""
+    import json as _json
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Vault")
+    gs.party["aldric"] = Character(name="Aldric")
+    gs.quest_flags["secret_phrase"] = "ashfall"
+
+    agent = DMAgent(gs, client=MagicMock())
+    raw_snap = agent._state_snapshot()
+    assert "ashfall" not in raw_snap
+    assert _json.loads(raw_snap)["quest_flags"]["secret_phrase"] == "<redacted>"
 
 
 # --- narrative persistence & launch-mode tests --------------------------------
