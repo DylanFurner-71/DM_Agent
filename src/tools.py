@@ -1002,6 +1002,14 @@ def dispatch(name: str, args: dict, state) -> dict:
 
     if name == "get_state":
         d = state.to_dict()
+        # Drop the unbounded session history. transcript/narrative/log grow every
+        # turn and the model never acts on them (it has the rolling narration window),
+        # but to_dict carries them for SAVES. Re-injecting them here cost ~4.5k tokens
+        # late in a profiled run (successful_end_trigger turn 11 = 20.4s, 2.5x avg) and
+        # rode along through every later hop of that turn. Extends the lean-context
+        # principle (DECISIONS §3) already applied to `scenes`; saves stay complete.
+        for _hist in ("transcript", "narrative", "log"):
+            d.pop(_hist, None)
         d["quest_flags"] = _redact_quest_flags(d.get("quest_flags", {}))
         if state.scenes:
             del d["scenes"]   # omit verbose definitions from model context

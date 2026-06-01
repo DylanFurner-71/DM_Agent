@@ -1905,6 +1905,42 @@ def test_get_state_surfaces_available_scenes():
     assert "scenes" not in state_dict   # omitted to keep context lean
 
 
+def test_get_state_omits_unbounded_history():
+    """get_state must not echo transcript/narrative/log — they grow every turn and the
+    model never acts on them, so re-injecting them only bloats context and latency.
+    The live numbers the model DOES need (HP, slots, flags) must still be present."""
+    gs = GameState(location="Hall")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=20, spell_slots={1: 2})
+    gs.transcript = [{"kind": "player", "text": "x"}, {"kind": "dm", "text": "y"}]
+    gs.narrative = [{"turn": 1, "text": "y"}]
+    gs.log = ["[turn 1] something happened"]
+    gs.quest_flags = {"door_opened": True}
+
+    state_dict = tools.dispatch("get_state", {}, gs)["state"]
+
+    assert "transcript" not in state_dict
+    assert "narrative" not in state_dict
+    assert "log" not in state_dict
+    # The numbers the model acts on survive the trim.
+    assert state_dict["party"]["aldric"]["hp"] == 20
+    assert state_dict["party"]["aldric"]["spell_slots"] == {1: 2}
+    assert state_dict["quest_flags"] == {"door_opened": True}
+
+
+def test_get_state_history_trim_does_not_touch_saves():
+    """The trim is model-facing only — to_dict (the save path) keeps full history."""
+    gs = GameState(location="Hall")
+    gs.party["aldric"] = Character(name="Aldric")
+    gs.transcript = [{"kind": "player", "text": "x"}]
+    gs.narrative = [{"turn": 1, "text": "y"}]
+    gs.log = ["[turn 1] z"]
+    tools.dispatch("get_state", {}, gs)  # must not mutate state
+    saved = gs.to_dict()
+    assert saved["transcript"] == [{"kind": "player", "text": "x"}]
+    assert saved["narrative"] == [{"turn": 1, "text": "y"}]
+    assert saved["log"] == ["[turn 1] z"]
+
+
 def test_add_npc_combat_initiatives_round_trips_through_json():
     """combat_initiatives is preserved across save/load."""
     rules.seed(0)
