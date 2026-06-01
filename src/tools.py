@@ -236,31 +236,21 @@ TOOLS = [
     {
         "name": "attempt_ambush",
         "description": (
-            "Before combat, attempt a stealth ambush: one party member sneaks up on a target using "
-            "a declared weapon or spell. The engine rolls that character's Dex check vs the highest "
-            "alertness DC and records the result. Never decide the outcome yourself. "
-            "Combat starts immediately whether the check succeeds or fails — the response contains "
-            "combat_started=true, combat_order, active, and active_name. Announce the order and stop; "
-            "do NOT call start_combat yourself. "
-            "On SUCCESS hostiles are surprised (listed in result) and lose their first turn — on the "
-            "ambushing character's first combat turn, use the declared weapon or spell against the target. "
-            "On FAILURE enemies notice the approach — no surprise. "
+            "Before combat, attempt a group stealth ambush. The engine rolls a Dex check for every "
+            "conscious party member vs the highest alertness DC among living hostiles. "
+            "SUCCESS requires every member to beat the bar (weakest-link). "
+            "On success, pending_ambush is set; call start_combat next — the engine will mark "
+            "hostiles as surprised so they lose their first turn. "
+            "On failure, no surprise — call start_combat for a fair fight. "
+            "This tool does NOT start combat; call start_combat separately. "
             "Rejected (ok=false) when: combat is already in progress ('in_combat'); an attempt was "
             "already made this scene ('already_attempted'); no living hostiles present ('no_target'); "
             "any hostile is always-alert ('cannot_ambush'). "
-            "Exactly one of weapon or spell_name must be provided. "
-            "target is required when multiple hostiles are present."
+            "ok=True with success=False means the check was valid but the party failed stealth."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {
-                "character":   {"type": "string", "description": "Name of the party member attempting the ambush."},
-                "target":      {"type": "string", "description": "Name of the NPC to ambush. Required when multiple hostiles are present; omit when only one hostile exists."},
-                "weapon":      {"type": "string", "description": "Weapon to use for the opening strike. Must be in the character's inventory. Mutually exclusive with spell_name."},
-                "spell_name":  {"type": "string", "description": "Spell to cast as the opening strike. Mutually exclusive with weapon."},
-                "spell_level": {"type": "integer", "description": "Slot level for the spell. Required when spell_name is provided."},
-            },
-            "required": ["character"],
+            "properties": {},
         },
     },
     {
@@ -854,87 +844,32 @@ def dispatch(name: str, args: dict, state) -> dict:
         if any(h.alertness_dc is None for h in hostiles):
             return {"ok": False, "reason": "cannot_ambush", "error": "One or more foes are always alert — cannot get the drop on them."}
 
-        # Validate character.
-        character_arg = (args.get("character") or "").strip()
-        if not character_arg:
-            return {"ok": False, "error": "character is required."}
-        character = state.find_actor(character_arg)
-        if not character or not hasattr(character, "proficiency_bonus"):
-            return {"ok": False, "error": f"Unknown party member {character_arg!r}; call get_state."}
-        if character.is_down:
-            return {"ok": False, "error": f"{character.name} is down and cannot attempt an ambush."}
-
-        # Validate weapon or spell (exactly one required).
-        weapon_arg = (args.get("weapon") or "").strip()
-        spell_name_arg = (args.get("spell_name") or "").strip()
-        spell_level_arg = args.get("spell_level")
-        if not weapon_arg and not spell_name_arg:
-            return {"ok": False, "error": "Either weapon or spell_name must be provided."}
-        if weapon_arg and spell_name_arg:
-            return {"ok": False, "error": "Provide either weapon or spell_name, not both."}
-        if weapon_arg:
-            weapon_key = weapon_arg.lower()
-            if weapon_key not in rules.WEAPONS:
-                return {"ok": False, "error": f"Unknown weapon {weapon_arg!r}. Known: {', '.join(rules.WEAPONS)}."}
-            inv_lower = [i.strip().lower() for i in character.inventory]
-            if weapon_key not in inv_lower:
-                available = [i for i in character.inventory if i.strip().lower() in rules.WEAPONS]
-                avail_str = ", ".join(available) if available else "none"
-                return {"ok": False, "error": f"{character.name} has no {weapon_arg}; available weapons: {avail_str}."}
-        if spell_name_arg:
-            if spell_level_arg is None:
-                return {"ok": False, "error": "spell_level is required when spell_name is provided."}
-            spell_key = spell_name_arg.strip().lower().replace(" ", "_")
-            known = getattr(character, "spells", None)
-            if known is not None and spell_key not in known:
-                return {"ok": False, "error": f"{character.name} does not know {spell_name_arg}."}
-
-        # Validate target (required when multiple hostiles).
-        target, target_err, _ = _resolve_offensive_target(args.get("target", ""), state)
-        if target_err:
-            return target_err
-
-        # Stealth check for the ambushing character only.
         bar = max(h.alertness_dc for h in hostiles)
-        stealth_res = rules.skill_check(character, "dex", bar)
-        success = stealth_res["success"]
+        party_members = [c for c in state.party.values() if not c.is_down]
+        rolls = []
+        for member in party_members:
+            check = rules.skill_check(member, "dex", bar)
+            rolls.append({
+                "character": member.name,
+                "roll": check["roll"],
+                "modifier": check["modifier"],
+                "total": check["total"],
+                "success": check["success"],
+            })
+        success = all(r["success"] for r in rolls)
 
         state.ambush_attempted = True
         if success:
             state.pending_ambush = True
-        state.record(f"attempt_ambush character={character.name} bar={bar} success={success}")
+        state.record(f"attempt_ambush bar={bar} success={success}")
 
-        result: dict = {
+        return {
             "ok": True,
             "success": success,
             "bar": bar,
-            "character": character.name,
-            "roll": stealth_res["roll"],
-            "modifier": stealth_res["modifier"],
-            "total": stealth_res["total"],
-            "target": target.name,
+            "rolls": rolls,
+            "hostiles": [h.name for h in hostiles],
         }
-        if weapon_arg:
-            result["weapon"] = weapon_arg
-        if spell_name_arg:
-            result["spell_name"] = spell_name_arg
-            result["spell_level"] = spell_level_arg
-
-        # Always auto-start combat; pending_ambush (set on success) marks hostiles as surprised.
-        combatant_keys = (
-            [k for k, c in state.party.items() if not c.is_down] +
-            [k for k, n in state.npcs.items() if n.hostile and not n.is_down]
-        )
-        if combatant_keys:
-            combat_res = dispatch("start_combat", {"combatants": combatant_keys}, state)
-            result["combat_started"] = True
-            result["combat_order"] = combat_res.get("combat_order")
-            result["active"] = combat_res.get("active")
-            result["active_name"] = combat_res.get("active_name")
-            result["round"] = combat_res.get("round")
-            if success and combat_res.get("surprised"):
-                result["surprised"] = combat_res.get("surprised")
-        return result
 
     if name == "start_combat":
         all_actors = {**state.party, **state.npcs}
