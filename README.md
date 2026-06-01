@@ -120,9 +120,11 @@ read, a seal broken), surfaced each turn and used to gate ways and endings.
 combat, flags), mid-session resume, sensible defaults for older saves, and
 template-based NPC spawning from the scenario file.
 
-**Observability.** A tool trace (`/trace`, `/full_trace`) shows exactly what the
-agent decided each turn, alongside a per-call stats sidecar capturing latency and
-token usage — including prompt-cache reads and writes.
+**Observability & CLI.** A tool trace (`/trace`, `/full_trace`) shows exactly what
+the agent decided each turn, alongside a per-call stats sidecar capturing latency and
+token usage — including prompt-cache reads and writes. In-session commands include
+`/help`, `/state`, `/recap` (replay the story so far), `/roll <notation>` (open
+flavor rolls), and `/save`.
 
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
@@ -158,11 +160,32 @@ The core resolution gaps worth closing first:
   exists, `skill_check`, so only the saving-throw side is missing.)
 - **Hazards & traps:** author-placed dangers in a scene that trigger a save or check
   and deal dice damage through `apply_dice` — what gives checks and saves real stakes.
+- **`/undo` + per-turn autosave:** snapshot `GameState` (via the existing
+  `to_dict`/`from_dict`) into a ring buffer each turn so a turn can be reverted, and
+  autosave every turn for crash-safe resume. High play-quality payoff on plumbing
+  that already exists.
+- **Scenario validator:** a `python -m src.validate <scenario.json>` lint that checks
+  every exit `to` points to a real scene, NPC `template`s exist in `MONSTERS`, loot
+  ids are known, monster weapons are in `WEAPONS`, answer-gates carry `denied` text,
+  and gated exits name a real flag — catching authored-content bugs before play.
 
 ## Potential implementations
 
-Future work, ranked roughly least → most difficult to implement:
+Future work, ranked roughly least → most difficult to implement.
 
+*CLI & quality-of-life (all terminal, mostly cheap):*
+
+- **Status HUD:** a compact header/footer each prompt — party HP bars, slots, conditions, and in combat the round + initiative order with the active actor highlighted and dying/dead/companion markers. Reformats data `/state` already has.
+- **Color & Markdown output:** render scene text, NPC names, and inline dice via `rich` (with a `--plain` fallback for pipes/CI), plus a spinner during the pre-stream API latency.
+- **`/cost` and `/export`:** summarize session tokens + estimated cost from the stats sidecar, and write the transcript to a shareable Markdown session log.
+- **Input history:** `readline` (stdlib) for arrow-key recall and line editing at the prompt.
+- **`--seed` flag:** fix the dice RNG for a whole session for reproducible demos and bug reports.
+- **API retry/backoff:** wrap the model calls so a rate-limit or network blip mid-turn doesn't abort the session.
+
+*Mechanics:*
+
+- **Concentration:** one concentration spell at a time, broken by damage — pairs with the multi-category spell engine.
+- **Inspiration / luck point:** a once-per-session reroll the DM can award.
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
 - **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks.

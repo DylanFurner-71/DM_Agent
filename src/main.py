@@ -6,7 +6,7 @@ Usage:
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --debug
 
-In-session commands: /state  /trace  /save [path]  /quit
+In-session commands: /help  /state  /recap  /roll  /trace  /full_trace  /save [path]  /quit
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .dm_agent import DMAgent
 from .game_state import GameState
-from .rules import CONSUMABLES
+from .rules import CONSUMABLES, roll
 
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
 SAVE_DIR = Path("saves")
@@ -88,6 +88,48 @@ def _do_save(
         except Exception:
             pass
     return ("saved", path)
+
+
+_COMMANDS = [
+    ("/help", "show this list of commands"),
+    ("/state", "show party HP, slots, inventory, NPCs, and combat status"),
+    ("/recap", "replay the story so far (the DM's narration beats)"),
+    ("/roll <notation>", "roll dice openly, e.g. /roll 2d6+3 (flavor only — not enforced state)"),
+    ("/trace", "show the tools the agent called each turn"),
+    ("/full_trace", "show the tool trace with per-call timing and token usage"),
+    ("/save [path]", "save the game (prompts for a name if omitted)"),
+    ("/quit", "end the session"),
+]
+
+
+def print_help() -> None:
+    print("\n  Commands:")
+    for cmd, desc in _COMMANDS:
+        print(f"    {cmd:<18} — {desc}")
+    print()
+
+
+def print_recap(state: GameState) -> None:
+    """Replay the DM's narration beats so far — the story without the mechanics."""
+    if not state.narrative:
+        print("\n  Nothing has happened yet.\n")
+        return
+    print("\n  — The story so far —\n")
+    for beat in state.narrative:
+        print(f"  {beat['text']}\n")
+
+
+def print_roll(notation: str) -> None:
+    """Roll dice openly via the engine. Flavor/divination only — touches no state."""
+    if not notation:
+        print("  Usage: /roll <notation>, e.g. /roll 1d20+5\n")
+        return
+    try:
+        r = roll(notation)
+    except ValueError as e:
+        print(f"  {e}\n")
+        return
+    print(f"  🎲 {r.describe()}\n")
 
 
 def print_state(state: GameState) -> None:
@@ -220,7 +262,7 @@ def main() -> None:
     agent.on_narration_delta = _emit_delta
 
     print("=" * 60)
-    print("  DM AGENT — type /state, /trace, /full_trace, /save, or /quit at any time")
+    print("  DM AGENT — type /help for commands")
     print(f"  Scenario: {args.scenario}")
     print("=" * 60)
     mode = _launch_mode(state)
@@ -242,8 +284,17 @@ def main() -> None:
             continue
         if player == "/quit":
             break
+        if player == "/help":
+            print_help()
+            continue
         if player == "/state":
             print_state(state)
+            continue
+        if player == "/recap":
+            print_recap(state)
+            continue
+        if player.startswith("/roll"):
+            print_roll(player.split(maxsplit=1)[1].strip() if " " in player else "")
             continue
         if player == "/trace":
             print_full_trace(agent.full_trace)

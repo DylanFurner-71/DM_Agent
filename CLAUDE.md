@@ -19,7 +19,7 @@ python -m src.main savegame.json                     # resume a saved game
 python -m src.main --help                            # show all options
 ```
 
-In-session commands: `/state`, `/trace`, `/full_trace`, `/save [path]`, `/quit`.
+In-session commands: `/help`, `/state`, `/recap`, `/roll <notation>`, `/trace`, `/full_trace`, `/save [path]`, `/quit`.
 
 ## Architecture
 
