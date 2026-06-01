@@ -143,3 +143,74 @@ def test_print_state_rich_does_not_leak_markup(monkeypatch, capsys):
     views.print_state(gs)
     out = capsys.readouterr().out
     assert "Grik [the Bold]" in out   # rendered literally, not swallowed as markup
+
+
+# --- /cost: usage aggregation, pricing, and summary -------------------------
+
+def _trace(*usages):
+    """Build a full_trace with one api_call per usage dict, grouped into one turn."""
+    return [{"turn": 1, "input": "x", "calls": [],
+             "api_calls": [{"phase": "thinking", "elapsed": 1.5, "usage": u} for u in usages]}]
+
+
+def test_aggregate_usage_sums_all_buckets():
+    trace = _trace(
+        {"input": 100, "output": 20, "cache_write": 500},
+        {"input": 50, "output": 10, "cache_read": 400},
+    )
+    agg = views.aggregate_usage(trace)
+    assert agg["calls"] == 2
+    assert agg["input"] == 150
+    assert agg["output"] == 30
+    assert agg["cache_write"] == 500
+    assert agg["cache_read"] == 400
+    assert agg["elapsed"] == 3.0
+
+
+def test_aggregate_usage_empty_trace():
+    agg = views.aggregate_usage([])
+    assert agg["calls"] == 0
+    assert agg["input"] == 0
+
+
+def test_price_for_matches_family_prefix():
+    assert views._price_for("claude-sonnet-4-6")["input"] == 3.0
+    assert views._price_for("claude-opus-4-8")["output"] == 75.0
+    assert views._price_for("claude-haiku-4-5")["input"] == 1.0
+    # Unknown id falls back to Sonnet-class pricing.
+    assert views._price_for("gpt-9") == views._DEFAULT_PRICING
+
+
+def test_estimate_cost_applies_cache_multipliers():
+    # 1M of each bucket makes the per-token math easy to verify against list price.
+    usage = {"input": 1_000_000, "output": 1_000_000,
+             "cache_write": 1_000_000, "cache_read": 1_000_000}
+    c = views.estimate_cost(usage, "claude-sonnet-4-6")
+    assert c["input"] == pytest.approx(3.0)
+    assert c["output"] == pytest.approx(15.0)
+    assert c["cache_write"] == pytest.approx(3.0 * 1.25)
+    assert c["cache_read"] == pytest.approx(3.0 * 0.10)
+    assert c["total"] == pytest.approx(3.0 + 15.0 + 3.75 + 0.30)
+
+
+def test_format_cost_empty():
+    out = views.format_cost([], "claude-sonnet-4-6")
+    assert "No API calls recorded yet" in out
+
+
+def test_format_cost_summary_lines():
+    trace = _trace({"input": 1000, "output": 200, "cache_read": 5000, "cache_write": 800})
+    out = views.format_cost(trace, "claude-sonnet-4-6")
+    assert "claude-sonnet-4-6" in out
+    assert "1 API call " in out          # singular, exactly one call
+    assert "Input" in out and "Output" in out
+    assert "Cache write" in out and "Cache read" in out
+    assert "Total" in out
+    assert "$" in out
+    assert "\x1b" not in out             # plain string, no ANSI
+
+
+def test_format_cost_unknown_model_flagged():
+    trace = _trace({"input": 1000, "output": 200})
+    out = views.format_cost(trace, "some-other-model")
+    assert "unknown id" in out.lower()

@@ -21,7 +21,7 @@ python -m src.main --help                            # show all options
 python -m src.validate data/scenario.json            # lint a scenario before play (no API)
 ```
 
-In-session commands: `/help`, `/state`, `/hud`, `/recap`, `/roll <notation>`, `/undo`, `/trace`, `/full_trace`, `/save [path]`, `/quit`. The game autosaves to `saves/autosave.json` after every turn (`python -m src.main saves/autosave.json` to resume).
+In-session commands: `/help`, `/state`, `/hud`, `/recap`, `/roll <notation>`, `/undo`, `/trace`, `/full_trace`, `/cost`, `/save [path]`, `/quit`. The game autosaves to `saves/autosave.json` after every turn (`python -m src.main saves/autosave.json` to resume).
 
 ## Architecture
 

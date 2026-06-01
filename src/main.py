@@ -6,7 +6,7 @@ Usage:
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --plain   # no color/Markdown/spinner
 
-In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /save [path]  /quit
+In-session commands: /help  /state  /hud  /recap  /roll  /undo  /trace  /full_trace  /cost  /save [path]  /quit
 
 Output is colorized and Markdown-rendered with `rich` when stdout is a terminal;
 pass --plain (or pipe/redirect output) for plain text. The game autosaves to
@@ -28,6 +28,7 @@ from .views import (
     Spinner,
     _build_stats_trace,
     banner,
+    format_cost,
     format_hud,
     print_full_trace,
     print_full_trace_verbose,
@@ -233,6 +234,10 @@ def main() -> None:
             continue
         if player == "/full_trace":
             print_full_trace_verbose(agent.full_trace)
+            continue
+        if player == "/cost":
+            print(format_cost(agent.full_trace, agent.model))
+            print()
             continue
         if player.startswith("/save"):
             parts = player.split(maxsplit=1)

@@ -108,6 +108,7 @@ _COMMANDS = [
     ("/undo", "rewind the last turn (the game autosaves after every turn)"),
     ("/trace", "show the tools the agent called each turn"),
     ("/full_trace", "show the tool trace with per-call timing and token usage"),
+    ("/cost", "summarize session token usage and estimated cost"),
     ("/save [path]", "save the game (prompts for a name if omitted)"),
     ("/quit", "end the session"),
 ]
@@ -366,3 +367,88 @@ def print_full_trace_verbose(full_trace: list) -> None:
                 tokens += f" cache_write={u['cache_write']}"
             print(f"    api:{ac['phase']} {ac['elapsed']:.1f}s | {tokens}")
     print()
+
+
+# ---------------------------------------------------------------------------
+# /cost — session token + estimated-spend summary
+# ---------------------------------------------------------------------------
+
+# Published Anthropic list prices in USD per 1M tokens (input, output), keyed by
+# model-id prefix so a minor version bump (…-4-6 → …-4-7) still matches. Cache
+# pricing is derived from the standard 5-minute multipliers (writes 1.25x input,
+# reads 0.10x input), so only the base input/output rates live here. Update when
+# the MODEL constant or Anthropic's prices change; estimate only, never billed.
+MODEL_PRICING: dict[str, dict[str, float]] = {
+    "claude-opus-4":   {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4": {"input": 3.0,  "output": 15.0},
+    "claude-haiku-4":  {"input": 1.0,  "output": 5.0},
+}
+_DEFAULT_PRICING = {"input": 3.0, "output": 15.0}  # Sonnet-class fallback for an unknown id
+_CACHE_WRITE_MULT = 1.25   # 5-minute cache write surcharge over base input
+_CACHE_READ_MULT = 0.10    # cache hit discount off base input
+
+
+def _price_for(model: str) -> dict[str, float]:
+    for prefix, price in MODEL_PRICING.items():
+        if model.startswith(prefix):
+            return price
+    return _DEFAULT_PRICING
+
+
+def aggregate_usage(full_trace: list) -> dict:
+    """Sum token usage, call count, and wall time across every API call in the trace."""
+    tot = {"calls": 0, "elapsed": 0.0, "input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+    for entry in full_trace:
+        for ac in entry.get("api_calls", []):
+            tot["calls"] += 1
+            tot["elapsed"] += ac.get("elapsed", 0.0)
+            u = ac.get("usage", {})
+            tot["input"] += u.get("input", 0)
+            tot["output"] += u.get("output", 0)
+            tot["cache_read"] += u.get("cache_read", 0)
+            tot["cache_write"] += u.get("cache_write", 0)
+    return tot
+
+
+def estimate_cost(usage: dict, model: str) -> dict:
+    """Estimated USD cost per token bucket (+ 'total') for aggregated usage."""
+    p = _price_for(model)
+    pin, pout = p["input"], p["output"]
+    cost = {
+        "input": usage["input"] / 1e6 * pin,
+        "cache_write": usage["cache_write"] / 1e6 * pin * _CACHE_WRITE_MULT,
+        "cache_read": usage["cache_read"] / 1e6 * pin * _CACHE_READ_MULT,
+        "output": usage["output"] / 1e6 * pout,
+    }
+    cost["total"] = sum(cost.values())
+    return cost
+
+
+def format_cost(full_trace: list, model: str) -> str:
+    """A session token + estimated-cost summary built from the stats trace.
+
+    Pure string builder (like format_hud) so it's testable without I/O; returns a
+    'nothing yet' line before any API call. Cost is an estimate from MODEL_PRICING,
+    not a billed figure.
+    """
+    u = aggregate_usage(full_trace)
+    if u["calls"] == 0:
+        return "  No API calls recorded yet — play a turn first."
+    c = estimate_cost(u, model)
+    total_tokens = u["input"] + u["cache_write"] + u["cache_read"] + u["output"]
+    known = any(model.startswith(prefix) for prefix in MODEL_PRICING)
+    rows = [
+        ("Input",       u["input"],       c["input"]),
+        ("Cache write", u["cache_write"], c["cache_write"]),
+        ("Cache read",  u["cache_read"],  c["cache_read"]),
+        ("Output",      u["output"],      c["output"]),
+    ]
+    lines = [
+        f"  Session cost — model {model}" + ("" if known else " (unknown id; Sonnet-rate estimate)"),
+        f"    {u['calls']} API call{'s' * (u['calls'] != 1)} over {u['elapsed']:.1f}s",
+    ]
+    for label, toks, dollars in rows:
+        lines.append(f"    {label:<12} {toks:>9,} tok   ${dollars:.4f}")
+    lines.append(f"    {'Total':<12} {total_tokens:>9,} tok   ${c['total']:.4f}")
+    lines.append("    (estimate; cache write 1.25x / read 0.10x base input rate)")
+    return "\n".join(lines)
