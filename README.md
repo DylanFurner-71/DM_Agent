@@ -161,7 +161,11 @@ to `saves/autosave.json` after every turn for crash-safe resume.
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
 **decode-bound** (~30 tok/s, with caching fully engaged and *not* the bottleneck),
-which sets the direction for the latency work below.
+which sets the direction for the latency work below. The model-facing context is
+also kept lean: `get_state` returns live numbers (HP, slots, flags, scene) but
+**not** the unbounded session history (`transcript`/`narrative`/`log`), which the
+model never acts on — re-injecting it once cost ~3.4k tokens in profiling and rode
+through every later hop of that turn.
 
 ## Roadmap
 
@@ -172,8 +176,9 @@ which sets the direction for the latency work below.
   generation is no longer thrown away: out of combat it *is* the narration, and in
   combat one call narrates the player action plus all NPC beats. Narration also
   **streams** to the terminal as it generates (behind a leak gate), so the player
-  reads from the first token. A profiling harness (`profile_api.py`) measures the
-  before/after.
+  reads from the first token. `get_state` was also trimmed of unbounded session
+  history (see Performance, above). A profiling harness (`profile_api.py`) measures
+  the before/after. The remaining lever is the two-model split below.
 - **Two-model split (potential).** Run the mechanical tool-selection phase on a
   faster, cheaper model (e.g. Haiku) while keeping the quality model for narration.
   Tool decisions are largely mechanical (map the player's words to the right tool +
