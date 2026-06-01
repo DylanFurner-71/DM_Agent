@@ -178,14 +178,19 @@ through every later hop of that turn.
   **streams** to the terminal as it generates (behind a leak gate), so the player
   reads from the first token. `get_state` was also trimmed of unbounded session
   history (see Performance, above). A profiling harness (`profile_api.py`) measures
-  the before/after. The remaining lever is the two-model split below.
-- **Two-model split (potential).** Run the mechanical tool-selection phase on a
-  faster, cheaper model (e.g. Haiku) while keeping the quality model for narration.
-  Tool decisions are largely mechanical (map the player's words to the right tool +
-  args), so they may not need the top model; narration is where prose quality matters.
-  Would need a second model constant in `dm_agent.py` and routing the tool-use
-  `client` calls to it. Open question: whether the cheaper model picks tools/args
-  reliably enough to keep enforcement clean.
+  the before/after. The remaining levers are captured in the table below.
+
+**Remaining latency levers** — none addressed yet; recorded here so they aren't lost.
+Profiling a full run showed a ~3.3s fixed cost *per API call* (so calls-per-turn is
+the lever, not output size), with wall time splitting roughly **40% tool-selection /
+52% narration**. Ranked by payoff vs. risk:
+
+| Lever | Payoff | Risk |
+|---|---|---|
+| **Two-model split** — run the mechanical tool-selection ("thinking") calls on a faster, cheaper model (e.g. Haiku), keep the quality model for narration. Needs a second model constant in `dm_agent.py` and routing the tool-use `client` calls to it. | High — ~40% of wall time is mechanical tool-selection | Medium — the cheaper model must still pick the right tool/args, or enforcement narration breaks |
+| **Merge conclude-action + epilogue** into one narration call | Low — one fewer call, on the final turn only | Low — the epilogue paragraph is shaped differently |
+| **Lean harder on parallel `tool_use`** to cut hops on multi-tool turns (e.g. two `take_item`s + a `move_scene` resolved in one response instead of three) | Low–medium | Low code, but prompt-level and unreliable |
+| **Cap narration `max_tokens` / prompt for brevity** | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
 
 ## Need to implement
 
