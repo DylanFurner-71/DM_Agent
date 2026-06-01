@@ -128,9 +128,15 @@ which sets the direction for the latency work below.
   generation is no longer thrown away: out of combat it *is* the narration, and in
   combat one call narrates the player action plus all NPC beats. Narration also
   **streams** to the terminal as it generates (behind a leak gate), so the player
-  reads from the first token. **Still open:** run the mechanical tool-selection phase
-  on a faster model while keeping the quality model for narration. A profiling harness
-  (`profile_api.py`) measures the before/after.
+  reads from the first token. A profiling harness (`profile_api.py`) measures the
+  before/after.
+- **Two-model split (potential).** Run the mechanical tool-selection phase on a
+  faster, cheaper model (e.g. Haiku) while keeping the quality model for narration.
+  Tool decisions are largely mechanical (map the player's words to the right tool +
+  args), so they may not need the top model; narration is where prose quality matters.
+  Would need a second model constant in `dm_agent.py` and routing the tool-use
+  `client` calls to it. Open question: whether the cheaper model picks tools/args
+  reliably enough to keep enforcement clean.
 
 **Deliberately deferred (decided, not forgotten).**
 
