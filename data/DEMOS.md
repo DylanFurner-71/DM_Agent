@@ -10,8 +10,9 @@ python -m src.main data/demos/demo_combat.json
 
 In every session you can use the CLI commands to observe what the engine did:
 `/help`, `/state` (HP, slots, inventory, NPCs, combat order), `/recap` (story so
-far), `/roll <notation>` (open flavor roll), `/trace` (tools called per turn),
-`/full_trace` (adds timing + token usage), `/save [name]`, `/quit`.
+far), `/roll <notation>` (open flavor roll), `/undo` (rewind the last turn),
+`/trace` (tools called per turn), `/full_trace` (adds timing + token usage),
+`/save [name]`, `/quit`.
 
 > **A note on dice.** Outcomes are real rolls, so a given run may vary (a
 > persuasion can fail, a PC may not drop exactly when expected). The scenarios are
@@ -33,6 +34,7 @@ far), `/roll <notation>` (open flavor roll), `/trace` (tools called per turn),
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
 | Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
 | Persistence & resume | any scenario — see the bottom section |
+| Autosave & `/undo` (rewind a turn) | any scenario — see the bottom section |
 
 ---
 
@@ -313,3 +315,10 @@ The save/resume round-trip works from any of the above:
 
 The game also offers to save at the end of a run (after a victory or defeat
 epilogue), so you can keep the completed transcript and trace.
+
+**Autosave & `/undo` (any scenario).** Every turn is autosaved to
+`saves/autosave.json`, so a crash or accidental `/quit` loses nothing — resume with
+`python -m src.main saves/autosave.json`. And at any prompt, `/undo` rewinds the
+last turn (state, narration, and trace all roll back); type it twice to step back
+two turns. Try it in any demo: take an action, `/state` to see the change, `/undo`,
+then `/state` again to watch it revert.
