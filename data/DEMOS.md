@@ -30,6 +30,7 @@ far), `/roll <notation>` (open flavor roll), `/trace` (tools called per turn),
 | Exploration: scenes, gates & loot + Quest flags (flag gate, answer gate, `take_item`) | `demo_gates_loot.json` |
 | Spells & items (slot economy "money shot", Pearl-of-Power cap, `use_item`, `lookup_rule`) | `demo_spells_items.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
+| Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
 | Persistence & resume | any scenario — see the bottom section |
 
 ---
@@ -220,6 +221,44 @@ turn), and one-spawn-per-id.
 4. Survive the wave to win. Each reinforcement can arrive only once.
 
 ---
+
+## five_scene_branching.json — Branching geography
+
+**Party:** Aldric, Kael, Wisp. A five-scene crawl through Stormhold Keep whose map
+forks and then reconverges:
+
+```
+1 Storm Gate ─→ 2 Great Hall ┬─→ 3 High Ramparts ──┐
+                             └─→ 4 Flooded Crypt ───┴─→ 5 Throne Sanctum (terminal)
+```
+
+Scene 2 offers **two** exits; scenes 3 and 4 are different routes that both lead to
+the same scene 5. This is the demo for non-linear scene geography — the engine holds
+the model to the declared exits, so it can only offer the paths that exist, and a
+played-through branch genuinely skips the other route's content.
+
+**Shows:** a fork with a meaningful choice (the two routes differ — see below),
+two paths converging on one destination, fixed author-declared geography across five
+scenes, and a terminal boss whose defeat fires the victory epilogue. Along the way it
+also composes the other features: a fight (or optional parley) in scene 2, and a
+choice between a **direct brute fight** (ramparts, reward: a greater healing potion)
+and a **stealthy undead route** (crypt — ambushable foes, reward: a Pearl of Power).
+
+**Play it:**
+1. `search the gate, then go into the great hall` → loot the messenger's
+   `healing_potion`, then `move_scene` to scene 2.
+2. In the Great Hall, fight or talk down the two raiders (`Wisp persuades Dax to
+   stand aside` uses `influence_npc`). Then **pick a route**:
+   - **High road:** `we take the spiral stair up to the ramparts` → fight Hookjaw the
+     ogre, `take the greater healing potion`, then `go through the captain's door`.
+   - **Low road:** `we head down the cellar steps into the crypt` → `we sneak up on the
+     skeletons` (`attempt_ambush`) for a surprise round, `take the Pearl of Power`,
+     then `take the submerged passage up`.
+3. Either route arrives at the **Throne Sanctum** (scene 5). Defeat Captain Vexis to
+   trigger the victory epilogue; `take the stormhold signet` first if you like.
+   - *Geography check:* at the fork, try `is there a back way out?` — the DM only
+     offers the two declared exits and won't invent a third. Replay and take the other
+     route to see the content you skipped.
 
 ## Persistence & resume (any scenario)
 
