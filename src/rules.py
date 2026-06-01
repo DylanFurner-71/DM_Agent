@@ -77,6 +77,20 @@ def cast_spell(caster, spell_level: int) -> dict:
     return {"ok": True, "reason": "slot expended", "slots_remaining": available - 1}
 
 
+def _mark_dead(target) -> None:
+    """Transition a PC to dead and keep condition tags consistent.
+
+    A corpse is not 'unconscious' — drop that tag (added when first downed) and
+    tag 'dead' so every consumer (/state, the model snapshot, get_state) agrees.
+    """
+    target.dead = True
+    if hasattr(target, "conditions"):
+        if "unconscious" in target.conditions:
+            target.conditions.remove("unconscious")
+        if "dead" not in target.conditions:
+            target.conditions.append("dead")
+
+
 def apply_damage(target, amount: int, from_crit: bool = False) -> dict:
     amount = max(0, int(amount))
     was_down = target.hp <= 0
@@ -91,11 +105,11 @@ def apply_damage(target, amount: int, from_crit: bool = False) -> dict:
             if target.stable:
                 target.stable = False  # re-enters dying
             if amount >= target.max_hp:
-                target.dead = True  # massive damage: instant death
+                _mark_dead(target)  # massive damage: instant death
             else:
                 target.death_save_failures = min(3, target.death_save_failures + (2 if from_crit else 1))
                 if target.death_save_failures >= 3:
-                    target.dead = True
+                    _mark_dead(target)
             result.update({
                 "death_save_failure": True,
                 "death_save_failures": target.death_save_failures,
@@ -176,7 +190,7 @@ def roll_death_save(character) -> dict:
         character.death_save_failures = 0
         result_kind = "stabilized"
     elif character.death_save_failures >= 3:
-        character.dead = True
+        _mark_dead(character)
         result_kind = "dead"
     elif nat <= 9:
         result_kind = "failure"

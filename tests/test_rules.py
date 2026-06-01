@@ -3577,11 +3577,37 @@ def test_death_save_three_successes_stabilizes():
 
 def test_death_save_three_failures_kills():
     from unittest.mock import patch
-    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=2)
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=2,
+                  conditions=["unconscious"])
     with patch.object(rules, "roll", return_value=_make_roll_result(5)):
         res = rules.roll_death_save(c)
     assert res["result_kind"] == "dead"
     assert c.dead is True
+    # On death the unconscious tag is dropped for a 'dead' tag so /state and the
+    # model snapshot stop reporting a corpse as merely unconscious.
+    assert "unconscious" not in c.conditions
+    assert "dead" in c.conditions
+
+
+def test_death_by_damage_while_down_clears_unconscious():
+    """A PC who dies from the third failed death save then takes a killing hit —
+    or any damage-while-down death — must shed 'unconscious' for 'dead'."""
+    c = Character(name="Hero", max_hp=20, hp=0, death_save_failures=2,
+                  conditions=["unconscious"])
+    res = rules.apply_damage(c, 3)  # one more failure -> 3 -> dead
+    assert res["dead"] is True
+    assert c.dead is True
+    assert "unconscious" not in c.conditions
+    assert "dead" in c.conditions
+
+
+def test_death_by_massive_damage_clears_unconscious():
+    c = Character(name="Hero", max_hp=20, hp=0, conditions=["unconscious"])
+    res = rules.apply_damage(c, 20)  # >= max_hp while down -> instant death
+    assert res["dead"] is True
+    assert c.dead is True
+    assert "unconscious" not in c.conditions
+    assert "dead" in c.conditions
 
 
 def test_death_save_refuses_conscious_pc():
@@ -4788,7 +4814,8 @@ def test_attempt_ambush_bar_is_max_alertness():
 
 
 def test_attempt_ambush_cannot_ambush_when_any_always_alert():
-    """Any hostile with alertness_dc=None → ok=False 'cannot_ambush', no rolls made."""
+    """Any hostile with alertness_dc=None → ok=False 'cannot_ambush', no rolls made,
+    and the engine auto-starts combat (the alert foe spotted the party)."""
     gs = GameState(location="Corridor")
     gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ability_modifiers={"dex": 2})
     gs.npcs["guard"] = NPC(name="Guard", hostile=True, alertness_dc=12)
@@ -4796,7 +4823,12 @@ def test_attempt_ambush_cannot_ambush_when_any_always_alert():
     res = tools.dispatch("attempt_ambush", {}, gs)
     assert res["ok"] is False
     assert res["reason"] == "cannot_ambush"
-    assert gs.ambush_attempted is False  # attempt not consumed — no roll was made
+    # No surprise was possible, so combat starts as a fair fight.
+    assert res["combat_started"] is True
+    assert gs.combat_round == 1
+    assert gs.pending_ambush is False  # never set — nobody is surprised
+    assert all(not n.surprised for n in gs.npcs.values())
+    assert gs.ambush_attempted is True  # consumed: the attempt tipped the party's hand
 
 
 def test_attempt_ambush_no_target():

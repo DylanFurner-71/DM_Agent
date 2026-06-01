@@ -261,8 +261,11 @@ TOOLS = [
             "On failure, no surprise — call start_combat for a fair fight. "
             "This tool does NOT start combat; call start_combat separately. "
             "Rejected (ok=false) when: combat is already in progress ('in_combat'); an attempt was "
-            "already made this scene ('already_attempted'); no living hostiles present ('no_target'); "
-            "any hostile is always-alert ('cannot_ambush'). "
+            "already made this scene ('already_attempted'); no living hostiles present ('no_target'). "
+            "If any hostile is always-alert ('cannot_ambush'), the engine refuses the ambush AND "
+            "auto-starts combat (combat_started=true, with combat_order/active/active_name/round) — "
+            "the alert foe noticed the party; do NOT call start_combat yourself, just narrate the "
+            "spotted approach and announce the initiative order. "
             "ok=True with success=False means the check was valid but the party failed stealth."
         ),
         "input_schema": {
@@ -879,7 +882,28 @@ def dispatch(name: str, args: dict, state) -> dict:
         if not hostiles:
             return {"ok": False, "reason": "no_target", "error": "No living hostiles to ambush."}
         if any(h.alertness_dc is None for h in hostiles):
-            return {"ok": False, "reason": "cannot_ambush", "error": "One or more foes are always alert — cannot get the drop on them."}
+            # An always-alert foe spots the party — no surprise is possible, and
+            # the attempt itself tips the party's hand. Drop straight into a fair
+            # fight, mirroring the failed-parley auto-combat path below.
+            state.ambush_attempted = True
+            state.record("attempt_ambush cannot_ambush — always-alert foe; auto-starting combat")
+            result = {
+                "ok": False,
+                "reason": "cannot_ambush",
+                "error": "One or more foes are always alert — cannot get the drop on them.",
+            }
+            combatant_keys = (
+                [k for k, c in state.party.items() if not c.is_down] +
+                [k for k, n in state.npcs.items() if n.hostile and not n.is_down]
+            )
+            if combatant_keys:
+                combat_res = dispatch("start_combat", {"combatants": combatant_keys}, state)
+                result["combat_started"] = True
+                result["combat_order"] = combat_res.get("combat_order")
+                result["active"] = combat_res.get("active")
+                result["active_name"] = combat_res.get("active_name")
+                result["round"] = combat_res.get("round")
+            return result
 
         bar = max(h.alertness_dc for h in hostiles)
         party_members = [c for c in state.party.values() if not c.is_down]
