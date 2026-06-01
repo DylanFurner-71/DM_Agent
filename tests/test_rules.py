@@ -324,6 +324,7 @@ def test_next_turn_advances_pointer():
     rules.seed(0)
     gs = _make_combat_state()
     tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     second = gs.combat_order[1]
     res = tools.dispatch("next_turn", {}, gs)
     assert res["ok"] is True
@@ -336,6 +337,7 @@ def test_next_turn_wraps_and_increments_round():
     rules.seed(0)
     gs = _make_combat_state()
     tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     first = gs.combat_order[0]
     tools.dispatch("next_turn", {}, gs)       # index 0 → 1
     res = tools.dispatch("next_turn", {}, gs)  # index 1 → wraps to 0, round 2
@@ -1140,6 +1142,7 @@ def test_next_turn_skips_downed_combatant():
     gs.party["wisp"].ability_modifiers["dex"] = -100    # third
     res = tools.dispatch("start_combat", {"combatants": ["aldric", "snik", "wisp"]}, gs)
     assert res["combat_order"] == ["aldric", "snik", "wisp"]
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
 
     gs.party["wisp"].hp = 0
     gs.party["wisp"].dead = True  # dead PC is skipped (unlike dying, which stops)
@@ -1166,6 +1169,7 @@ def test_next_turn_all_downed_returns_error():
     gs = _make_combat_state()
     gs.party["aldric"].ability_modifiers["dex"] = 100
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     gs.party["aldric"].hp = 0
     gs.party["aldric"].dead = True  # dead PC is skipped; dying would stop next_turn
     gs.npcs["snik"].hp = 0
@@ -2429,6 +2433,7 @@ def test_closing_prompt_npc_ambiguous_does_not_pollute_next_player():
     gs.party["aldric"].ability_modifiers["dex"] = -100   # goes last
     gs.npcs["snik"].ability_modifiers["dex"] = 100       # goes first
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     tools.dispatch("next_turn", {}, gs)   # advance pointer to aldric
     assert gs.combat_order[gs.combat_index] == "aldric"
 
@@ -4694,13 +4699,15 @@ def test_next_turn_skips_surprised_npc_round1_clears_flag():
     # Reset guard surprised to True manually since start_combat would clear pending_ambush
     gs.npcs["guard"].surprised = True
 
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     # Advance from rogue (index 0) to guard (index 1, surprised) — should skip to rogue round 2
     adv = tools.dispatch("next_turn", {}, gs)
     assert adv["ok"] is True
     assert adv["active"] == "rogue"
     assert adv["round"] == 2
     assert gs.npcs["guard"].surprised is False  # flag cleared
-    assert "guard" in adv.get("skipped_downed", [])  # recorded in skipped list
+    assert "guard" in adv.get("skipped_surprised", [])  # surprised, not down
+    assert "skipped_downed" not in adv  # a healthy surprised NPC must not be reported as down
 
 
 def test_next_turn_surprised_npc_acts_in_round2():
@@ -4712,6 +4719,7 @@ def test_next_turn_surprised_npc_acts_in_round2():
     tools.dispatch("start_combat", {"combatants": ["rogue", "guard"]}, gs)
     gs.npcs["guard"].surprised = True  # manually flag for this test
 
+    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
     # Round 1 skip: advance → skip guard → back to rogue, round 2
     adv1 = tools.dispatch("next_turn", {}, gs)
     assert adv1["round"] == 2

@@ -914,8 +914,12 @@ def dispatch(name: str, args: dict, state) -> dict:
     if name == "next_turn":
         if not state.combat_order:
             return {"ok": False, "error": "No combat in progress; call start_combat first."}
+        if state.combat_starting:
+            return {"ok": False, "reason": "combat_starting",
+                    "error": "Combat just started — let the engine resolve the surprise round before advancing turns."}
         all_actors = {**state.party, **state.npcs}
-        skipped: list[str] = []
+        skipped_downed: list[str] = []
+        skipped_surprised: list[str] = []
         for _ in range(len(state.combat_order)):
             state.combat_index += 1
             if state.combat_index >= len(state.combat_order):
@@ -928,7 +932,7 @@ def dispatch(name: str, args: dict, state) -> dict:
             if active_key in state.party:
                 decision = _pc_turn_decision(actor)
                 if decision == "skip":
-                    skipped.append(active_key)
+                    skipped_downed.append(active_key)
                     reason = "dead" if actor.is_dead else "stable"
                     state.record(f"skipping {active_key} ({actor.name}) — {reason}")
                     continue
@@ -936,11 +940,11 @@ def dispatch(name: str, args: dict, state) -> dict:
                 break
             else:
                 if actor.is_down:
-                    skipped.append(active_key)
+                    skipped_downed.append(active_key)
                     state.record(f"skipping downed {active_key} ({actor.name})")
                     continue
                 if state.combat_round == 1 and actor.surprised:
-                    skipped.append(active_key)
+                    skipped_surprised.append(active_key)
                     state.record(f"surprised, skipping {active_key} ({actor.name})")
                     actor.surprised = False
                     continue
@@ -951,8 +955,10 @@ def dispatch(name: str, args: dict, state) -> dict:
         state.action_used = False
         state.record(f"round {state.combat_round}, turn -> {active_key} ({active_name})")
         result = {"ok": True, "active": active_key, "active_name": active_name, "round": state.combat_round, "combat_index": state.combat_index}
-        if skipped:
-            result["skipped_downed"] = skipped
+        if skipped_downed:
+            result["skipped_downed"] = skipped_downed
+        if skipped_surprised:
+            result["skipped_surprised"] = skipped_surprised
         return result
 
     if name == "end_combat":
