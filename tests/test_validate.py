@@ -62,14 +62,15 @@ def test_valid_scenario_is_clean():
 
 
 def test_all_shipped_scenarios_validate():
-    """Every scenario shipped in data/ must pass with zero errors."""
+    """Every scenario shipped under data/ (incl. data/demos/) must pass cleanly."""
+    import glob
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    files = [f for f in os.listdir(data_dir) if f.endswith(".json")]
+    files = glob.glob(os.path.join(data_dir, "**", "*.json"), recursive=True)
     assert files, "expected scenario files in data/"
-    for fname in files:
-        with open(os.path.join(data_dir, fname)) as f:
+    for path in files:
+        with open(path) as f:
             rep = validate_scenario(json.load(f))
-        assert rep.ok, f"{fname} has errors: {rep.errors}"
+        assert rep.ok, f"{os.path.relpath(path, data_dir)} has errors: {rep.errors}"
 
 
 # --- structural / load-crash errors ------------------------------------------

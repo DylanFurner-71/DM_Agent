@@ -242,8 +242,8 @@ src/
   validate.py          # scenario linter: python -m src.validate <scenario.json>
 data/
   scenario.json        # the demo adventure
-  demo_*.json          # per-feature demo scenarios
   DEMOS.md             # index of the demos + how to trigger each feature
+  demos/               # per-feature demo scenarios (demo_*.json, five_scene_branching.json)
 tests/
   test_rules.py        # ~300 enforcement tests — no API needed
   test_answer_gate.py  # answer-gated-exit behaviour + redaction, no API needed
@@ -267,7 +267,7 @@ python -m src.main data/scenario.json     # explicit scenario, or a savegame pat
 ## Demos
 
 **Per-feature demo scenarios.** [`data/DEMOS.md`](data/DEMOS.md) is an index of
-focused, ready-to-run scenarios (`data/demo_*.json`) — one per feature-cluster
+focused, ready-to-run scenarios (`data/demos/`) — one per feature-cluster
 (combat, death saves, social & companions, stealth, gates & loot, spells & items,
 reinforcements) — each with the exact player inputs to type to trigger the feature
 and what to watch for in `/state` and `/trace`.

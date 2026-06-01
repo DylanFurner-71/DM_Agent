@@ -5,7 +5,7 @@ Focused scenarios, one per feature-cluster from the README's **Features
 trigger and watch. Drive them from the terminal:
 
 ```bash
-python -m src.main data/demo_combat.json
+python -m src.main data/demos/demo_combat.json
 ```
 
 In every session you can use the CLI commands to observe what the engine did:
