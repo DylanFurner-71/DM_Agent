@@ -172,10 +172,9 @@ through every later hop of that turn.
 
 ## Roadmap
 
-**In progress / specced.**
+### In progress / specced
 
-
-- **Latency.** *(Mostly done — see DECISIONS.md §5–6.)* The wasted terminating
+**Latency.** *(Mostly done — see DECISIONS.md §5–6.)* The wasted terminating
   generation is no longer thrown away: out of combat it *is* the narration, and in
   combat one call narrates the player action plus all NPC beats. Narration also
   **streams** to the terminal as it generates (behind a leak gate), so the player
