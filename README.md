@@ -194,10 +194,6 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 ## Need to implement
 
-## Potential implementations
-
-Future work, ranked roughly least → most difficult to implement.
-
 *CLI & quality-of-life (all terminal, mostly cheap):*
 
 - **Status HUD:** a compact header/footer each prompt — party HP bars, slots, conditions, and in combat the round + initiative order with the active actor highlighted and dying/dead/companion markers. Reformats data `/state` already has.
@@ -206,6 +202,10 @@ Future work, ranked roughly least → most difficult to implement.
 - **Input history:** `readline` (stdlib) for arrow-key recall and line editing at the prompt.
 - **`--seed` flag:** fix the dice RNG for a whole session for reproducible demos and bug reports.
 - **API retry/backoff:** wrap the model calls so a rate-limit or network blip mid-turn doesn't abort the session.
+
+## Potential implementations
+
+Future work, ranked roughly least → most difficult to implement.
 
 *Mechanics:*
 
