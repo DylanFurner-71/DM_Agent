@@ -214,7 +214,6 @@ Future work, ranked roughly least → most difficult to implement.
 
 *Mechanics:*
 
-- **Concentration:** one concentration spell at a time, broken by damage — pairs with the multi-category spell engine.
 - **Inspiration / luck point:** a once-per-session reroll the DM can award.
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
@@ -225,6 +224,7 @@ Future work, ranked roughly least → most difficult to implement.
 - **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Utility & healing spells:** expand the spell table beyond damage (shield, bless, cure wounds).
 - **Multi-category spell engine:** today `cast_damaging_spell` resolves only single-target *damage* (auto-hit or spell-attack); generalize it into a category-aware resolver that also handles saving-throw spells (save for half), area-of-effect multi-target, healing, buffs/utility, and condition-inflicting spells — so the broad SRD spell list in `rules.SPELLS` is mechanically resolved, not just narrated.
+- **Concentration:** one concentration spell at a time, broken by damage — pairs with the multi-category spell engine.
 - **Fail-forward system:** failed checks that advance the fiction with a cost or complication instead of dead-ending — partial-success outcomes baked into resolution.
 - **Structured quests:** tracked multi-step objectives with prerequisites and completion state, beyond today's single-flag gates.
 - **Reactions & bonus actions:** a richer action economy (opportunity attacks, off-hand attacks, reactions).
