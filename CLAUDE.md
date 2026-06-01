@@ -16,22 +16,21 @@ python -m pytest -q                                  # enforcement tests — no 
 python -m src.main                                   # default scenario (data/scenario.json)
 python -m src.main data/my_scenario.json             # custom scenario
 python -m src.main savegame.json                     # resume a saved game
-python -m src.main data/my_scenario.json --debug     # print tool trace after each turn
 python -m src.main --help                            # show all options
 ```
 
-In-session commands: `/state`, `/save [path]`, `/quit`.
+In-session commands: `/state`, `/trace`, `/full_trace`, `/save [path]`, `/quit`.
 
 ## Architecture
 
 The core loop lives in `dm_agent.py::DMAgent.take_turn`:
 
-1. Append the player's input (with current location/party summary) to the conversation.
-2. Call `client.messages.create` with the full `TOOLS` schema.
-3. If `stop_reason == "tool_use"`, execute every requested tool via `tools.dispatch()`, feed results back as `tool_result` blocks, and loop (capped at `MAX_TOOL_HOPS = 12`).
-4. When the model stops calling tools, return its final text as narration.
+1. Rebuild a fresh, bounded context (`NARRATION_WINDOW` recent turns) and inject a *redacted* state snapshot plus the player's input.
+2. `_execute` runs the tool-use loop: call `client.messages.create` with the full `TOOLS` schema; while `stop_reason == "tool_use"`, run each tool via `tools.dispatch()`, feed results back as `tool_result` blocks, loop (capped at `MAX_TOOL_HOPS = 12`).
+3. In combat, advance the engine-driven NPC turns (mostly resolved without an API call) and accumulate ordered beats.
+4. Narrate. Narration is folded into as few calls as possible — out of combat the tool loop's *terminating turn* is the narration; in combat one unified call (`_narrate_turn`) covers the player action plus all NPC beats; combat-over and end-of-run use dedicated calls. In the terminal the prose **streams** behind a leak gate. See DECISIONS.md §5–6 for the full rationale and trade-offs.
 
-**State is enforced in code, not by the model.** `rules.py` contains the enforcement core — functions like `cast_spell` and `attack` mutate `GameState` and return structured dicts; the model only sees the result and must narrate around it. Tests in `test_rules.py` prove this with no API calls.
+**State is enforced in code, not by the model.** `rules.py` contains the enforcement core — functions like `cast_spell` and `attack` mutate `GameState` and return structured dicts; the model only sees the result and must narrate around it. Because narration is now produced with tool results in context, the leak screens (`_extract_narration` / `_sanitize_narration`) are load-bearing. Tests in `test_rules.py` prove the enforcement with no API calls.
 
 **Key data flow:**
 - `game_state.py` — `Character`, `NPC`, `GameState` dataclasses; JSON save/load
@@ -45,6 +44,8 @@ The model string is set once in `dm_agent.py` at the top-level `MODEL` constant.
 
 ## Extending
 
-Good next tools to add: `skill_check` (d20 + ability modifier vs DC), `use_item`, `add_npc`, initiative ordering. Add the Anthropic schema to `TOOLS` in `tools.py`, add a dispatch branch in `dispatch()`, and add the mechanic to `rules.py`. The test file covers enforcement — add a test for any new rules function.
+To add a new mechanic: add the Anthropic schema to `TOOLS` in `tools.py`, add a dispatch branch in `dispatch()`, and add the mechanic to `rules.py`. The test file covers enforcement — add a test for any new rules function.
+
+The combat, death-save, social (`influence_npc`), stealth (`attempt_ambush`), scene/gate/loot, spell, `use_item`, `skill_check`, and `add_npc` systems are already implemented. Current roadmap (see README "Roadmap" and DECISIONS.md): a two-model split (cheap model for tool selection, quality model for narration), a `max_spell_slots` cap, companions/following, and `use_item` on a downed ally. General ability saving throws (distinct from the death-save cycle) are deliberately out of scope.
 
 Spell-slot enforcement (`test_rules.py::test_spell_slots_run_out`) is the canonical demo of the agent/chatbot distinction: the model requests a second cast, the engine refuses, the model narrates failure. Preserve this invariant when adding new mechanics.
