@@ -259,12 +259,18 @@ DECISIONS.md           # architecture decision log (the soft/hard boundaries, ca
 ## Run
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv                     # create an isolated environment (.venv is git-ignored)
+source .venv/bin/activate                 # Windows: .venv\Scripts\activate
+pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
 python -m pytest -q                       # ~300 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 ```
+
+> The virtual environment keeps this project's dependencies (`rich`, `anthropic`, …)
+> out of your global/system Python. Activate it (`source .venv/bin/activate`) in each
+> new shell before running; `deactivate` when you're done.
 
 > Confirm the current model string in `src/dm_agent.py` (`MODEL`) against
 > https://docs.claude.com/en/docs/about-claude/models — it's the only place the

@@ -9,7 +9,8 @@ An agentic Dungeon Master for a single-session tabletop RPG. The LLM narrates an
 ## Commands
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv && source .venv/bin/activate   # isolated env (.venv is git-ignored); Windows: .venv\Scripts\activate
+pip install -r requirements.txt                      # installs into .venv, not system Python
 # set ANTHROPIC_API_KEY in a .env file (python-dotenv loads it automatically)
 
 python -m pytest -q                                  # enforcement tests — no API needed
