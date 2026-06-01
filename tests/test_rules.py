@@ -1037,27 +1037,23 @@ def test_end_combat_triggers_post_combat_narration():
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
     gs.action_used = True  # Aldric has acted
 
-    # API call sequence:
-    # 1. _execute: model calls end_combat tool
+    # API call sequence (combat player-turn fast path):
+    # 1. _execute: model calls end_combat tool. action_used is already True, so
+    #    _execute breaks here — no terminal model turn is spent (and would be scrubbed).
     ec_block = MagicMock()
     ec_block.type = "tool_use"; ec_block.id = "t1"
     ec_block.name = "end_combat"; ec_block.input = {}
     exec_resp = MagicMock()
     exec_resp.stop_reason = "tool_use"; exec_resp.content = [ec_block]
 
-    # 2. _execute loop: model returns end_turn (no more tools)
-    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
-    done_resp = MagicMock()
-    done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
-
-    # 3. _narrate_combat_over: post-combat prose
+    # 2. _narrate_combat_over: post-combat prose
     narr_block = MagicMock()
     narr_block.type = "text"
     narr_block.text = "The goblin crumples. Silence falls over the chamber. The passage yawns ahead. What do you do?"
     narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
 
     fake_client = MagicMock()
-    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
 
     agent = DMAgent(gs, client=fake_client)
     narration = agent.take_turn("Aldric finishes the goblin")
@@ -1070,9 +1066,9 @@ def test_end_combat_triggers_post_combat_narration():
     assert "What do you do?" in narration
 
     # _narrate_combat_over was used: its prompt contains "Combat is over"
-    third_call_messages = fake_client.messages.create.call_args_list[2][1]["messages"]
+    narrate_call_messages = fake_client.messages.create.call_args_list[1][1]["messages"]
     last_user_content = next(
-        m["content"] for m in reversed(third_call_messages) if m["role"] == "user"
+        m["content"] for m in reversed(narrate_call_messages) if m["role"] == "user"
     )
     assert "Combat is over" in str(last_user_content)
 
@@ -2338,16 +2334,16 @@ def test_engine_auto_ends_combat_when_last_enemy_downed():
     exec_resp = MagicMock()
     exec_resp.stop_reason = "tool_use"; exec_resp.content = [atk_block]
 
-    done_block = MagicMock(); done_block.type = "text"; done_block.text = ""
-    done_resp = MagicMock(); done_resp.stop_reason = "end_turn"; done_resp.content = [done_block]
-
+    # No terminal model turn: attack sets action_used, so _execute breaks right after
+    # the tool resolves. The engine (not the model) ends combat via _maybe_end_combat
+    # while combat_round is still > 0.
     narr_block = MagicMock()
     narr_block.type = "text"
     narr_block.text = "Silence falls. The passage yawns ahead. What do you do?"
     narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
 
     fake_client = MagicMock()
-    fake_client.messages.create.side_effect = [exec_resp, done_resp, narr_resp]
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
 
     agent = DMAgent(gs, client=fake_client)
 
@@ -2364,15 +2360,108 @@ def test_engine_auto_ends_combat_when_last_enemy_downed():
     assert len(ec_calls) == 1
 
     # _narrate_combat_over was used (its prompt contains "Combat is over")
-    third_call_msgs = fake_client.messages.create.call_args_list[2][1]["messages"]
+    narrate_call_msgs = fake_client.messages.create.call_args_list[1][1]["messages"]
     last_user_content = next(
-        m["content"] for m in reversed(third_call_msgs) if m["role"] == "user"
+        m["content"] for m in reversed(narrate_call_msgs) if m["role"] == "user"
     )
     assert "Combat is over" in str(last_user_content)
 
     # No combat-turn prompt appended
     assert "Aldric, what do you do?" not in narration
     assert "Snik, what do you do?" not in narration
+
+
+def test_model_end_combat_in_terminal_scene_still_fires_victory_epilogue():
+    """Regression: a *model*-issued end_combat in a terminal scene must still declare
+    victory and fire the epilogue.
+
+    The bug: dispatch('end_combat') zeroes combat_round, so the subsequent
+    _maybe_end_combat() short-circuited on its combat_round==0 guard and never set
+    game_over — leaving the run stuck in a terminal scene with the epilogue unfired.
+    The verdict now lives in _adjudicate_combat_outcome, called regardless of who
+    ended combat, so the epilogue fires either way.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="The Vault", current_scene="vault")
+    gs.scenes = {"vault": {"location": "The Vault", "exits": {}}}  # terminal: no exits
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=6, hp=0)  # last hostile already down
+
+    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
+    gs.action_used = True  # Aldric has acted; the model now wraps up the fight
+
+    # 1. _execute: model calls end_combat itself (the bug trigger). action_used is set,
+    #    so _execute breaks here — no terminal model turn.
+    ec_block = MagicMock()
+    ec_block.type = "tool_use"; ec_block.id = "t1"
+    ec_block.name = "end_combat"; ec_block.input = {}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [ec_block]
+
+    # 2. _narrate_epilogue: the triumphant closing paragraph.
+    epi_block = MagicMock()
+    epi_block.type = "text"
+    epi_block.text = "The vault falls silent. The party stands victorious amid the dust."
+    epi_resp = MagicMock(); epi_resp.stop_reason = "end_turn"; epi_resp.content = [epi_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, epi_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric ends the fight")
+
+    # Verdict declared despite the model — not the engine — ending combat.
+    assert gs.game_over is True
+    assert gs.game_outcome == "victory"
+    assert gs.combat_round == 0 and gs.combat_order == []
+
+    # The epilogue fired: its prose is returned, and the second call used the
+    # victory-epilogue prompt ("the party has prevailed").
+    assert "victorious" in narration
+    epi_call_msgs = fake_client.messages.create.call_args_list[1][1]["messages"]
+    last_user = next(m["content"] for m in reversed(epi_call_msgs) if m["role"] == "user")
+    assert "the party has prevailed" in str(last_user)
+
+
+def test_start_combat_prints_initiative_banner_once():
+    """A plain start_combat must print a deterministic initiative readout to the player
+    once, mirroring the ambush announcement — built by the engine, not the model."""
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Cave", current_scene="cave")
+    gs.scenes = {"cave": {"location": "Cave", "exits": {"out": "exit"}}}
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})  # leads
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, ability_modifiers={"dex": -5})
+
+    # 1. _execute: model calls start_combat (terminal call for this input).
+    sc_block = MagicMock()
+    sc_block.type = "tool_use"; sc_block.id = "t1"
+    sc_block.name = "start_combat"; sc_block.input = {"combatants": ["Aldric", "Snik"]}
+    exec_resp = MagicMock()
+    exec_resp.stop_reason = "tool_use"; exec_resp.content = [sc_block]
+
+    # 2. terminating turn: the model narrates the outbreak (no initiative list).
+    narr_block = MagicMock()
+    narr_block.type = "text"
+    narr_block.text = "Steel rasps free as the goblin lunges."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    narration = agent.take_turn("Aldric attacks the goblin")
+
+    # Deterministic banner present, in initiative order, exactly once.
+    assert "**Initiative order:** Aldric → Snik" in narration
+    assert narration.count("Initiative order:") == 1
+    # It is a trailer, not stored in the rolling narration history.
+    assert "Initiative order" not in agent.narration_history[-1][1]
 
 
 def test_maybe_end_combat_clears_when_last_hostile_down():

@@ -157,7 +157,7 @@ hostiles, and the party succeeds only if every member beats the bar (weakest-lin
 decide the outcome yourself. This tool does NOT start combat — its result is only \
 ok/success/bar/rolls/hostiles. If the attempt is valid (ok=true), call start_combat next; \
 on success start_combat will mark the hostiles surprised so they lose their first turn. \
-Announce the initiative order from start_combat's result and stop. \
+Do NOT list the initiative order yourself — the engine prints it. Narrate the moment and stop. \
 On SUCCESS (success=true) narrate the party getting the drop; on FAILURE (success=false) no \
 surprise is granted — narrate the enemies noticing the approach, then the fair fight. \
 attempt_ambush is rejected (ok=false) when combat is already in progress ('in_combat'), an \
@@ -189,8 +189,8 @@ participant. Never call `attack` or `cast_spell` offensively before `start_comba
 `start_combat` is the TERMINAL call for the input that triggers it — once you call it, \
 do NOT also call `attack`, `cast_spell`, `skill_check`, or any other action tool in \
 the same [Tool-use phase]; the engine will deny it with reason "combat_starting". \
-Announce the initiative order from the result and stop; the engine runs any leading NPC \
-turns and then prompts the first PC.
+Do NOT list the initiative order yourself — the engine prints it. Narrate the outbreak of \
+combat and stop; the engine runs any leading NPC turns and then prompts the first PC.
 2. TURN ORDER: `next_turn` is not available to you — the engine advances the pointer. \
 The preamble shows "[Combat: Round N — Name's turn]" so you always know who is active. \
 Only that combatant may act; the tools enforce this and return ok=false if you try to \
@@ -448,7 +448,8 @@ class DMAgent:
             messages.append({"role": "assistant", "content": narration})
         return messages
 
-    def _execute(self, prompt: str, capture_narration: bool = False) -> str:
+    def _execute(self, prompt: str, capture_narration: bool = False,
+                 stop_when_action_used: bool = False) -> str:
         """Tool-use phase for one action. Runs the loop; state mutates.
 
         When capture_narration is True, the model's terminating (non-tool) response
@@ -490,6 +491,13 @@ class DMAgent:
                         "content": _json(result),
                     })
             self.messages.append({"role": "user", "content": tool_results})
+            # Combat player-turn fast path: once the actor's action is spent, stop —
+            # don't pay for a terminal model turn whose prose is scrubbed anyway, and
+            # don't let the model drive next_turn / NPC turns the engine resolves for
+            # free in take_turn. (This also keeps end_combat in engine hands so the
+            # victory check in _maybe_end_combat runs while combat_round is still > 0.)
+            if stop_when_action_used and self.state.action_used:
+                break
 
         # When NOT capturing narration, scrub text the model emitted in its
         # terminating turn — premature prose must not leak into the later unified
@@ -612,6 +620,31 @@ class DMAgent:
         self.messages.append({"role": "user", "content": prompt})
         return self._narration_call(max_tokens=min(256 * total, 1024), phase=f"narrating_turn_{total}beats")
 
+    def _adjudicate_combat_outcome(self) -> None:
+        """Decide victory/defeat from the post-combat board and set game_over/outcome.
+
+        Party wipe → defeat (takes precedence over a mutual kill). Otherwise, all
+        hostiles cleared in an ungated terminal scene → victory; a gated terminal
+        defers victory until the flagged exit is opened. Idempotent and independent
+        of combat_round, so it produces the same verdict whether the *engine* ended
+        combat (via _maybe_end_combat) or the *model* did (a narrative end_combat for
+        surrender/flee, or a stray call) — the latter zeroes combat_round and would
+        otherwise skip the verdict, which is the bug that left the epilogue unfired.
+        """
+        s = self.state
+        if s.game_over:
+            return
+        if not any(not c.is_down for c in s.party.values()):
+            s.game_over = True
+            s.game_outcome = "defeat"
+            return
+        if any(n.hostile and not n.is_down for n in s.npcs.values()):
+            return  # hostiles remain — no terminal verdict to declare
+        scene = s.scenes.get(s.current_scene, {}) if s.scenes else {}
+        if not scene.get("exits", {}) and not scene.get("exit_requires"):
+            s.game_over = True
+            s.game_outcome = "victory"
+
     def _maybe_end_combat(self) -> bool:
         """End combat automatically when one side is entirely down.
 
@@ -626,21 +659,7 @@ class DMAgent:
         if not living_hostiles or not living_party:
             result = tools.dispatch("end_combat", {}, self.state)
             self.tool_trace.append({"name": "end_combat", "input": {}, "result": result})
-            if not living_party:  # party wipe — defeat takes precedence over mutual kill
-                self.state.game_over = True
-                self.state.game_outcome = "defeat"
-            else:
-                s = self.state
-                current_scene_data = (
-                    s.scenes.get(s.current_scene, {})
-                    if s.scenes else {}
-                )
-                current_exits = current_scene_data.get("exits", {})
-                # Gated terminal scenes: end combat but defer victory until the party
-                # opens the flagged exit. Ungated terminals auto-win as before.
-                if not current_exits and not current_scene_data.get("exit_requires"):
-                    s.game_over = True
-                    s.game_outcome = "victory"
+            self._adjudicate_combat_outcome()
             return True
         return False
 
@@ -660,6 +679,35 @@ class DMAgent:
             )
         self.messages.append({"role": "user", "content": prompt})
         return self._narration_call(max_tokens=300, phase="narrating_epilogue")
+
+    def _initiative_banner(self) -> str | None:
+        """One-time initiative readout, emitted when combat starts this turn.
+
+        A deterministic, engine-sourced line — like the closing prompt — so the order
+        is always shown to the player on a plain start_combat exactly as it is after an
+        ambush, rather than depending on the model to recite it. Built from the
+        start_combat result captured in this turn's tool_trace (its confirmed order and
+        surprised set), so it is robust to later combat_index/surprise mutation. Returns
+        None when combat did not start this turn.
+        """
+        sc = next(
+            (c for c in self.tool_trace
+             if c["name"] == "start_combat" and c["result"].get("ok")),
+            None,
+        )
+        if not sc:
+            return None
+        order_keys = sc["result"].get("combat_order", [])
+        if not order_keys:
+            return None
+        all_actors = {**self.state.party, **self.state.npcs}
+        surprised = {n.lower() for n in sc["result"].get("surprised", [])}
+        parts = [
+            f"{(all_actors[k].name if k in all_actors else k)}"
+            + (" *(surprised)*" if k.lower() in surprised else "")
+            for k in order_keys
+        ]
+        return "**Initiative order:** " + " → ".join(parts)
 
     def _closing_prompt(self) -> str | None:
         """Engine-sourced closing prompt for the active combatant.
@@ -749,9 +797,17 @@ class DMAgent:
             f"{finish}"
         )
         trace_len = len(self.tool_trace)
-        player_narration = self._execute(player_prompt, capture_narration=not in_combat)
+        player_narration = self._execute(player_prompt, capture_narration=not in_combat,
+                                          stop_when_action_used=in_combat)
         self._maybe_end_combat()
         self.state.combat_starting = False  # clear barrier before NPC loop so NPCs can act
+
+        # If combat ended during the player's own action, settle the verdict now.
+        # _maybe_end_combat already did so when the *engine* ended it; this also covers
+        # a *model*-issued end_combat (surrender/flee), which zeroes combat_round and
+        # would otherwise slip past the verdict and leave the epilogue unfired.
+        if in_combat and self.state.combat_round == 0:
+            self._adjudicate_combat_outcome()
 
         # Check point 1: game_over from player phase (victory via move_scene, or party wipe).
         if self.state.game_over:
@@ -939,11 +995,15 @@ class DMAgent:
 
         self.full_trace.append({"turn": self.state.turn, "input": player_input, "calls": list(self.tool_trace), "api_calls": list(self.api_stats)})
 
-        # Engine-sourced closing prompt: kept separate so it's not stored in history.
+        # Engine-sourced trailers, kept separate so they're not stored in history:
+        # a one-time initiative readout when combat just started, then the active-actor
+        # prompt. Both are deterministic so the order is always shown to the player.
+        banner = self._initiative_banner()
         closing = self._closing_prompt()
-        if closing:
-            self._emit(("\n\n" if combined else "") + closing)
-        return "\n\n".join(p for p in [combined, closing] if p)
+        trailer = "\n\n".join(p for p in [banner, closing] if p)
+        if trailer:
+            self._emit(("\n\n" if combined else "") + trailer)
+        return "\n\n".join(p for p in [combined, banner, closing] if p)
 
 
 def _json(obj) -> str:
