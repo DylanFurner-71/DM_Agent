@@ -46,6 +46,21 @@ def _exits_for_model(exits: dict) -> dict:
     return result
 
 
+def _available_reinforcements(scene_data: dict, quest_flags: dict) -> list[str]:
+    """Reinforcement ids whose authored trigger is currently satisfied.
+
+    An entry with a `requires` flag is hidden until that flag is set (mirrors
+    gated exits); an entry with no `requires` is always available. The model only
+    ever sees — and can only spawn — ids returned here; locked ones stay invisible.
+    """
+    out = []
+    for rid, entry in scene_data.get("reinforcements", {}).items():
+        req = entry.get("requires") if isinstance(entry, dict) else None
+        if not req or quest_flags.get(req):
+            out.append(rid)
+    return out
+
+
 def _normalize_flag_key(raw: str) -> str | None:
     """Normalize a quest flag key; return None if the result is empty.
 
@@ -136,6 +151,8 @@ TOOLS = [
             "Apply a flat, known amount of damage (negative) or healing (positive) — "
             "for exact non-dice values ONLY, e.g. 'the lava deals exactly 20' or "
             "'the potion restores exactly 10 HP'. "
+            "The magnitude may not exceed the target's max HP (ok=false reason "
+            "'amount_out_of_range'); larger swings are refused. "
             "For any dice-rolled amount use apply_dice. "
             "Do NOT use this for spell damage — use cast_spell instead."
         ),
@@ -319,23 +336,27 @@ TOOLS = [
     {
         "name": "add_npc",
         "description": (
-            "Instantiate a new NPC from a canonical monster template and add it to the roster. "
-            "Available templates: goblin, orc, skeleton. "
-            "instance_id is the unique state key (e.g. 'goblin_two'); it must not already exist. "
-            "name overrides the display name (optional). "
-            "Outside combat: NPC is added to the roster and can be named in start_combat. "
-            "During combat (reinforcements): the engine rolls the NPC's initiative and inserts "
-            "it into the turn order at the correct sorted slot; the active combatant is unchanged. "
-            "Returns ok=false for an unknown template or a duplicate instance_id."
+            "Bring an AUTHOR-DECLARED reinforcement into the current scene by its instance_id. "
+            "The scene's reinforcements manifest is the sole authority — you may only spawn an "
+            "instance_id the author declared there (ok=false reason 'not_declared' otherwise, "
+            "with the available ids listed). You cannot conjure a monster the author did not place, "
+            "exactly as move_scene cannot invent an exit and take_item cannot invent loot. "
+            "Stats, name, and template all come from the manifest entry — never supply them. "
+            "You may only spawn an id that appears in the state snapshot's 'reinforcements' "
+            "list; some reinforcements stay hidden behind an authored trigger and cannot be "
+            "spawned until that trigger fires (ok=false reason 'locked' if you try). "
+            "Each reinforcement spawns once (ok=false reason 'already_spawned' on a repeat). "
+            "Outside combat the NPC joins the roster and can be named in start_combat. "
+            "During combat the engine rolls its initiative and inserts it at the correct sorted "
+            "slot; the active combatant is unchanged. "
+            "Reveal reinforcements through the fiction (a door bursts open) — do not announce the manifest."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "template":    {"type": "string", "description": "Monster template id: 'goblin', 'orc', or 'skeleton'"},
-                "instance_id": {"type": "string", "description": "Unique state key for this NPC, e.g. 'goblin_two'"},
-                "name":        {"type": "string", "description": "Optional display name override"},
+                "instance_id": {"type": "string", "description": "The reinforcement key to spawn; must be declared in the current scene's reinforcements manifest, e.g. 'goblin_two'."},
             },
-            "required": ["template", "instance_id"],
+            "required": ["instance_id"],
         },
     },
     {
@@ -625,6 +646,19 @@ def dispatch(name: str, args: dict, state) -> dict:
         if not target:
             return {"ok": False, "error": "Unknown target; call get_state."}
         amount = int(args["amount"])
+        # Bound the magnitude: a single flat effect may not exceed the target's
+        # max HP. This caps the one place a model-supplied number reaches tracked
+        # state — an arbitrary HP swing is refused, not silently applied.
+        if abs(amount) > target.max_hp:
+            return {
+                "ok": False,
+                "reason": "amount_out_of_range",
+                "error": (
+                    f"modify_hp amount {amount} exceeds {target.name}'s max HP "
+                    f"({target.max_hp}). Use apply_dice for rolled effects, or supply "
+                    f"a plausible flat amount."
+                ),
+            }
         res = rules.heal(target, amount) if amount >= 0 else rules.apply_damage(target, -amount)
         return res
 
@@ -831,6 +865,9 @@ def dispatch(name: str, args: dict, state) -> dict:
             exit_req = current_scene_data.get("exit_requires")
             if exit_req:
                 d["exit_requires"] = exit_req
+            reinf = _available_reinforcements(current_scene_data, state.quest_flags)
+            if reinf:
+                d["reinforcements"] = reinf  # only gate-open ids; locked ones stay hidden
         return {"ok": True, "state": d}
 
     if name == "attempt_ambush":
@@ -1003,20 +1040,67 @@ def dispatch(name: str, args: dict, state) -> dict:
         return rules.lookup_rule(args["topic"])
 
     if name == "add_npc":
-        template = args.get("template", "").strip().lower()
         instance_id = args.get("instance_id", "").strip()
-        display_name = args.get("name")
-
-        if template not in rules.MONSTERS:
+        if not instance_id:
             return {
                 "ok": False,
-                "error": f"Unknown template {template!r}. Known: {', '.join(sorted(rules.MONSTERS))}.",
+                "reason": "missing_instance_id",
+                "error": "instance_id is required and cannot be empty.",
             }
+
+        # The current scene's reinforcements manifest is the SOLE authority for
+        # what may be spawned — the model can only trigger an author-declared
+        # reinforcement, never conjure a monster (mirrors move_scene/exits and
+        # take_item/loot). Stats, name, and template come from the manifest entry.
+        scene_data = state.scenes.get(state.current_scene, {}) if state.current_scene else {}
+        manifest: dict = scene_data.get("reinforcements", {})
+        entry = next(
+            (v for k, v in manifest.items() if k.lower() == instance_id.lower()),
+            None,
+        )
+        if entry is None:
+            available = ", ".join(_available_reinforcements(scene_data, state.quest_flags)) or "none"
+            return {
+                "ok": False,
+                "reason": "not_declared",
+                "error": (
+                    f"{instance_id!r} is not a declared reinforcement for this scene. "
+                    f"Available: {available}."
+                ),
+            }
+
+        # Authored trigger: a reinforcement with a `requires` flag stays locked
+        # until that flag is set (mirrors gated exits). It is also hidden from the
+        # model's state snapshot until then, so a locked spawn means the model
+        # named an id it should not yet see.
+        req = entry.get("requires") if isinstance(entry, dict) else None
+        if req and not state.quest_flags.get(req):
+            return {
+                "ok": False,
+                "reason": "locked",
+                "required_flag": req,
+                "error": f"{instance_id!r} cannot arrive yet — its trigger has not fired.",
+            }
+
+        # Each reinforcement spawns once — the duplicate guard prevents farming.
         instance_id_lower = instance_id.lower()
         if any(k.lower() == instance_id_lower for k in {**state.npcs, **state.party}):
-            return {"ok": False, "error": f"instance_id {instance_id!r} already exists."}
+            return {
+                "ok": False,
+                "reason": "already_spawned",
+                "error": f"instance_id {instance_id!r} already exists.",
+            }
 
-        npc = NPC(**rules.spawn_npc(template, display_name))
+        # Build exactly like a scene NPC so template overrides (name, max_hp,
+        # disposition_dc, alertness_dc, …) declared by the author are honored.
+        # `requires` is an add_npc-manifest concept, not an NPC field — strip it.
+        spawn_entry = {k: v for k, v in entry.items() if k != "requires"} if isinstance(entry, dict) else entry
+        try:
+            npc = expand_npc_entry(spawn_entry)
+        except (KeyError, TypeError) as e:
+            return {"ok": False, "reason": "bad_manifest",
+                    "error": f"Reinforcement {instance_id!r} is misdeclared: {e}"}
+        template = entry.get("template", "") if isinstance(entry, dict) else ""
         state.npcs[instance_id] = npc
 
         if state.combat_round > 0:

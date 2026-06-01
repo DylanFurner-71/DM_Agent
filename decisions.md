@@ -273,6 +273,57 @@ per-exit `requires` is the clean mechanism and the terminal `exit_requires` path
 the terminal gate exists for endings with no scene beyond. Backward compatible: string exits
 and ungated terminals are unchanged.
 
+- **What:** String-valued quest flags (including answer-gate passwords stored via 
+  `set_quest_flag`) are now redacted to `"<redacted>"` in both the `get_state` response 
+  and the `set_quest_flag` echo before they reach the model. The real value is stored in 
+  `state.quest_flags` and is used by the answer-gate engine logic in `move_scene`.
+- **Why:** The `get_state` snapshot is injected into the model's context every turn. A 
+  string-valued flag like `{"iron_door_password": "ashfall"}` was visible to the model, 
+  meaning it could supply the password itself rather than relaying the player's words — 
+  defeating the soft boundary documented in the README.
+- **What this hardens:** The `get_state` channel and the `set_quest_flag` echo channel. 
+  The `_exits_for_model` helper already redacted `requires_answer` from exits; this 
+  extends the same principle to quest flags.
+- **What it doesn't fix:** A scenario author who stores a password in a boolean flag (e.g. 
+  `"ashfall_known": true`) rather than a string flag still leaks the flag name. That's 
+  an author-convention problem, not addressable in code without a flag metadata schema.
+- **Classification:** Hard boundary (enforced in code), not soft boundary.
+
+
+## ADR: add_npc spawns only author-declared reinforcements, behind a trigger
+
+**Status:** Accepted
+
+**Context:** `add_npc` originally let the model spawn any monster from the `MONSTERS`
+table at will — stats were engine-owned, but *whether*, *when*, *how many*, and *which*
+were pure model discretion. That made it the one tool that let the model author world
+*content*, not just propose actions, breaking the discipline its siblings enforce:
+`move_scene` rejects undeclared exits, `take_item` rejects unlisted loot — the author
+declares the possibility-space and the engine holds the model inside it. `add_npc`
+checked against nothing but the template name. (It also accepted an empty `instance_id`,
+silently creating a blank-string roster key.)
+
+**Decision.** Reinforcements are author-placed, mirroring loot and exits. A scene declares
+a `reinforcements` manifest keyed by `instance_id`, each entry an NPC spec
+(`{template, name, …overrides}`) expanded through the same `expand_npc_entry` path as scene
+NPCs. `add_npc` takes only `instance_id` and may spawn only a declared key — stats, name,
+and template come from the manifest, never the model. An entry may carry a `requires` flag:
+the **authored trigger**. A gated reinforcement is hidden from the model's state snapshot
+(and `get_state`) and refused on spawn (`ok=false reason "locked"`) until that flag is set;
+the flag fires in the fiction via `set_quest_flag`, exactly like a gated exit opening. Each
+spawns once (`already_spawned`); empty ids are rejected (`missing_instance_id`).
+
+**Consequences.** Two separations now hold where one did before: stats were always
+engine-owned (numbers), and now *existence* is author-owned (content). What the model still
+owns is the *timing within the authored gate* — it decides the dramatic moment to bring in
+a triggered wave, and it sets the trigger flag, so the gate is hard on **what/whether** but
+soft on **when** (same trust model as gated exits and quest flags generally). The feature
+ships **dormant**: no scenario declares a manifest yet, so `add_npc` succeeds nowhere until
+an author opts in — turning it on is a scene-authoring act, not a code change. The neat
+mid-combat initiative-insertion capability (sorted-slot placement, pointer-stable) is
+preserved unchanged; only the source of *what* may enter was constrained. Backward note:
+the old free-form `template`/`name` arguments are gone from the schema.
+
 KNOWN ROUGH EDGE (leave for now): a de-escalated NPC stays in combat_order if other hostiles
 remain, so its turn still comes up — the system-prompt rule above handles it (narrate it standing
 aside). Cleanly removing it from the order is a later refinement; do not modify next_turn here.

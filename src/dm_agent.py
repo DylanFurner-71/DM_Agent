@@ -326,6 +326,9 @@ class DMAgent:
                 exit_req = scene_data.get("exit_requires")
                 if exit_req:
                     snap["exit_requires"] = exit_req
+                reinf = tools._available_reinforcements(scene_data, s.quest_flags)
+                if reinf:
+                    snap["reinforcements"] = reinf
         if s.quest_flags:
             snap["quest_flags"] = s.quest_flags
         if s.combat_round > 0:
