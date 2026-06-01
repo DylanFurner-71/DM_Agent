@@ -983,13 +983,18 @@ class DMAgent:
 
         # One narration call for the whole turn:
         #  - combat ended this turn → dedicated two-paragraph close (covers the finishing blow);
-        #  - in-combat turn with NPC beats → unified player-action + NPC-beats narration;
+        #  - in-combat turn → unified player-action + NPC-beats narration via _narrate_turn.
+        #    This fires whenever we were in combat at the start of the turn, even when NO
+        #    NPC beats accumulated (combat_beats empty) — e.g. a PC acts and the next
+        #    combatant in initiative is another PC. In combat the player action is
+        #    resolved tool-only (player_narration == ""), so its prose exists ONLY as
+        #    beat 1 of _narrate_turn; gating on combat_beats here would silently drop it.
         #  - out-of-combat turn → the terminating turn already captured by _execute.
         # The first two stream live inside their narration call; the last is captured
         # (not streamed) and is emitted here as a chunk so the sink sees it in order.
         if combat_over_in_player_phase or combat_ended_in_npc_phase:
             narration = self._narrate_combat_over()
-        elif combat_beats:
+        elif in_combat or combat_beats:
             narration = self._narrate_turn(player_input, combat_beats)
         else:
             narration = player_narration

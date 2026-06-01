@@ -2455,6 +2455,66 @@ def test_engine_auto_ends_combat_when_last_enemy_downed():
     assert "Snik, what do you do?" not in narration
 
 
+def test_combat_pc_action_narrated_when_next_combatant_is_pc():
+    """Regression: in combat, a PC's action must be narrated even when the NEXT
+    combatant in initiative is another conscious PC (so no NPC beats accumulate).
+
+    The bug: narration was gated on combat_beats being non-empty. When a PC acted
+    and the following combatant was also a PC, the NPC loop advanced the pointer and
+    broke immediately, producing zero beats — so _narrate_turn was never called and
+    the player's own action went un-narrated (only a 'thinking' API call, no
+    narration). Observed across Wisp's turns in the order wisp -> aldric -> grik -> narl.
+    """
+    from unittest.mock import MagicMock, patch
+    from src.dm_agent import DMAgent
+
+    gs = GameState(location="Arena")
+    gs.party["wisp"] = Character(name="Wisp", spell_slots={1: 1}, spells=["magic_missile"],
+                                 spellcasting_ability="int", ability_modifiers={"int": 4})
+    gs.party["aldric"] = Character(name="Aldric", inventory=["mace"], ability_modifiers={"str": 2})
+    gs.npcs["snik"] = NPC(name="Snik", max_hp=30, hp=30, ac=10)
+
+    # Force the order so Wisp acts, then a PC (Aldric) is next — no NPC beats this turn.
+    tools.dispatch("start_combat", {"combatants": ["wisp", "aldric", "snik"]}, gs)
+    gs.combat_order = ["wisp", "aldric", "snik"]
+    gs.combat_index = 0
+    gs.combat_round = 1
+    gs.action_used = False
+    gs.combat_starting = False
+
+    # _execute: model casts magic_missile at Snik; action_used set -> _execute breaks
+    # (no terminal model turn). One create() call for the tool-use phase.
+    cast_block = MagicMock()
+    cast_block.type = "tool_use"; cast_block.id = "t1"
+    cast_block.name = "cast_spell"
+    cast_block.input = {"caster": "Wisp", "spell_level": 1, "spell_name": "magic_missile", "target": "Snik"}
+    exec_resp = MagicMock(); exec_resp.stop_reason = "tool_use"; exec_resp.content = [cast_block]
+
+    narr_block = MagicMock(); narr_block.type = "text"
+    narr_block.text = "Three darts of force slam into Snik."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
+    agent = DMAgent(gs, client=fake_client)
+
+    with patch.object(rules._rng, "randint", side_effect=[2, 2, 2]):  # 3d4 = 6, +3 = 9 dmg
+        narration = agent.take_turn("Wisp fires magic missile at Snik")
+
+    # Combat continues — Snik survived, round still > 0.
+    assert gs.npcs["snik"].hp == 21
+    assert gs.combat_round > 0
+    # A narration call WAS made — the bug skipped it entirely (only the tool-use call).
+    assert fake_client.messages.create.call_count == 2
+    # The player's action narration reaches the player.
+    assert "Three darts of force" in narration
+    # _narrate_turn was the vehicle (its prompt enumerates beats; the player action is beat 1).
+    narr_prompt = str(fake_client.messages.create.call_args_list[1][1]["messages"])
+    assert "Narrate each of the following" in narr_prompt
+    # The closing prompt addresses the next actor (Aldric).
+    assert "Aldric" in narration
+
+
 def test_model_end_combat_in_terminal_scene_still_fires_victory_epilogue():
     """Regression: a *model*-issued end_combat in a terminal scene must still declare
     victory and fire the epilogue.
