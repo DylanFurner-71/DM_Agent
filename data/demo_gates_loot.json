@@ -1,0 +1,70 @@
+{
+  "current_scene": "antechamber",
+  "scenes": {
+    "antechamber": {
+      "location": "The warded antechamber",
+      "scene": "A dusty antechamber. A dead scout lies against the wall, a water-stained journal in his lap; its last legible line reads: 'The iron door yields to no key, only to a spoken word: ashfall.' A bronze lever juts from a slot beside a humming, rune-warded arch — the arch's barrier still crackles, blocking the way on. A healing draught and a small bronze key glint in the rubble.",
+      "npcs": {},
+      "loot": ["healing_potion", "bronze_key"],
+      "exits": {
+        "the warded arch": {
+          "to": "gallery",
+          "requires": "ward_lowered",
+          "denied": "The arch's barrier crackles and holds — the ward is still raised. Something here must lower it first."
+        }
+      }
+    },
+    "gallery": {
+      "location": "The echoing gallery",
+      "scene": "A long gallery of cracked statues. At the far end stands a heavy iron door, banded and glyph-marked, with no keyhole at all. A lustrous Pearl of Power rests on a fallen plinth nearby.",
+      "npcs": {},
+      "loot": ["pearl_of_power"],
+      "exits": {
+        "the iron door, banded and glyph-marked": {
+          "to": "vault",
+          "requires_answer": "ashfall",
+          "denied": "The iron door does not so much as shiver. Whatever opens it, it is not force — and you have not spoken the word."
+        }
+      }
+    },
+    "vault": {
+      "location": "The inner vault",
+      "scene": "Beyond the iron door, a vaulted treasury opens in hushed dark. On a velvet bier rests the Sundering Crown, the relic this barrow was raised to keep. There is nowhere further to go.",
+      "npcs": {},
+      "loot": ["sundering_crown"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch"],
+      "conditions": []
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 3, "2": 1},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "chromatic_orb", "fire_bolt"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

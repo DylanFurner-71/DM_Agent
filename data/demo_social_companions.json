@@ -1,0 +1,58 @@
+{
+  "current_scene": "parley_ledge",
+  "scenes": {
+    "parley_ledge": {
+      "location": "A torchlit ledge above the warren",
+      "scene": "A lone goblin, Snik, blocks the rope-bridge down into the warren, blade half-raised but eyes wary — this one looks like he would rather talk than die for whoever pays him. Below, the tunnels echo with other voices.",
+      "npcs": {
+        "snik": { "template": "goblin", "name": "Snik", "hostile": true, "disposition_dc": 13, "alertness_dc": 12 }
+      },
+      "loot": [],
+      "exits": {
+        "the rope-bridge down into the warren": "warren"
+      }
+    },
+    "warren": {
+      "location": "The goblin warren",
+      "scene": "A low, reeking burrow of packed earth. A mindless skeleton sentry, Rattle, stands bolt upright in an alcove, jaw clacking — there is no reasoning with that. Beside a cookfire, a second goblin, Grub, leaps up with a shriek and grabs for his cleaver. This is the bottom of the warren; there is nowhere deeper to go.",
+      "npcs": {
+        "rattle": { "template": "skeleton", "name": "Rattle", "hostile": true, "disposition_dc": null, "alertness_dc": 10 },
+        "grub": { "template": "goblin", "name": "Grub", "hostile": true, "disposition_dc": 14, "alertness_dc": 10 }
+      },
+      "loot": [],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch"],
+      "conditions": []
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 3, "2": 1},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 4},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "chromatic_orb", "fire_bolt"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

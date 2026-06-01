@@ -1,0 +1,71 @@
+{
+  "current_scene": "alarm_post",
+  "scenes": {
+    "alarm_post": {
+      "location": "The alarm post",
+      "scene": "A cramped guard post where a single goblin, Grik, stands beside a great brass alarm-horn slung on a chain. Tunnels branch away into the dark on every side — if that horn sounds, whatever lurks down them will come running. This is the only chamber; there is no way past but to settle it here.",
+      "npcs": {
+        "grik": { "template": "goblin", "name": "Grik", "hostile": true, "alertness_dc": 12 }
+      },
+      "loot": ["healing_potion"],
+      "exits": {},
+      "reinforcements": {
+        "goblin_reserve": { "template": "goblin", "name": "Skab", "hostile": true },
+        "ogre_enforcer": {
+          "template": "ogre",
+          "name": "Grukk",
+          "hostile": true,
+          "max_hp": 32,
+          "requires": "alarm_raised"
+        }
+      }
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2},
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch"],
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": ["guiding_bolt"]
+    },
+    "kael": {
+      "name": "Kael",
+      "level": 3,
+      "max_hp": 20,
+      "hp": 20,
+      "ac": 14,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 1, "dex": 3, "con": 1, "int": 0, "wis": 1, "cha": 1},
+      "inventory": ["shortsword", "shortbow", "thieves tools"],
+      "conditions": []
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 4, "2": 2},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "chromatic_orb", "fire_bolt"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

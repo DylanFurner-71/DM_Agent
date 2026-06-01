@@ -216,6 +216,8 @@ src/
   main.py              # terminal REPL: /state /trace /full_trace /save /quit
 data/
   scenario.json        # the demo adventure
+  demo_*.json          # per-feature demo scenarios
+  DEMOS.md             # index of the demos + how to trigger each feature
 tests/
   test_rules.py        # ~300 enforcement tests — no API needed
   test_answer_gate.py  # answer-gated-exit behaviour + redaction, no API needed
@@ -237,6 +239,12 @@ python -m src.main data/scenario.json     # explicit scenario, or a savegame pat
 > model is named.
 
 ## Demos
+
+**Per-feature demo scenarios.** [`data/DEMOS.md`](data/DEMOS.md) is an index of
+focused, ready-to-run scenarios (`data/demo_*.json`) — one per feature-cluster
+(combat, death saves, social & companions, stealth, gates & loot, spells & items,
+reinforcements) — each with the exact player inputs to type to trigger the feature
+and what to watch for in `/state` and `/trace`.
 
 **The money shot — enforcement you can see.** The starting scenario gives the mage
 **Wisp** exactly one level-1 slot, on purpose:

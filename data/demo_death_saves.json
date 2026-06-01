@@ -1,0 +1,47 @@
+{
+  "current_scene": "collapsing_crypt",
+  "scenes": {
+    "collapsing_crypt": {
+      "location": "A collapsing crypt",
+      "scene": "Dust sifts from a cracked ceiling onto broken sarcophagi. Two goblin grave-robbers, Skar and Vrik, whirl from their looting with notched blades bared. Wisp looks dangerously frail in the gloom — one solid hit could put the mage down. Aldric still carries a sealed healing draught.",
+      "npcs": {
+        "skar": { "template": "goblin", "name": "Skar", "hostile": true },
+        "vrik": { "template": "goblin", "name": "Vrik", "hostile": true }
+      },
+      "loot": ["healing_potion"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch", "healing_potion"],
+      "conditions": []
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 5,
+      "hp": 5,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "fire_bolt"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

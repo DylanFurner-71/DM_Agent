@@ -1,0 +1,53 @@
+{
+  "current_scene": "spellbreaker_hall",
+  "scenes": {
+    "spellbreaker_hall": {
+      "location": "The Spellbreaker Hall",
+      "scene": "A long basalt hall where arcane sigils flicker on every pillar. Three kobold skirmishers — Zik, Zak, and Zek — scurry from the shadows, slings whirling. Wisp's spellbook is nearly spent: a single first-level slot remains. A Pearl of Power glows faintly on a nearby altar. There is no exit but through this fight.",
+      "npcs": {
+        "zik": { "template": "kobold", "name": "Zik", "hostile": true },
+        "zak": { "template": "kobold", "name": "Zak", "hostile": true },
+        "zek": { "template": "kobold", "name": "Zek", "hostile": true }
+      },
+      "loot": ["pearl_of_power"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2},
+      "max_spell_slots": {"1": 2},
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch", "healing_potion"],
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": ["guiding_bolt", "sacred_flame"]
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 1},
+      "max_spell_slots": {"1": 1},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "chromatic_orb", "fire_bolt"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}
