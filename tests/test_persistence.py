@@ -214,6 +214,15 @@ def test_save_proficiencies_preserved(tmp_path):
     assert loaded.party["wisp"].save_proficiencies == []
 
 
+def test_sprung_hazards_preserved(tmp_path):
+    """sprung one-shot hazards must survive the round-trip so a reloaded session
+    doesn't re-arm a trap the party already triggered."""
+    gs = _make_midgame_state()
+    gs.sprung_hazards = ["ember_chamber:dart_trap"]
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.sprung_hazards == ["ember_chamber:dart_trap"]
+
+
 # --- savegame branch guard ---------------------------------------------------
 
 def test_savegame_branch_used_not_scene_expansion(tmp_path):

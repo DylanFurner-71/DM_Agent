@@ -108,6 +108,7 @@ class GameState:
     party: dict[str, Character] = field(default_factory=dict)
     npcs: dict[str, NPC] = field(default_factory=dict)
     quest_flags: dict[str, bool] = field(default_factory=dict)
+    sprung_hazards: list[str] = field(default_factory=list)  # "<scene>:<hazard_id>" of fired one-shot hazards
     turn: int = 0
     log: list[str] = field(default_factory=list)
     transcript: list[dict] = field(default_factory=list)  # {"kind": "player"|"dm", "text": str}
@@ -150,6 +151,7 @@ class GameState:
             "party": {k: asdict(v) for k, v in self.party.items()},
             "npcs": {k: asdict(v) for k, v in self.npcs.items()},
             "quest_flags": self.quest_flags,
+            "sprung_hazards": self.sprung_hazards,
             "turn": self.turn,
             "log": self.log,
             "transcript": self.transcript,
@@ -192,6 +194,7 @@ class GameState:
             current_scene=current_scene,
             scenes=scenes,
             quest_flags=d.get("quest_flags", {}),
+            sprung_hazards=d.get("sprung_hazards", []),
             turn=d.get("turn", 0),
             log=d.get("log", []),
             transcript=d.get("transcript", []),

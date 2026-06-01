@@ -29,7 +29,7 @@ far), `/roll <notation>` (open flavor roll), `/trace` (tools called per turn),
 | Stealth & ambush (group stealth, surprise round, always-alert foe) | `demo_stealth.json` |
 | Exploration: scenes, gates & loot + Quest flags (flag gate, answer gate, `take_item`) | `demo_gates_loot.json` |
 | Spells & items (slot economy "money shot", Pearl-of-Power cap, `use_item`, `lookup_rule`) | `demo_spells_items.json` |
-| Saving throws (`saving_throw` — resist an effect; reactive, proficiency-aware) | `demo_saving_throws.json` |
+| Saving throws & hazards/traps (`trigger_hazard` author-placed traps + bare `saving_throw`) | `demo_saving_throws.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
 | Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
 | Persistence & resume | any scenario — see the bottom section |
@@ -196,39 +196,43 @@ free cantrips, the **Pearl-of-Power cap** (refused when slots are already full, 
 
 ---
 
-## demo_saving_throws.json — Saving throws
+## demo_saving_throws.json — Saving throws & hazards/traps
 
 **Party:** Aldric (proficient in WIS/CHA saves, carries a healing potion), Kael
-(DEX/INT saves), Wisp (INT/WIS saves). **Scene 1 (trapped_gallery):** a DEX dart-trap
-and a CON poison-spore cloud. **Scene 2 (fear_sanctum):** a WIS fear-ward guarding the
-relic — terminal victory.
+(DEX/INT saves), Wisp (INT/WIS saves). **Scene 1 (trapped_gallery):** an author-placed
+DEX dart-trap (`floor_darts`, hidden) and a CON poison-spore cloud (`spore_cloud`,
+save-for-half). **Scene 2 (fear_sanctum):** a WIS fear-ward guarding the relic —
+terminal victory.
 
-**Shows:** `saving_throw` (the reactive twin of `skill_check`) used to **resist** an
-effect, across three different abilities (DEX/CON/WIS); proficiency-aware saves (a
-character proficient in that save adds proficiency, a plain check never does); the
-fact that a save is **not an action and not turn-guarded** (everyone present saves at
-once, with no combat); and applying a failed save's consequence through
-`apply_dice`/`modify_hp`.
+**Shows:** `trigger_hazard` springing **author-placed traps** whose save ability, DC,
+and damage live in the scene's `hazards` manifest — the engine rolls each save and
+applies the damage atomically, and the model never sees or supplies the numbers; the
+**hidden** flag (the dart trap isn't telegraphed until it springs); **save-for-half**
+(the spore cloud); proficiency-aware saves (Kael's DEX-proficient save beats the dart
+trap more easily); and the contrast with a **bare `saving_throw`** for the fear-ward
+(a one-off, non-damage effect with a DM-set DC — not every save is a hazard).
 
-> The hazards are authored in the scene text (each naming its save ability and DC),
-> because author-placed traps are the *next* roadmap item — until then the scene prose
-> is what cues the DM to call `saving_throw`. Watch `/trace` for the `saving_throw`
-> calls and the `apply_dice` damage that follows a failure.
+> The state snapshot lists hazards by **id and name only** — the DC and damage stay
+> engine-owned. Watch `/trace`: a hazard resolves in a single `trigger_hazard` call
+> (save + damage), whereas the fear-ward is a plain `saving_throw`.
 
 **Play it:**
-1. `we cross the gallery` → the DM calls a **DC 13 DEX** `saving_throw` for each PC.
-   Kael (proficient) rolls best; anyone who fails takes `2d6` darts via `apply_dice`.
-   (`/state` shows the HP drop; `/trace` shows save → damage.)
-2. `we push through the spores` → a **DC 12 CON** save for each PC (none are proficient,
-   so they roll raw ability). On a failure, `1d6` poison is applied.
-3. `Aldric drinks his healing potion` if someone is hurt (`use_item`), then
-   `take the healing draught` from the niche and `go through the far arch`.
-4. In the sanctum, `we approach the reliquary` → a **DC 13 WIS** save (Aldric and Wisp
-   are proficient; Kael isn't). Then `take the Pale Sigil` and `is there anywhere
+1. `we cross the gallery` → the DM springs `floor_darts` with `trigger_hazard` (it's a
+   hidden trap, so it shouldn't have been telegraphed). The engine rolls each PC's DEX
+   save against the authored DC and applies `2d6` to those who fail — Kael (DEX
+   proficient) fares best. (`/state` shows the HP drop; `/trace` shows one `trigger_hazard`.)
+2. `we push through the spores` → the DM springs `spore_cloud` (visible, save-for-half):
+   a CON save; failers take full `1d6` poison, successes take half.
+3. `Aldric drinks his healing potion` if someone's hurt (`use_item`), then `take the
+   healing draught` and `go through the far arch`.
+4. In the sanctum, `we approach the reliquary` → this is **not** a hazard but a one-off
+   fear effect: the DM calls a bare **WIS `saving_throw`** (DC from the prose; Aldric and
+   Wisp are proficient, Kael isn't). Then `take the Pale Sigil` and `is there anywhere
    further to go?` → leaving the terminal sanctum fires the **victory epilogue**.
-   - *Check vs save:* ask the DM to make a *check* instead (e.g. "Kael studies the
-     plate — perception check") to see `skill_check` add **no** proficiency, while the
-     DEX *save* on the same character does.
+   - *Try to re-spring a trap:* step back onto the dart plate — `trigger_hazard` returns
+     `already_sprung` (one-shot hazards fire once).
+   - *Check vs save:* ask for a *check* ("Kael studies the plate — perception check") to
+     see `skill_check` add **no** proficiency where the DEX *save* on the same character does.
 
 ## demo_reinforcements.json — Reinforcements (`add_npc`)
 

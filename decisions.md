@@ -512,3 +512,41 @@ still stands (`hostiles_present`). The worst case is a missed or one-turn-early
 conclusion of the *final* room — never a fabricated mid-dungeon ending or wrong numbers.
 The engine gate (victory only when hostile-free; refusal otherwise) is hard-tested;
 only the model's leave/finish recognition is soft.
+
+## ADR: Hazards & traps are author-placed; the engine owns the numbers
+
+**Status:** Accepted
+
+**Context:** Saving throws (`saving_throw`) gave the engine a reactive d20-vs-DC roll, but
+nothing *used* it as authored scene content. The stopgap (see `demo_saving_throws`) wrote
+the trap's ability and DC into the scene prose so the model would read them and pass them
+to `saving_throw` + `apply_dice` — which means the model held the trap's numbers and could,
+in principle, fudge the DC or damage, or invent a trap wholesale. That breaks the discipline
+every other piece of authored content already enforces (`move_scene` rejects undeclared
+exits, `take_item` rejects unlisted loot, `add_npc` rejects undeclared reinforcements).
+
+**Decision.** A scene declares a `hazards` manifest keyed by hazard id, each entry an
+author spec: `{name, ability, dc, damage, damage_type, on_success ("none"|"half"), once,
+requires, hidden}`. A new `trigger_hazard(hazard_id, characters?)` tool springs one. The
+manifest is the sole authority — the model may only trigger a declared id, **never** supplies
+the ability/DC/damage, and the engine resolves the whole thing atomically: roll the damage
+once (shared across an area), roll each affected character's save (via `saving_throw`, so it
+is proficiency-aware), and apply full / half / no damage through `apply_damage`. The model
+chooses only the *fiction* — which hazard fires, when, and who is caught (omit `characters`
+to hit all conscious party members). Hazards reuse the reinforcement gating idioms: a
+`requires` flag keeps a hazard disarmed and hidden until set; a one-shot (`once`, default
+true) fires once and is recorded in `GameState.sprung_hazards` (`"<scene>:<id>"`, serialized);
+`hidden` marks a concealed trap the prompt forbids telegraphing before it springs.
+
+**Consequences.** Two boundaries now hold where the stopgap held none: *existence* is
+author-owned (no invented traps) and *numbers* are engine-owned (DC and damage never reach
+the model — the snapshot surfaces only id/name/hidden). What the model still owns is the
+*timing and targeting within the fiction* — soft, like reveal-through-exploration for loot.
+Scope kept deliberately tight for v1: hazards resolve a single *saving throw* and deal
+*dice damage* (or none/half); a detect/disarm *check*, condition effects (frighten, poison
+as a status), and recurring environmental ticks are left as extensions. `trigger_hazard` is
+not turn-guarded — a trap is environmental, not an actor's action, so it may fire on anyone's
+turn. The hard parts (declared-only, gating, once, save+damage math) are unit-tested; only
+the model's choice of when to spring a hazard is soft. `demo_saving_throws` is converted from
+the prose-DC stopgap to a real manifest, retaining one bare `saving_throw` (the fear ward) to
+show the distinction: not every save is a hazard.

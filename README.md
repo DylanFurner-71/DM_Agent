@@ -121,6 +121,17 @@ character proficient in the save (its `save_proficiencies`) adds proficiency, wh
 plain check never does. The engine owns the roll; the model applies the consequence of a
 failed save through `apply_dice`/`modify_hp`.
 
+**Hazards & traps.** Author-placed scene dangers — a dart trap, a spore cloud, a
+rune-ward — declared in a scene's `hazards` manifest and sprung with `trigger_hazard`.
+The manifest is the sole authority (mirroring loot, exits, and reinforcements): the model
+may only trigger a declared hazard, never invent one, and **never supplies the save
+ability, DC, or damage** — those are author-owned and the engine rolls the save and
+applies the damage atomically for every affected character (full on a fail, half if the
+hazard is save-for-half, none on a success). Hazards can be gated behind a quest flag
+(armed only after a trigger), fire once or repeatedly, and be marked `hidden` so a
+concealed trap isn't telegraphed before it springs. This is the engine-authoritative
+upgrade of describing a trap's DC in prose: the numbers leave the model's hands entirely.
+
 **Quest flags.** Boolean story markers recording that something happened (a clue
 read, a seal broken), surfaced each turn and used to gate ways and endings.
 *(Hardening to strict-boolean values is in progress — see roadmap.)*
@@ -163,8 +174,6 @@ which sets the direction for the latency work below.
 
 The core resolution gaps worth closing first:
 
-- **Hazards & traps:** author-placed dangers in a scene that trigger a save or check
-  and deal dice damage through `apply_dice` — what gives checks and saves real stakes.
 - **`/undo` + per-turn autosave:** snapshot `GameState` (via the existing
   `to_dict`/`from_dict`) into a ring buffer each turn so a turn can be reverted, and
   autosave every turn for crash-safe resume. High play-quality payoff on plumbing

@@ -135,6 +135,18 @@ yourself. On a FAILED save, apply the consequence with the matching tool — `ap
 for dice damage, `modify_hp` for a flat amount — and narrate it; on a success, narrate \
 the effect resisted or reduced. (Distinct from the death-save cycle, which the engine \
 rolls automatically for dying PCs.)
+- HAZARDS & TRAPS — some scenes hold author-placed hazards (a dart trap, a spore cloud, \
+a rune-ward), shown in the state snapshot's `hazards` list by id and name. Spring one with \
+`trigger_hazard` (NOT a free-hand `saving_throw` + `apply_dice`) when the fiction triggers \
+it — the party crosses the plate, opens the chest, lingers in the gas. The engine owns the \
+save ability, DC, and damage; you NEVER supply them and may only trigger a declared hazard \
+id (an invented trap is refused). Pass `characters` for who is caught (omit to hit every \
+conscious party member). The engine rolls each save and applies damage atomically — narrate \
+the outcome it returns. A hazard marked `hidden` is a concealed trap: do not reveal or \
+telegraph it before you spring it (reveal it through the consequence, the way loot is \
+revealed through exploration). Not every save is a hazard — to resist a spell, a fear \
+effect, or another non-damage effect, use `saving_throw` directly; `trigger_hazard` is \
+specifically for author-placed scene dangers.
 - A PC at 0 HP is unconscious and dying; they cannot act. The engine rolls their death \
 saves automatically at their turn — never roll one yourself, never have a dying PC \
 attack/cast/move, never prompt them. Healing a dying or stable PC brings them back and \
@@ -443,6 +455,9 @@ class DMAgent:
                 reinf = tools._available_reinforcements(scene_data, s.quest_flags)
                 if reinf:
                     snap["reinforcements"] = reinf
+                haz = tools._available_hazards(scene_data, s.quest_flags, set(s.sprung_hazards), s.current_scene)
+                if haz:
+                    snap["hazards"] = haz
         if s.quest_flags:
             # Redact string-valued flags (e.g. answer-gate passwords) the same way
             # get_state does — this snapshot is injected into model context every

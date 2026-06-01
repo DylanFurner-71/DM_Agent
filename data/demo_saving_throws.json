@@ -3,16 +3,37 @@
   "scenes": {
     "trapped_gallery": {
       "location": "The Trapped Gallery",
-      "scene": "A long gallery floored with worn flagstones. Halfway across, a hair-trigger pressure plate guards a wall of dart-slits — anyone crossing it must make a DC 13 Dexterity saving throw or take a volley of darts (2d6 piercing). Beyond it, a cluster of burst puffball fungi hazes the air with spores: breathing them forces a DC 12 Constitution saving throw or 1d6 poison damage. A sealed healing draught rests in a niche by the far arch. These are hazards, not foes — there is no one here to fight.",
+      "scene": "A long gallery floored with worn flagstones. The stone is pocked with old puncture-marks and a row of narrow dart-slits lines one wall — somewhere underfoot a pressure plate is surely waiting. Further on, a cluster of burst puffball fungi hazes the air with drifting spores. A sealed healing draught rests in a niche by the far arch. These are dangers of the place, not foes — there is no one here to fight, only the gallery to cross.",
       "npcs": {},
       "loot": ["healing_potion"],
+      "hazards": {
+        "floor_darts": {
+          "name": "dart trap",
+          "ability": "dex",
+          "dc": 13,
+          "damage": "2d6",
+          "damage_type": "piercing",
+          "once": true,
+          "hidden": true
+        },
+        "spore_cloud": {
+          "name": "spore cloud",
+          "ability": "con",
+          "dc": 12,
+          "damage": "1d6",
+          "damage_type": "poison",
+          "on_success": "half",
+          "once": true,
+          "hidden": false
+        }
+      },
       "exits": {
         "the far arch into the sanctum": "fear_sanctum"
       }
     },
     "fear_sanctum": {
       "location": "The Fear-Warded Sanctum",
-      "scene": "The arch opens into a domed sanctum lit by cold witch-light. A reliquary of black glass pulses with a dread-ward: any creature that approaches it must make a DC 13 Wisdom saving throw or be gripped by supernatural fear. On the bier within rests the Pale Sigil — the relic you came for. This is the heart of the vault; there is nowhere deeper to go.",
+      "scene": "The arch opens into a domed sanctum lit by cold witch-light. A reliquary of black glass pulses with a dread-ward — drawing near it forces a Wisdom saving throw (DC 13) or the mind buckles under supernatural fear. On the bier within rests the Pale Sigil — the relic you came for. This is the heart of the vault; there is nowhere deeper to go.",
       "npcs": {},
       "loot": ["pale_sigil"],
       "exits": {}

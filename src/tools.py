@@ -61,6 +61,27 @@ def _available_reinforcements(scene_data: dict, quest_flags: dict) -> list[str]:
     return out
 
 
+def _available_hazards(scene_data: dict, quest_flags: dict, sprung: set, scene_key: str) -> list[dict]:
+    """Hazard ids whose gate is open and which have not already sprung.
+
+    Mirrors _available_reinforcements: a hazard with a `requires` flag is hidden until
+    that flag is set; a one-shot hazard (once, default True) already in `sprung` is
+    omitted. Returns [{id, name, hidden}] only — never the DC, ability, or damage, which
+    are engine-owned and surface only in the trigger_hazard result.
+    """
+    out = []
+    for hid, entry in scene_data.get("hazards", {}).items():
+        if not isinstance(entry, dict):
+            continue
+        req = entry.get("requires")
+        if req and not quest_flags.get(req):
+            continue
+        if entry.get("once", True) and f"{scene_key}:{hid}" in sprung:
+            continue
+        out.append({"id": hid, "name": entry.get("name", hid), "hidden": bool(entry.get("hidden", False))})
+    return out
+
+
 def _normalize_flag_key(raw: str) -> str | None:
     """Normalize a quest flag key; return None if the result is empty.
 
@@ -331,6 +352,37 @@ TOOLS = [
                 "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
             },
             "required": ["character", "ability", "dc"],
+        },
+    },
+    {
+        "name": "trigger_hazard",
+        "description": (
+            "Spring an author-placed hazard or trap in the current scene against one or more "
+            "characters. The scene's `hazards` manifest is the SOLE authority — you may only "
+            "trigger a hazard id listed in the state snapshot's `hazards` (ok=false reason "
+            "'not_declared' otherwise); you cannot invent a trap, and you NEVER supply its "
+            "save ability, DC, or damage — those are author-owned and the engine applies them. "
+            "characters: optional list of names to affect; omit to affect every conscious party "
+            "member (an area hazard). For each affected character the engine rolls the authored "
+            "saving throw and applies the authored damage atomically — full on a failed save, "
+            "half if the hazard is save-for-half, none on a success. A hazard marked hidden is a "
+            "concealed trap: do not reveal it until you spring it — trigger it when the fiction "
+            "warrants (the party crosses the plate, opens the chest, lingers in the gas). "
+            "One-shot hazards fire once (ok=false reason 'already_sprung' after); a gated hazard "
+            "is refused until its flag is set ('locked'). Do NOT call saving_throw or apply_dice "
+            "yourself for a declared hazard — trigger_hazard owns the whole resolution."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "hazard_id": {"type": "string", "description": "Hazard id from the scene's manifest, e.g. 'dart_trap'."},
+                "characters": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of affected characters. Omit to affect all conscious party members.",
+                },
+            },
+            "required": ["hazard_id"],
         },
     },
     {
@@ -967,6 +1019,9 @@ def dispatch(name: str, args: dict, state) -> dict:
             reinf = _available_reinforcements(current_scene_data, state.quest_flags)
             if reinf:
                 d["reinforcements"] = reinf  # only gate-open ids; locked ones stay hidden
+            haz = _available_hazards(current_scene_data, state.quest_flags, set(state.sprung_hazards), state.current_scene)
+            if haz:
+                d["hazards"] = haz  # id/name/hidden only — DC and damage stay engine-owned
         return {"ok": True, "state": d}
 
     if name == "attempt_ambush":
@@ -1170,6 +1225,98 @@ def dispatch(name: str, args: dict, state) -> dict:
                 f"{'success' if res['success'] else 'failure'}"
             )
         return res
+
+    if name == "trigger_hazard":
+        hazard_id = args.get("hazard_id", "").strip()
+        if not hazard_id:
+            return {"ok": False, "reason": "missing_hazard_id", "error": "hazard_id is required."}
+        scene_data = state.scenes.get(state.current_scene, {}) if state.current_scene else {}
+        manifest = scene_data.get("hazards", {})
+        canon = next((k for k in manifest if k.lower() == hazard_id.lower()), None)
+        entry = manifest.get(canon) if canon else None
+        if not isinstance(entry, dict):
+            available = ", ".join(
+                h["id"] for h in _available_hazards(
+                    scene_data, state.quest_flags, set(state.sprung_hazards), state.current_scene)
+            ) or "none"
+            return {
+                "ok": False,
+                "reason": "not_declared",
+                "error": f"{hazard_id!r} is not a declared hazard in this scene. Available: {available}.",
+            }
+        # Authored trigger: a hazard with a `requires` flag stays disarmed until set
+        # (mirrors gated reinforcements / exits) and is hidden from the snapshot until then.
+        req = entry.get("requires")
+        if req and not state.quest_flags.get(req):
+            return {"ok": False, "reason": "locked", "required_flag": req,
+                    "error": f"{hazard_id!r} is not armed yet — its trigger has not fired."}
+        once = entry.get("once", True)
+        sprung_key = f"{state.current_scene}:{canon}"
+        if once and sprung_key in state.sprung_hazards:
+            return {"ok": False, "reason": "already_sprung", "error": f"{hazard_id!r} has already been sprung."}
+
+        ability = str(entry.get("ability", "dex")).strip().lower()
+        dc = int(entry.get("dc", 10))
+        damage_dice = entry.get("damage", "")
+        on_success = entry.get("on_success", "none")  # "none" | "half"
+
+        # Affected characters: explicit list, or all conscious party members (area hazard).
+        names = args.get("characters") or [c.name for c in state.party.values() if not c.is_down]
+        targets = []
+        for nm in names:
+            actor = state.find_actor(nm)
+            if actor is None:
+                return {"ok": False, "reason": "unknown_target", "error": f"Unknown character {nm!r}; call get_state."}
+            targets.append(actor)
+        if not targets:
+            return {"ok": False, "reason": "no_targets", "error": "No characters to affect."}
+
+        # Roll the hazard's damage ONCE (shared across targets, like an area trap):
+        # failers take it in full, successes take half (save-for-half) or none.
+        dmg_total, dmg_detail = 0, ""
+        if damage_dice:
+            try:
+                rolled = rules.roll(damage_dice)
+            except ValueError as e:
+                return {"ok": False, "error": f"Bad hazard damage {damage_dice!r}: {e}"}
+            dmg_total, dmg_detail = rolled.total, rolled.describe()
+
+        results = []
+        for actor in targets:
+            save = rules.saving_throw(actor, ability, dc)
+            if save["success"]:
+                dealt = dmg_total // 2 if on_success == "half" else 0
+            else:
+                dealt = dmg_total
+            applied = rules.apply_damage(actor, dealt) if dealt else {"hp": actor.hp, "downed": actor.is_down}
+            results.append({
+                "character": actor.name,
+                "save_roll": save["roll"],
+                "save_total": save["total"],
+                "success": save["success"],
+                "damage": dealt,
+                "hp": applied["hp"],
+                "downed": applied.get("downed", actor.is_down),
+            })
+
+        if once:
+            state.sprung_hazards.append(sprung_key)
+        state.record(
+            f"hazard {canon} sprung ({ability} DC {dc}"
+            + (f", {damage_dice}={dmg_total}" if damage_dice else "") + "): "
+            + "; ".join(f"{r['character']} {'saved' if r['success'] else 'failed'} took {r['damage']}" for r in results)
+        )
+        return {
+            "ok": True,
+            "hazard": entry.get("name", canon),
+            "ability": ability,
+            "dc": dc,
+            "damage_roll": dmg_total,
+            "damage_detail": dmg_detail,
+            "damage_type": entry.get("damage_type"),
+            "on_success": on_success,
+            "results": results,
+        }
 
     if name == "lookup_rule":
         return rules.lookup_rule(args["topic"])
