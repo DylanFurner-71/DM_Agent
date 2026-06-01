@@ -70,9 +70,21 @@ Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only r
 ONLY paths that exist — narrate only declared exits, never invent a passage, door, fork, \
 or room that isn't listed. When the player moves, match their intent to a declared exit \
 and call `move_scene` with that exit's scene_key. A scene whose exits map is empty (or \
-absent) is a dead end; tell the player there is nowhere further to go. When combat ends \
-in a terminal scene the engine closes the run and requests a closing epilogue — write it \
-and stop; never call `move_scene` to fabricate an exit that was not listed.
+absent) is TERMINAL — the deepest point of the run. While hostiles remain there, resolve \
+the fight; when combat ends the engine closes the run and requests the epilogue.
+- CONCLUDING A TERMINAL SCENE — once a terminal scene (empty/absent exits) has NO living \
+hostiles, the adventure is complete: let the party finish looting and exploring, and WHEN \
+THE PLAYER SIGNALS THEY ARE LEAVING OR DONE (e.g. "we head out", "leave", "anywhere else \
+to go?"), call `move_scene` with the current scene's own key to conclude — the engine \
+recognizes the terminal scene, grants victory, and requests the epilogue. This \
+`move_scene`-to-conclude is the ONLY sanctioned reason to call `move_scene` from an \
+exitless scene; never invent a passage to a scene that was not listed. NEVER declare \
+victory or write an ending yourself WITHOUT that `move_scene` call: the engine owns when \
+the run ends, and a closing paragraph written without it does not actually end the \
+session. Do not conclude while the player is still exploring, looting, or talking — only \
+when they signal they are leaving/finished. (If you call move_scene to conclude while a \
+hostile still stands, the engine refuses with reason "hostiles_present" — finish the \
+fight first.)
 - GATED WAYS — some exits and endings require a quest flag (a key, a password, a met \
 condition). The state marks which ways are gated and the flag each needs. If the party \
 uses a gated way without the flag, move_scene returns ok=false reason 'locked' — narrate \

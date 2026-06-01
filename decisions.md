@@ -471,3 +471,44 @@ be unconscious — only the giver's turn/action is consumed.
 **Scope — unaffected.** Enforcement, turn order, and redaction are untouched; new
 fields serialize through the existing `asdict`/`from_dict` path (with the
 `max_spell_slots` default-on-absent shim).
+
+## ADR: Concluding an empty terminal scene (soft trigger, hard gate)
+
+**Status:** Accepted
+
+**Context:** A terminal scene (empty `exits`) that contains hostiles wins
+deterministically via the combat-clear path (`_adjudicate_combat_outcome` sets
+victory when the last hostile drops in an exitless scene). But a *hostile-free*
+terminal scene — an exploration/puzzle ending such as the vault beyond the iron
+door, a relic chamber — had no reliable victory trigger. The only engine path was
+the player calling `move_scene` with a non-exit key, which the system prompt forbade
+("empty exits = dead end, nowhere to go"). Observed in a real run
+(`saves/epilogue_not_firing_stats_trace.json`): the party spoke the password, entered
+the empty terminal vault, looted it, and tried to "leave"/"exit" twice — the model
+never called `move_scene`, so `game_over` was never set and the epilogue never fired;
+the run hung in the winning room.
+
+**Decision.** Conclude a hostile-free terminal scene via a **soft trigger** and a
+**hard gate**.
+- *Soft (prompt):* when the player signals leaving/finishing in a terminal scene with
+  no living hostiles, the model calls `move_scene` with the current scene's own key.
+- *Hard (engine):* `move_scene` from an exitless scene grants victory only when no
+  living hostile remains (new `hostiles_present` refusal otherwise); the engine —
+  never the model — sets `game_over`/`game_outcome` and fires the epilogue. The model
+  is explicitly forbidden from writing an ending without that `move_scene` call.
+
+**Considered and rejected.** (a) *Instant victory on entering* a hostile-free terminal
+scene — robust and deterministic, but cuts off looting/roleplay in the final room (the
+reward becomes epilogue-only, or the loot must move one scene back). (b) *Require every
+terminal scene to contain a hostile* — works through the existing combat path with no
+code, but forces a fight onto exploration/puzzle endings, against their intent.
+
+**Consequences.** This is a soft boundary, like target-agency and password-relay: the
+engine cannot make the model recognize "the player wants to leave," so the *trigger* is
+model-dependent and not unit-testable end to end (the trace shows the model failing it
+once — the accepted risk). The hard half bounds the failure modes: the model cannot
+declare victory itself (`game_over` is engine-owned), and cannot conclude while a foe
+still stands (`hostiles_present`). The worst case is a missed or one-turn-early
+conclusion of the *final* room — never a fabricated mid-dungeon ending or wrong numbers.
+The engine gate (victory only when hostile-free; refusal otherwise) is hard-tested;
+only the model's leave/finish recognition is soft.

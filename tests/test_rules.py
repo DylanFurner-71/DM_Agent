@@ -2515,6 +2515,36 @@ def test_combat_pc_action_narrated_when_next_combatant_is_pc():
     assert "Aldric" in narration
 
 
+def test_move_scene_concludes_empty_terminal_scene():
+    """3a hard gate: from a hostile-free terminal scene (empty exits), calling
+    move_scene to conclude grants victory — the engine, not the model, sets game_over."""
+    gs = GameState(location="Vault", current_scene="vault")
+    gs.scenes = {"vault": {"location": "Vault", "exits": {}}}  # terminal
+    gs.party["aldric"] = Character(name="Aldric")
+    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res["ok"] is True
+    assert res.get("adventure_complete") is True
+    assert res.get("outcome") == "victory"
+    assert gs.game_over is True and gs.game_outcome == "victory"
+
+
+def test_move_scene_conclude_refused_while_hostiles_present():
+    """The conclude path is hard-gated: it refuses while a living hostile remains, so
+    the model's soft leave/finish trigger can never end the run with foes standing."""
+    gs = GameState(location="Vault", current_scene="vault")
+    gs.scenes = {"vault": {"location": "Vault", "exits": {}}}  # terminal
+    gs.party["aldric"] = Character(name="Aldric")
+    gs.npcs["snik"] = NPC(name="Snik", hp=5, hostile=True)  # still up
+    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "hostiles_present"
+    assert gs.game_over is False
+    # A downed (or non-hostile) NPC does not block conclusion.
+    gs.npcs["snik"].hp = 0
+    res2 = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
+    assert res2["ok"] is True and gs.game_over is True
+
+
 def test_model_end_combat_in_terminal_scene_still_fires_victory_epilogue():
     """Regression: a *model*-issued end_combat in a terminal scene must still declare
     victory and fire the epilogue.

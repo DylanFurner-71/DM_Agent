@@ -231,7 +231,10 @@ TOOLS = [
             "and replaces the NPC roster. Party is untouched. "
             "NEVER supply a scene_key that is not listed in the current scene's exits — "
             "moves to non-adjacent scenes are rejected even if the scene is defined. "
-            "A scene whose exits map is empty is a dead end; no further move is possible.\n"
+            "A scene whose exits map is empty is TERMINAL: to CONCLUDE the adventure from "
+            "such a scene once no hostiles remain, call move_scene with the current scene's "
+            "own key — the engine grants victory and ends the run (ok=false reason "
+            "'hostiles_present' if a foe still stands).\n"
             "FREE-FORM (no named scenes defined): pass location string and optional scene "
             "description to update them directly."
         ),
@@ -857,8 +860,17 @@ def dispatch(name: str, args: dict, state) -> dict:
                             f"Available exits: {exits_str}."
                         ),
                     }
-                # Terminal scene: check for a flag gate before granting victory.
+                # Terminal scene: concluding here ends the run. Hard-gate it.
                 if state.combat_round == 0:
+                    # Cannot conclude while a hostile still stands — the model's
+                    # leave/finish trigger is soft, but this refusal is hard, so a
+                    # premature conclude can never end the run with foes alive.
+                    if any(n.hostile and not n.is_down for n in state.npcs.values()):
+                        return {
+                            "ok": False,
+                            "reason": "hostiles_present",
+                            "error": "Foes still stand — finish the fight before leaving.",
+                        }
                     exit_req = current_scene_data.get("exit_requires")
                     if exit_req and not state.quest_flags.get(exit_req):
                         return {
