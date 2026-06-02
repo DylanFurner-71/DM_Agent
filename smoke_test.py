@@ -17,8 +17,9 @@ data/demos/scripts/<demo>.txt, this:
   3. feeds the scripted player inputs to take_turn one at a time, stopping early
      if the game ends, and
   4. saves the final GameState as saves/<demo><suffix>.json — reusing the same
-     writer as the in-session `/save` command (so the path/format and the
-     .trace.jsonl sidecar match exactly).
+     writer (`_do_save`) as the in-session `/save` command, so the path and
+     format match exactly, plus a saves/<demo><suffix>_stats_trace.json sidecar
+     (per-turn tool calls + API stats, built the same way `/save` does).
 
 The optional suffix is appended to each demo's filename, so repeated runs
 (_1, _2, ...) don't clobber each other. This matters because each run calls the
@@ -43,8 +44,8 @@ from dotenv import load_dotenv
 from src import rules
 from src.dm_agent import DMAgent
 from src.game_state import GameState
-from src.main import _do_save  # reuse the exact /save writer (path + .trace sidecar)
-from src.views import set_plain
+from src.main import _do_save  # reuse the exact /save writer (same path + format)
+from src.views import _build_stats_trace, set_plain
 
 DEMO_DIR = Path("data/demos")
 SCRIPT_DIR = DEMO_DIR / "scripts"
@@ -77,7 +78,8 @@ def run_demo(scenario_path: Path, script_path: Path, suffix: str) -> dict:
             break
 
     save_name = scenario_path.stem + suffix
-    status, where = _do_save(state, save_name, overwrite=True, trace=agent.tool_trace)
+    stats = _build_stats_trace(agent.full_trace)
+    status, where = _do_save(state, save_name, overwrite=True, stats_trace=stats)
     return {
         "demo": scenario_path.stem,
         "turns": turns,
