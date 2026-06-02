@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 
 from .game_state import GameState
-from .rules import CONSUMABLES, SPELLS, roll
+from .rules import CONSUMABLES, SPELLS, WEAPONS, roll
 
 # Optional rich rendering. The app degrades to plain text when rich isn't
 # installed, so it stays a soft dependency — every helper checks _rich_on().
@@ -372,6 +372,8 @@ def _print_state_rich(state: GameState) -> None:
         def _fmt_item(item: str) -> str:
             if item.lower() in CONSUMABLES:
                 return f"[orange1]{escape(item)} (consumable)[/orange1]"
+            if item.lower() in WEAPONS:
+                return f"[dark_olive_green2]{escape(item)}[/dark_olive_green2]"
             return f"[grey70]{escape(item)}[/grey70]"
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "[grey70]—[/grey70]"
         con.print(f"    Inventory: {inv}")
@@ -387,10 +389,10 @@ def _print_state_rich(state: GameState) -> None:
                           f"[medium_purple3]{escape(names)}[/medium_purple3]")
     for n in state.npcs.values():
         kind, disposition = _npc_descriptor(n)
-        color = "cyan" if kind == "ally" else ("red" if n.hostile else "green")
+        color = "cyan" if kind == "ally" else ("red3" if n.hostile else "green")
         status = " [dim](down)[/dim]" if n.is_down else ""
         npc_hpcol = _hp_color(n.hp, n.max_hp)
-        atk = f"[bright_red]+{n.attack_bonus}[/bright_red]" if n.hostile else f"+{n.attack_bonus}"
+        atk = f"[red3]+{n.attack_bonus}[/red3]" if n.hostile else f"+{n.attack_bonus}"
         con.print(
             f"  [{color}]{escape(n.name)}[/{color}] ({kind}){status}: "
             f"HP [{npc_hpcol}]{n.hp}/{n.max_hp}[/{npc_hpcol}] | AC [steel_blue1]{n.ac}[/steel_blue1] "
@@ -447,7 +449,7 @@ def _combatant_color(actor, key: str, state: GameState) -> str:
         return "dim"
     if getattr(actor, "companion", False):
         return "cyan"
-    return "red" if actor.hostile else "green"
+    return "red3" if actor.hostile else "green"
 
 
 def _combatant_marker(actor, key: str, state: GameState) -> str:
@@ -563,9 +565,16 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
         indent = f"  {' ' * namew}  "
         for inv_line in _hud_inventory_lines(c):
             lbl, _, val = inv_line.partition(": ")
-            if val:
-                valcol = "orange1" if lbl == "Consumables" else "grey70"
-                p(f"{indent}[white]{escape(lbl)}:[/white] [{valcol}]{escape(val)}[/{valcol}]")
+            if val and lbl == "Consumables":
+                p(f"{indent}[white]{escape(lbl)}:[/white] [orange1]{escape(val)}[/orange1]")
+            elif val:
+                # Items: colour each piece — weapons olive, other gear grey.
+                def _hud_item(it: str) -> str:
+                    it = it.strip()
+                    col = "dark_olive_green2" if it.lower() in WEAPONS else "grey70"
+                    return f"[{col}]{escape(it)}[/{col}]"
+                pieces = ", ".join(_hud_item(it) for it in val.split(","))
+                p(f"{indent}[white]{escape(lbl)}:[/white] {pieces}")
             else:
                 p(f"{indent}{escape(inv_line)}")
         for label, names in _known_spell_groups(c):

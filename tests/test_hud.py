@@ -279,7 +279,7 @@ def test_combatant_color_by_side():
     ally = NPC(name="Ally", max_hp=8, hp=8, hostile=False); ally.companion = True
     gs.npcs["ally"] = ally
     assert _combatant_color(gs.party["pc"], "pc", gs) == "cyan"
-    assert _combatant_color(gs.npcs["foe"], "foe", gs) == "red"
+    assert _combatant_color(gs.npcs["foe"], "foe", gs) == "red3"
     assert _combatant_color(gs.npcs["pal"], "pal", gs) == "green"
     assert _combatant_color(gs.npcs["ally"], "ally", gs) == "cyan"
     gs.party["pc"].hp = 0
