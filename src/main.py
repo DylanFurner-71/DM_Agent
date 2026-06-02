@@ -17,6 +17,7 @@ saves/autosave.json after every turn; resume with
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import sys
@@ -44,6 +45,46 @@ from .views import (
 DEFAULT_SCENARIO = os.path.join(os.path.dirname(__file__), "..", "data", "scenario.json")
 SAVE_DIR = Path("saves")
 AUTOSAVE_NAME = "autosave"   # rolling per-turn save in SAVE_DIR (saves/autosave.json)
+HISTORY_FILE = SAVE_DIR / ".input_history"   # readline history, persisted across sessions
+HISTORY_LENGTH = 1000
+
+
+def _init_input_history(history_file: Path = HISTORY_FILE) -> bool:
+    """Enable arrow-key recall and line editing at the `input()` prompt.
+
+    Importing `readline` (stdlib) transparently upgrades every `input()` call with
+    line editing and an in-session history ring — arrow-up recalls prior commands,
+    Ctrl-A/E/K etc. work — with no change to the prompt code. We also persist the
+    history to a small file so commands survive a restart, loading it now and
+    registering an atexit hook to write it back.
+
+    Entirely best-effort and never raises: `readline` is absent on some platforms
+    (e.g. stock Windows without pyreadline) and disk errors must never block play,
+    so every step is guarded. Returns True when readline was enabled, else False.
+    """
+    try:
+        import readline
+    except ImportError:
+        return False  # no readline here — input() still works, just without recall
+    try:
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        if history_file.exists():
+            readline.read_history_file(str(history_file))
+    except OSError:
+        pass
+    try:
+        readline.set_history_length(HISTORY_LENGTH)
+    except (OSError, AttributeError):  # libedit backends may lack set_history_length
+        pass
+
+    def _save_history() -> None:
+        try:
+            readline.write_history_file(str(history_file))
+        except OSError:
+            pass
+
+    atexit.register(_save_history)
+    return True
 
 
 def _resolve_save_path(raw: str, base_dir: Path = SAVE_DIR, ext: str = ".json") -> Path:
@@ -186,6 +227,10 @@ def main() -> None:
     )
     args = parser.parse_args()
     set_plain(args.plain or not sys.stdout.isatty())
+    # Arrow-key recall and line editing at the prompt. Only when stdin is a real
+    # terminal — a piped/CI run has no use for it and shouldn't write a history file.
+    if sys.stdin.isatty():
+        _init_input_history()
     state = GameState.load(args.scenario)
     agent = DMAgent(state)
 

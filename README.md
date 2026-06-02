@@ -168,7 +168,10 @@ Output is **color- and Markdown-rendered** with [`rich`](https://github.com/Text
 when stdout is a terminal — scene/recap prose as Markdown, NPC names colored by
 disposition, inline dice highlighted, and a *thinking* spinner over the pre-stream API
 latency — with `--plain` (auto-on when piped or non-tty) for clean text in pipes/CI.
-`rich` is a soft dependency: absent it, the app degrades to plain text.
+`rich` is a soft dependency: absent it, the app degrades to plain text. The prompt
+also has **input history** — `readline` (stdlib) gives arrow-key recall and line
+editing, persisted across sessions to `saves/.input_history` (best-effort; a quiet
+no-op where `readline` is unavailable, e.g. stock Windows).
 
 **Performance.** The static system-prompt-plus-tools prefix is cached across calls,
 and every API call is instrumented per phase. Profiling showed the run is
@@ -207,7 +210,6 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 *CLI & quality-of-life (all terminal, mostly cheap):*
 
-- **Input history:** `readline` (stdlib) for arrow-key recall and line editing at the prompt.
 - **`--seed` flag:** fix the dice RNG for a whole session for reproducible demos and bug reports.
 - **API retry/backoff:** wrap the model calls so a rate-limit or network blip mid-turn doesn't abort the session.
 
