@@ -17,7 +17,8 @@ python -m pytest -q                                  # enforcement tests — no 
 python -m src.main                                   # default scenario (data/scenario.json)
 python -m src.main data/my_scenario.json             # custom scenario
 python -m src.main savegame.json                     # resume a saved game
-python -m src.main --help                            # show all options
+python -m src.main --seed 42                          # fix the dice RNG for reproducible rolls
+python -m src.main --help                             # show all options (--seed, --no-hud, --plain)
 python -m src.validate data/scenario.json            # lint a scenario before play (no API)
 ```
 
@@ -36,7 +37,7 @@ The core loop lives in `dm_agent.py::DMAgent.take_turn`:
 
 **Key data flow:**
 - `game_state.py` — `Character`, `NPC`, `GameState` dataclasses; JSON save/load
-- `rules.py` — dice (`roll`), `attack`, `cast_spell`, `apply_damage`, `heal`, `lookup_rule`; seeded `_rng` for deterministic tests
+- `rules.py` — dice (`roll`), `attack`, `cast_spell`, `apply_damage`, `heal`, `lookup_rule`; seedable `_rng` (deterministic tests and the `--seed` flag)
 - `tools.py` — `TOOLS` list (Anthropic tool schemas) + `dispatch()` that routes tool names to `rules` functions against live state
 - `dm_agent.py` — the agentic loop; `MODEL` constant is the only place the model name appears
 - `main.py` — terminal REPL: command dispatch, save/launch, per-turn autosave
