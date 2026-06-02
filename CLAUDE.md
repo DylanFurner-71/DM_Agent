@@ -39,6 +39,8 @@ The core loop lives in `dm_agent.py::DMAgent.take_turn`:
 - `rules.py` — dice (`roll`), `attack`, `cast_spell`, `apply_damage`, `heal`, `lookup_rule`; seeded `_rng` for deterministic tests
 - `tools.py` — `TOOLS` list (Anthropic tool schemas) + `dispatch()` that routes tool names to `rules` functions against live state
 - `dm_agent.py` — the agentic loop; `MODEL` constant is the only place the model name appears
+- `main.py` — terminal REPL: command dispatch, save/launch, per-turn autosave
+- `views.py` — presentation layer: HUD, `/state`, `/recap`, `/roll`, `/cost`, `/export`, tool/stats traces (rich + plain)
 
 ## Model configuration
 
