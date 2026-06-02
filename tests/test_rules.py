@@ -87,7 +87,25 @@ def test_heal_clamps_to_max_and_revives():
     c = Character(name="Hero", max_hp=20, hp=0, conditions=["unconscious"])
     res = rules.heal(c, 50)
     assert res["hp"] == 20  # cannot exceed max
+    assert res["healed"] == 20  # reports HP actually restored (0 -> 20), not the raw 50
     assert "unconscious" not in c.conditions
+
+
+def test_heal_reports_effective_amount_when_capped():
+    """`healed` is the HP actually restored after the max-HP cap, not the raw roll.
+    A potion that rolls 7 on a target 6 below max reports healed == 6."""
+    c = Character(name="Wisp", max_hp=16, hp=10)
+    res = rules.heal(c, 7)
+    assert res["hp"] == 16
+    assert res["healed"] == 6  # capped: only 6 landed, not the rolled 7
+
+
+def test_heal_reports_full_amount_when_uncapped():
+    """Below the cap, `healed` equals the full amount applied."""
+    c = Character(name="Aldric", max_hp=24, hp=10)
+    res = rules.heal(c, 7)
+    assert res["hp"] == 17
+    assert res["healed"] == 7
 
 
 
@@ -544,6 +562,45 @@ def test_cast_damaging_spell_no_slot_fails():
     assert "level-1" in res["reason"]
     assert target.hp == 10              # HP untouched
     assert caster.spell_slots == {1: 0} # slot untouched
+
+
+def test_cast_leveled_spell_below_base_level_refused():
+    """A leveled spell cannot be cast at a lower slot level than its tabled base.
+
+    Guards the slot economy against a level-0 bypass: casting magic_missile (a
+    1st-level spell) at spell_level 0 must NOT take the free-cantrip path nor the
+    by_slot[max] fallback. The cast is refused before anything is consumed — no
+    slot spent (including any higher slot the caster holds), no damage dealt.
+    """
+    caster = Character(
+        name="Wisp",
+        spell_slots={1: 0, 2: 1},          # out of L1, but holds an L2 slot
+        spells=["magic_missile"],
+    )
+    target = NPC(name="Goblin", max_hp=30, hp=30)
+    res = rules.cast_damaging_spell(caster, target, "magic_missile", 0)
+    assert res["ok"] is False
+    assert res.get("below_min_level") is True
+    assert "level-1" in res["reason"]
+    assert "damage" not in res                       # no damage resolved
+    assert target.hp == 30                           # target untouched
+    assert caster.spell_slots == {1: 0, 2: 1}        # NO slot consumed (L2 intact)
+
+
+def test_cast_leveled_spell_upcast_above_base_still_allowed():
+    """The min-level guard only blocks under-leveling — a legal upcast still works,
+    spends the higher slot, and uses that slot's by_slot column (not the max)."""
+    caster = Character(
+        name="Wisp",
+        spell_slots={1: 0, 2: 1},
+        spells=["magic_missile"],
+    )
+    target = NPC(name="Goblin", max_hp=30, hp=30)
+    res = rules.cast_damaging_spell(caster, target, "magic_missile", 2)
+    assert res["ok"] is True
+    assert res["slots_remaining"] == 0
+    assert "4d4+4" in res["damage_detail"]           # L2 column, not L3 max
+    assert caster.spell_slots == {1: 0, 2: 0}        # the L2 slot was spent
 
 
 

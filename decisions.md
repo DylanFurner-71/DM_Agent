@@ -624,3 +624,38 @@ extension. Semantics are advantage-style (2d20 keep higher) rather than a true r
 which avoids having to store and undo a committed roll. Economy chosen: one reroll per character for
 the entire session (lifetime lock), the strictest faithful reading of "once-per-session." The hard
 parts (cap, lifetime lock, advantage roll, decrement) are unit-tested; only *when to award* is soft.
+
+
+## ADR: A leveled spell cannot be cast below its tabled base level
+
+**Status:** Accepted
+
+**Context:** `cast_spell` treats *any* cast at `spell_level == 0` as a free cantrip
+(`slots_remaining: "n/a"`, no slot charged) — it never checked that the *named* spell is actually a
+cantrip. Separately, `cast_damaging_spell` resolved damage with
+`by_slot.get(spell_level, by_slot[max(by_slot)])`, falling back to the **strongest** tabled version
+when the level wasn't found. Together these opened a slot-economy bypass: a caster out of slots could
+cast a leveled spell — e.g. `magic_missile` (base level 1) — by declaring `spell_level: 0`. The
+engine charged no slot *and* auto-picked the highest upcast (`by_slot[3]`, `5d4+5`). A live 5-scene
+trace caught exactly this on turn 27: a Wisp at `L1 (0/3)`, holding only an `L2 (1/1)` slot, fired
+Magic Missile for free at the L3 damage column; the persisted save confirmed the L2 slot was never
+touched. This is the same invariant `test_spell_slots_run_out` exists to protect (the engine owns the
+slot economy; the model cannot narrate around a refusal), reached through a side door.
+
+**Decision:** `cast_damaging_spell` looks up the spell's tabled entry **before** consuming anything
+and refuses a cast whose `spell_level` is below the spell's base `level`
+(`ok=false, reason "…is a level-N spell and cannot be cast with a level-M slot", below_min_level=True`).
+The check sits between the knowledge check (a) and slot consumption (b), so no slot — of any level —
+is spent on a refused cast. With under-leveling blocked, the `by_slot[max(...)]` fallback is now only
+reachable by *over*-leveling (upcasting above the tabled max), where capping at the strongest tabled
+column is the intended behavior. Cantrips (base level 0) are unaffected: `0 < 0` is false, so they
+keep the free path.
+
+**Consequences:** The model must now actually spend the right slot — to finish a foe with Magic
+Missile when out of L1 slots, it must upcast into the held L2 slot (`spell_level: 2` → `4d4+4`), or
+narrate the fizzle. Hard boundary, enforced in code
+(`test_cast_leveled_spell_below_base_level_refused`, `test_cast_leveled_spell_upcast_above_base_still_allowed`).
+Untabled spells (no `SPELLS` entry) are not level-checked — the engine can't know their base level —
+so they retain the prior slot-consumed-and-narrated behavior. Related, same trace: `heal` now reports
+`healed` as the HP *actually* restored after the max-HP cap (`target.hp - hp_before`) rather than the
+raw roll, so a capped potion no longer hands the model an inflated number to narrate.

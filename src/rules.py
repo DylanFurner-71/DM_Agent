@@ -176,6 +176,7 @@ def heal(target, amount: int) -> dict:
     # Dead PCs cannot be revived by healing.
     if hasattr(target, "death_save_failures") and target.dead:
         return {"ok": True, "target": target.name, "healed": 0, "hp": 0, "note": "cannot heal the dead"}
+    hp_before = target.hp
     target.hp = min(target.max_hp, target.hp + amount)
     if target.hp > 0 and hasattr(target, "conditions") and "unconscious" in target.conditions:
         target.conditions.remove("unconscious")
@@ -183,7 +184,8 @@ def heal(target, amount: int) -> dict:
         target.death_save_successes = 0
         target.death_save_failures = 0
         target.stable = False
-    return {"ok": True, "target": target.name, "healed": amount, "hp": target.hp}
+    # Report the HP actually restored, not the raw roll — the max-HP cap may clip it.
+    return {"ok": True, "target": target.name, "healed": target.hp - hp_before, "hp": target.hp}
 
 
 def roll_death_save(character) -> dict:
@@ -623,12 +625,27 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
     if known is not None and spell_key not in known:
         return {"ok": False, "reason": f"{caster.name} does not know {spell_name}"}
 
+    # (a.5) Minimum-level check — a leveled spell cannot be cast below its tabled
+    # base level. Without this, declaring spell_level 0 takes the free-cantrip
+    # path in cast_spell AND the by_slot[max(...)] fallback below, casting a
+    # leveled spell for no slot at its highest upcast. Refuse before anything is
+    # consumed; the model must narrate the fizzle.
+    spell = SPELLS.get(spell_key)
+    if spell is not None and spell_level < spell["level"]:
+        return {
+            "ok": False,
+            "reason": (
+                f"{spell.get('name', spell_name)} is a level-{spell['level']} spell "
+                f"and cannot be cast with a level-{spell_level} slot"
+            ),
+            "below_min_level": True,
+        }
+
     # (b) Slot check + consumption — returns ok=False without consuming if empty.
     slot_res = cast_spell(caster, spell_level)
     if not slot_res["ok"]:
         return slot_res
 
-    spell = SPELLS.get(spell_key)
     # No tabled entry, or a tabled non-damage spell (no dice): the engine can't
     # resolve a number, so the slot is consumed and the effect is narrated.
     if spell is None or spell.get("effect") != "damage" or not spell.get("by_slot"):
