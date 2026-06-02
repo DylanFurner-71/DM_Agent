@@ -5,7 +5,7 @@
       "location": "A torchlit ledge above the warren",
       "scene": "A lone goblin, Snik, blocks the rope-bridge down into the warren, blade half-raised but eyes wary — this one looks like he would rather talk than die for whoever pays him. Below, the tunnels echo with other voices.",
       "npcs": {
-        "snik": { "template": "goblin", "name": "Snik", "hostile": true, "disposition_dc": 13, "alertness_dc": 12 }
+        "snik": { "template": "goblin", "name": "Snik", "hostile": true, "disposition_dc": 8, "alertness_dc": 12 }
       },
       "loot": [],
       "exits": {

@@ -106,7 +106,8 @@ python3 -m src.main data/demos/demo_social_companions.json
 ```
 
 **Party:** Aldric, Wisp (high CHA, the face). **Scene 1 (parley_ledge):** Snik, a
-goblin open to reason (`disposition_dc 13`). **Scene 2 (warren):** Rattle, a
+goblin easily swayed (`disposition_dc 8` — low so the seeded smoke run reliably wins
+him over and exercises `recruit_npc`). **Scene 2 (warren):** Rattle, a
 **mindless skeleton** (`disposition_dc null` = immovable) and Grub (goblin).
 
 **Shows:** `influence_npc` swaying a hostile to neutral, the "immovable" foe that

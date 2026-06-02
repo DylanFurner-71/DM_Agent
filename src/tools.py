@@ -279,7 +279,8 @@ TOOLS = [
             "own key — the engine grants victory and ends the run (ok=false reason "
             "'hostiles_present' if a foe still stands).\n"
             "FREE-FORM (no named scenes defined): pass location string and optional scene "
-            "description to update them directly."
+            "description to update them directly.\n"
+            "Not usable during combat — returns ok=false reason 'in_combat'; end the fight first."
         ),
         "input_schema": {
             "type": "object",
@@ -942,6 +943,16 @@ def dispatch(name: str, args: dict, state) -> dict:
         return {"ok": True, "flag": key, "removed": removed}
 
     if name == "move_scene":
+        # No travel mid-combat: changing scenes here would rebuild state.npcs from the
+        # destination while leaving combat_order/round/index pointing at the old scene's
+        # combatants — a stale, incoherent fight. Refuse outright (mirrors recruit_npc);
+        # the sanctioned way to leave a fight is to end it first (defeat/flee/parley).
+        if state.combat_round > 0:
+            return {
+                "ok": False,
+                "reason": "in_combat",
+                "error": "Cannot travel while combat is underway — end the fight first.",
+            }
         if state.scenes:
             scene_key = args.get("scene_key", "").strip()
             # Current scene's exits: {player-facing label: bare scene_key or gated dict}

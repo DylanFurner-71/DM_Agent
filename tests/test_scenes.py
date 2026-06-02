@@ -194,13 +194,14 @@ def test_move_scene_nonterminal_unchanged():
 
 
 def test_move_scene_terminal_in_combat_does_not_complete():
-    """Terminal scene but combat_round > 0: no victory, existing no-exits rejection."""
+    """Terminal scene but combat_round > 0: refused for being in combat, no victory."""
     gs = GameState(location="Final Chamber", current_scene="final_room")
     gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
     gs.combat_round = 1
     gs.combat_order = ["aldric"]
     res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
     assert res["ok"] is False
+    assert res["reason"] == "in_combat"
     assert gs.game_over is False
 
 
@@ -231,7 +232,7 @@ def test_move_scene_rejects_non_exit():
 
 
 def test_move_scene_terminal_has_no_exits():
-    """Terminal scene + active combat: move_scene is rejected and error mentions no exits."""
+    """Terminal scene + active combat: move_scene is refused with reason in_combat."""
     gs = GameState(location="Chamber", current_scene="ember_chamber")
     gs.scenes = {
         "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
@@ -240,7 +241,33 @@ def test_move_scene_terminal_has_no_exits():
     gs.combat_order = ["aldric"]
     res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
     assert res["ok"] is False
-    assert "no exits" in res["error"].lower()
+    assert res["reason"] == "in_combat"
+
+
+def test_move_scene_declared_exit_refused_in_combat():
+    """A declared-exit move is refused while combat is active; combat state untouched.
+
+    Regression for the stale-combat_order bug: moving scenes mid-combat used to rebuild
+    state.npcs from the destination while leaving combat_order pointing at the old scene's
+    combatants (see BUGS.md). The move is now refused, so combat state cannot go stale.
+    """
+    gs = GameState(location="Start", current_scene="a")
+    gs.scenes = {
+        "a": {"location": "A", "exits": {"forward": "b"}},
+        "b": {"location": "B", "exits": {}},
+    }
+    gs.party["aldric"] = Character(name="Aldric")
+    gs.npcs["snik"] = NPC(name="Snik")
+    gs.combat_round = 1
+    gs.combat_order = ["aldric", "snik"]
+    gs.combat_index = 0
+    res = tools.dispatch("move_scene", {"scene_key": "b"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "in_combat"
+    # State unchanged — the bug was leaving combat_order stale after a move.
+    assert gs.current_scene == "a"
+    assert gs.combat_round == 1
+    assert gs.combat_order == ["aldric", "snik"]
 
 
 def test_state_snapshot_includes_exits():

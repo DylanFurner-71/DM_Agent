@@ -322,6 +322,10 @@ frightened ones flee) and execute it with `attack`, `cast_spell`, `skill_check`,
 reach 0 HP — do NOT call `get_state` to check HP counts or call `end_combat` for \
 defeat. `end_combat` is only for narrative endings where no one reaches 0 HP: enemies \
 flee, surrender, or parley — call it yourself only in those cases.
+4a. NO TRAVEL MID-COMBAT: You cannot change scenes while a fight is on — `move_scene` \
+returns ok=false reason "in_combat". Resolve the fight first (enemies defeated, or they \
+flee/surrender/parley so `end_combat` fires), THEN travel. Narrate foes barring the way, \
+not an open passage; never imply the party slips out of an active fight without ending it.
 5. POST-COMBAT BEAT: When `end_combat` fires, the engine requests a two-paragraph \
 closing beat — (1) the finishing blow and its immediate aftermath; (2) brief stock of \
 the party (wounds, spent slots, the body, the sudden silence), then re-orient to the \
