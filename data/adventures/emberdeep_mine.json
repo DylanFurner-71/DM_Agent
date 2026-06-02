@@ -129,7 +129,7 @@
       "attack_bonus": 4,
       "proficiency_bonus": 2,
       "spell_slots": {"1": 4, "2": 3},
-      "ability_modifiers": {"str": -1, "dex": 2, "con": 1, "int": 4, "wis": 1, "cha": 0},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 1, "int": 4, "wis": 1, "cha": 3},
       "inventory": ["quarterstaff", "spellbook"],
       "conditions": [],
       "spellcasting_ability": "int",
