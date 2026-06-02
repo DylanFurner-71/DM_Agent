@@ -35,7 +35,7 @@ compact status header shown before each prompt), `/recap` (story so far),
 | Saving throws & hazards/traps (`trigger_hazard` author-placed traps + bare `saving_throw`) | `demo_saving_throws.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
 | Flat effects & flavor rolls (`modify_hp` exact damage/heal, `roll_dice` fiction-only) | `demo_flat_effects.json` |
-| Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
+| Branching geography (a fork with two routes that reconverge, multi-scene) | `adventures/stormhold_keep.json` |
 | Persistence & resume | any scenario — see the bottom section |
 | Autosave & `/undo` (rewind a turn) | any scenario — see the bottom section |
 
@@ -390,10 +390,10 @@ count) — the roll the engine forbids from feeding HP.
 
 ---
 
-## five_scene_branching.json — Branching geography
+## stormhold_keep.json — Branching geography
 
 ```bash
-python -m src.main data/five_scene_branching.json
+python -m src.main data/adventures/stormhold_keep.json
 ```
 
 **Party:** Aldric, Kael, Wisp. A five-scene crawl through Stormhold Keep whose map
