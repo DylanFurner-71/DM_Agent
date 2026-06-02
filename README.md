@@ -277,7 +277,7 @@ Future work, ranked roughly least → most difficult to implement.
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
 - **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
-- **Equipment Table and Functionality** implement an equipment table for items like 'spellbook' and 'holy symbol'
+- **Equipment Table and Functionality** implement an equipment table for items like 'spellbook' and 'holy symbol' using 5de's descriptions of the items. Many of these items enable certain abilities, requires more effort.
 - **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks. *(The keep-higher primitive already exists — `rules._d20(advantage=True)`, used by Inspiration on `skill_check`/`saving_throw`; what remains is threading it through `attack`/`cast_damaging_spell` and adding the keep-lower disadvantage direction.)*
 - **Resting:** a short/long rest that restores HP and spell slots between encounters.
 - **Conditions beyond unconscious:** prone, poisoned, frightened, restrained, etc., with mechanical effects on rolls.
