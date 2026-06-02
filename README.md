@@ -261,7 +261,7 @@ editing, persisted across sessions to `saves/.input_history` (best-effort; a qui
 no-op where `readline` is unavailable, e.g. stock Windows).
 
 **Performance & Latency.** Profiling showed the run is **decode-bound** (~30 tok/s, with
-caching fully engaged and *not* the bottleneck) and that wall time iwas dominated by a
+caching fully engaged and *not* the bottleneck) and that wall time was dominated by a
 ~3.3s fixed cost *per API call* — so **calls-per-turn**, not output size, is the lever
 the optimizations below pull. Every API call is instrumented per phase (`/cost` and
 the stats sidecar break out prompt-cache reads vs. writes).
