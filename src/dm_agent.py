@@ -106,8 +106,12 @@ rolls AND applies atomically. Weapon damage → `attack`. Spell damage → `cast
 Trap, hazard, or potion dice → `apply_dice`. `roll_dice` is for fiction-only randomness \
 (encounter table, NPC flee direction, coins in a chest) and must NEVER feed `modify_hp`. \
 `modify_hp` accepts flat, known amounts only (e.g. "the mechanism deals exactly 10").
-- When you need exact current numbers (HP, remaining slots, who's present), call \
-`get_state` rather than guessing.
+- The `[Current state]` block injected at the start of every turn already carries the \
+live numbers you need to decide an action — each PC's HP, spell slots, conditions, \
+inventory, and known spells; who is present and hostile; the current scene with its \
+exits and loot; quest flags; and the combat order. ACT ON THAT SNAPSHOT DIRECTLY rather \
+than calling a tool to re-read it. Only call `get_state` for the rare detail the snapshot \
+omits — never as a routine first step before attacking, casting, moving, or looting.
 - Scene geography is fixed. When `exits` appears in the state snapshot, those are the \
 ONLY paths that exist — narrate only declared exits, never invent a passage, door, fork, \
 or room that isn't listed. When the player moves, match their intent to a declared exit \
@@ -666,22 +670,30 @@ class DMAgent:
                     narration = _extract_narration(resp.content)
                 break
             tool_results = []
+            hard_stop = False   # any ok=false this hop — the model's next move is a HARD STOP
             for block in resp.content:
                 if block.type == "tool_use":
                     result = tools.dispatch(block.name, block.input, self.state)
                     self.tool_trace.append({"name": block.name, "input": block.input, "result": result})
+                    if not result.get("ok", True):
+                        hard_stop = True
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
                         "content": _json(result),
                     })
             self.messages.append({"role": "user", "content": tool_results})
-            # Combat player-turn fast path: once the actor's action is spent, stop —
+            # Combat player-turn fast path: once the actor's action is resolved, stop —
             # don't pay for a terminal model turn whose prose is scrubbed anyway, and
             # don't let the model drive next_turn / NPC turns the engine resolves for
             # free in take_turn. (This also keeps end_combat in engine hands so the
             # victory check in _maybe_end_combat runs while combat_round is still > 0.)
-            if stop_when_action_used and self.state.action_used:
+            # "Resolved" means EITHER the action was spent (action_used) OR a tool returned
+            # ok=false — a turn-guard / ambiguous_target / invalid-action rejection the
+            # prompt designates a HARD STOP. On a rejection action_used stays False, so
+            # without the hard_stop check the loop would burn one more terminal call whose
+            # text is scrubbed anyway (combat narration is produced separately).
+            if stop_when_action_used and (self.state.action_used or hard_stop):
                 break
 
         # When NOT capturing narration, scrub text the model emitted in its

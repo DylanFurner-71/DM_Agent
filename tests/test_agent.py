@@ -117,6 +117,58 @@ def test_loop_halts_at_first_player_when_input_names_another(first_key, second_k
     assert next_turns == [], f"next_turn must not be called when active player hasn't acted; got {next_turns}"
 
 
+def test_combat_failed_action_does_not_burn_terminal_hop():
+    """A combat action tool that returns ok=False is a HARD STOP — the tool loop must
+    break right there, not spend one more (scrubbed) terminal `thinking` call.
+
+    Scenario: Aldric is active; the player names Wisp's attack. The model emits an
+    `attack(attacker=wisp, ...)`, which the turn guard rejects (ok=False, action_used
+    stays False). Before the fast-path counted ok=False, the loop would loop once more
+    for a terminal text turn whose prose is scrubbed in combat — wasted latency. Assert
+    exactly ONE `thinking` API call is recorded for the player phase.
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Arena")
+    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 100})   # wins initiative, active
+    gs.party["wisp"]   = Character(name="Wisp",   ability_modifiers={"dex": -100}, inventory=["dagger"])
+    gs.npcs["snik"]    = NPC(name="Snik", max_hp=20, hp=20, ability_modifiers={"dex": 0})
+
+    res = tools.dispatch("start_combat", {"combatants": ["aldric", "wisp", "snik"]}, gs)
+    assert gs.combat_order[0] == "aldric", "precondition: Aldric active"
+
+    # First create() returns a tool_use that the turn guard will reject; every later
+    # create() (the unified-turn narration) returns plain prose. A side_effect function
+    # lets us serve different responses without exhausting a fixed list.
+    def _responses(*_a, **_kw):
+        if not _state["tool_emitted"]:
+            _state["tool_emitted"] = True
+            tu = MagicMock(); tu.type = "tool_use"; tu.name = "attack"; tu.id = "t1"
+            tu.input = {"attacker": "Wisp", "weapon": "dagger", "defender": "Snik"}
+            r = MagicMock(); r.stop_reason = "tool_use"; r.content = [tu]
+            return r
+        txt = MagicMock(); txt.type = "text"; txt.text = "The blade swings wide."
+        r = MagicMock(); r.stop_reason = "end_turn"; r.content = [txt]
+        return r
+    _state = {"tool_emitted": False}
+    fake_client = MagicMock(); fake_client.messages.create.side_effect = _responses
+
+    agent = DMAgent(gs, client=fake_client)
+    agent.take_turn("Wisp attacks Snik")
+
+    # The rejected attack was dispatched once...
+    attacks = [c for c in agent.tool_trace if c["name"] == "attack"]
+    assert len(attacks) == 1 and not attacks[0]["result"]["ok"], "expected one rejected attack"
+    # ...and the loop stopped without a wasted terminal hop: exactly one thinking call.
+    thinking = [s for s in agent.api_stats if s["phase"] == "thinking"]
+    assert len(thinking) == 1, (
+        f"expected 1 thinking call (the rejected action); a second would be the wasted "
+        f"scrubbed terminal hop this fix removes. got {len(thinking)}"
+    )
+
+
 
 
 def test_context_bounded_regardless_of_history_length():
