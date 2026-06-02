@@ -973,6 +973,23 @@ def test_dispatch_attack_passes_advantage_and_tags_log():
     assert any("(advantage)" in e for e in gs.log)
 
 
+def test_dispatch_skill_check_passes_skill_and_tags_log():
+    from src import rules
+    gs = _make_state()
+    hero = gs.party["Hero"]
+    hero.ability_modifiers = {"dex": 2}
+    hero.proficiency_bonus = 2
+    hero.skill_proficiencies = ["stealth"]
+    rules.force_rolls([10])
+    res = tools.dispatch("skill_check", {"character": "Hero", "ability": "dex", "dc": 10,
+                                         "skill": "stealth"}, gs)
+    assert res["ok"] is True
+    assert res["skill"] == "stealth"
+    assert res["proficient"] is True
+    assert res["total"] == 14  # 10 + dex 2 + proficiency 2
+    assert any("(proficient)" in e for e in gs.log)
+
+
 def test_dispatch_cast_spell_passes_disadvantage_and_tags_log():
     from src import rules
     actor = Character(name="Wisp", level=1, spells=["chromatic_orb"], spell_slots={1: 1},

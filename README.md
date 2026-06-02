@@ -131,12 +131,16 @@ their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite
 
 **Checks & saves.** `skill_check` resolves a *proactive* `d20 + ability modifier` vs
 a DC (perception, persuasion, athletics, stealth…) and, in combat, is the acting
-character's turn-guarded action. `saving_throw` is its *reactive* twin for **resisting**
-an effect (DEX vs a trap, CON vs poison, WIS vs fear): it is not an action, isn't
-turn-guarded, and can be rolled for any affected character on anyone's turn — and a
-character proficient in the save (its `save_proficiencies`) adds proficiency, which a
-plain check never does. The engine owns the roll; the model applies the consequence of a
-failed save through `apply_dice`/`modify_hp`.
+character's turn-guarded action. Naming a 5e **skill** (e.g. `stealth`, `persuasion`)
+makes the engine pick that skill's governing ability and add the character's
+`proficiency_bonus` when they're in `skill_proficiencies` — twice for `expertise` — so a
+rogue's Stealth genuinely beats a raw DEX check; a bare ability check (no skill named)
+adds none. `saving_throw` is its *reactive* twin for **resisting** an effect (DEX vs a
+trap, CON vs poison, WIS vs fear): it is not an action, isn't turn-guarded, can be rolled
+for any affected character on anyone's turn, and adds proficiency for a proficient save
+(its `save_proficiencies`). The skill→ability map, the proficiency math, and the roll are
+all engine-owned; the model only names the skill and applies the consequence of a failed
+save through `apply_dice`/`modify_hp`.
 
 **Inspiration.** A single DM-awarded reroll, built as another capped engine resource — the
 same shape as the spell-slot economy. The DM may grant a character inspiration
@@ -293,7 +297,6 @@ Future work, ranked roughly least → most difficult to implement.
 
 *Mechanics:*
 
-- **Skill proficiency & expertise:** today `skill_check` adds only the raw ability modifier; 5e adds the character's `proficiency_bonus` for skills they're proficient in (and *doubles* it for expertise). Add a `skill_proficiencies` (plus optional `expertise`) list on `Character` — mirroring the existing `save_proficiencies` used by `saving_throw` — and have `skill_check` add proficiency the same way saves already do. Cheap, and it's what makes a rogue's Stealth differ from a raw DEX check. (Deliberately omitted today — see the Checks & saves note that a check never adds proficiency.)
 - **Gold ledger:** a tracked party currency so loot and rewards carry a real number. Add a `gold` total (on `GameState` or per-`Character`) plus `add_gold`/`spend_gold` tools — a `tools.TOOLS` schema, a `dispatch` branch, and a `rules` helper that refuses overspend — surfaced in `/state` and the HUD. The foundation **Merchants** build on.
 - **Merchants (buy/sell):** shopkeeper NPCs with a stock and price list, plus `buy_item`/`sell_item` tools that move entries between the merchant and a PC's `inventory` and debit/credit the **gold ledger** (its prerequisite). Reuses the loot / `take_item` plumbing.
 - **Temporary HP:** a separate hit-point buffer (from `false life`, `heroism`, a paladin's lay-on-hands variants, etc.) that absorbs damage **before** real HP, is **not** restored by healing, doesn't stack (take the higher of old/new), and is cleared on a long rest. Add a `temp_hp` field on `Character`/`NPC`, drain it first in `apply_damage`, and have `heal` ignore it. Pairs with the **utility & healing spells** work.
@@ -347,9 +350,9 @@ data/
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
-tests/                 # ~631 tests total, all no-API
-  test_rules.py        # 136 — enforcement core: dice, attack, spells, combat/turn guards
-  test_tools.py        #  70 — dispatch, guards, target/redaction, get_state
+tests/                 # ~639 tests total, all no-API
+  test_rules.py        # 142 — enforcement core: dice, attack, spells, combat/turn guards
+  test_tools.py        #  71 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
   test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
   test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
@@ -359,7 +362,7 @@ tests/                 # ~631 tests total, all no-API
   test_ambush.py       #  26 — attempt_ambush, surprise, companions
   test_save.py         #  23 — /save + /export helpers
   test_reinforcements.py #22 — add_npc reinforcements + available_reinforcements
-  test_persistence.py  #  20 — JSON save/load round-trip
+  test_persistence.py  #  21 — JSON save/load round-trip
   test_items.py        #  20 — take_item / use_item / consumables
   test_social.py       #  15 — influence_npc + parley-to-combat
   test_answer_gate.py  #  15 — answer-gated exits + password redaction
@@ -380,7 +383,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
-python3 -m pytest -q                       # ~631 enforcement tests, no API needed
+python3 -m pytest -q                       # ~639 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -428,7 +431,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 631 tests across `tests/`, all running with **no API**. They drive the
+Roughly 639 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and

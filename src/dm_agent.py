@@ -167,6 +167,11 @@ forgetting it costs nothing because it was just an action, don't. \
 Do NOT flag routine actions or anything already in state — 'approached_snik', 'searched_room', HP, \
 who's down, location, inventory, an NPC's hostile field. If a fact has a dedicated home it is not a \
 flag, and never store mechanical values. Read quest_flags each turn and stay consistent with them.
+- CHECKS — for a proactive ability check (perception, stealth, persuasion, athletics, \
+arcana, …), call `skill_check`. When the check is a named 5e skill, pass `skill` (e.g. \
+`stealth`, `persuasion`) so the engine uses that skill's governing ability and adds the \
+character's proficiency bonus when they're proficient (twice for expertise); omit `skill` \
+only for a raw ability check. You never supply the bonus — the engine owns it.
 - SAVING THROWS — when an effect happens TO a character that they resist (a trap's \
 dex save, poison's con save, a fear effect's wis save, a shove's str save), call \
 `saving_throw` with the ability and DC — NOT `skill_check`, which is a proactive action \

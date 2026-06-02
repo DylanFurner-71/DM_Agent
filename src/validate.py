@@ -163,6 +163,10 @@ def _check_party(rep: Report, party) -> None:
         for save in member.get("save_proficiencies", []) or []:
             if isinstance(save, str) and save.strip().lower() not in _ABILITIES:
                 rep.warn(where, f"save_proficiencies entry {save!r} is not a known ability")
+        for field_name in ("skill_proficiencies", "expertise"):
+            for skill in member.get(field_name, []) or []:
+                if isinstance(skill, str) and rules._normalize_skill(skill) not in rules.SKILLS:
+                    rep.warn(where, f"{field_name} entry {skill!r} is not a known skill{_suggest(rules._normalize_skill(skill), rules.SKILLS)} — it adds no proficiency")
 
 
 def _check_exits(rep: Report, scene_key: str, scene: dict, scene_keys: set) -> None:

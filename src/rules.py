@@ -443,18 +443,60 @@ def _spend_inspiration(character, use_inspiration: bool) -> tuple[int, dict]:
     return nat, {"inspiration_used": False, "inspiration_reason": "no_inspiration"}
 
 
-def skill_check(character, ability: str, dc: int, use_inspiration: bool = False) -> dict:
-    """Roll d20 + the character's ability modifier against DC. Always resolves.
+# The 5e skill list, each mapped to its governing ability. Naming a skill on a
+# skill_check lets the engine add proficiency (the model never decides the bonus):
+# the skill->ability map is engine-owned, so a named skill also fixes which ability
+# is rolled. Constitution governs no skills.
+SKILLS: dict[str, str] = {
+    "athletics": "str",
+    "acrobatics": "dex", "sleight_of_hand": "dex", "stealth": "dex",
+    "arcana": "int", "history": "int", "investigation": "int", "nature": "int", "religion": "int",
+    "animal_handling": "wis", "insight": "wis", "medicine": "wis", "perception": "wis", "survival": "wis",
+    "deception": "cha", "intimidation": "cha", "performance": "cha", "persuasion": "cha",
+}
+
+
+def _normalize_skill(skill: str) -> str:
+    """Lower-case and underscore a skill name so 'Sleight of Hand' matches the table."""
+    return skill.strip().lower().replace(" ", "_")
+
+
+def skill_check(character, ability: str, dc: int, use_inspiration: bool = False,
+                skill: str | None = None) -> dict:
+    """Roll d20 + ability modifier (+ proficiency for a named, proficient skill) vs DC.
+
+    If ``skill`` names a known skill (see SKILLS), the engine uses that skill's governing
+    ability — overriding ``ability`` — and adds ``proficiency_bonus`` when the character is
+    proficient in it, or twice for expertise. Skill proficiency only applies when the skill
+    is named; a bare ability check (no skill) is the raw ability roll it always was. Always
+    resolves.
 
     Passing use_inspiration spends the character's inspiration (if held) for advantage —
     see _spend_inspiration; the engine owns the reroll and the budget.
     """
+    skill_key = _normalize_skill(skill) if skill else None
+    # A named, known skill fixes which ability is rolled (engine-owned map).
+    if skill_key and skill_key in SKILLS:
+        ability = SKILLS[skill_key]
     ability = ability.strip().lower()
     modifier = character.ability_modifiers.get(ability, 0)
+
+    proficient = expertise = False
+    if skill_key:
+        prof_bonus = getattr(character, "proficiency_bonus", 0)
+        has_expertise = skill_key in {_normalize_skill(s) for s in getattr(character, "expertise", [])}
+        is_proficient = skill_key in {_normalize_skill(s) for s in getattr(character, "skill_proficiencies", [])}
+        if has_expertise:
+            modifier += 2 * prof_bonus
+            proficient = expertise = True
+        elif is_proficient:
+            modifier += prof_bonus
+            proficient = True
+
     nat, insp = _spend_inspiration(character, use_inspiration)
     total = nat + modifier
     sign = "+" if modifier >= 0 else ""
-    return {
+    result = {
         "ok": True,
         "character": character.name,
         "ability": ability,
@@ -466,6 +508,9 @@ def skill_check(character, ability: str, dc: int, use_inspiration: bool = False)
         "detail": f"d20({nat}) {sign}{modifier} = {total} vs DC {dc}",
         **insp,
     }
+    if skill_key:
+        result.update({"skill": skill_key, "proficient": proficient, "expertise": expertise})
+    return result
 
 
 def saving_throw(character, ability: str, dc: int, use_inspiration: bool = False) -> dict:
@@ -919,7 +964,7 @@ SRD_RULES = {
     "chromatic_orb": "1st-level arcane evocation, spell attack roll. Damage: 3d8 force (L1); each slot level above 1st adds one die (+1d8). Use cast_spell with spell_name='chromatic_orb' and a target.",
     "attack": "A weapon attack rolls d20 + ability modifier + proficiency bonus vs the target's AC (Str for melee, Dex for finesse or ranged — the engine uses whichever is better). On a hit, damage is the weapon's dice + that same ability modifier. NPCs roll d20 + their listed attack_bonus. See critical_hit for natural 20/1. Use the attack tool — the engine owns the roll and damage.",
     "critical_hit": "A natural 20 on an attack or spell-attack roll always hits and doubles the damage dice (ability modifiers are not doubled). A natural 1 always misses. A critical hit against a creature already at 0 HP costs it two death-save failures instead of one.",
-    "skill_check": "A proactive ability check: roll d20 + the relevant ability modifier vs a DC. It resolves on the total — unlike an attack, a natural 20 is not an automatic success and a natural 1 is not an automatic failure. Use the skill_check tool for perception, athletics, arcana, stealth, persuasion, etc. To resist an effect happening TO you, use saving_throw instead.",
+    "skill_check": "A proactive ability check: roll d20 + the relevant ability modifier (+ proficiency bonus if proficient in the named skill, doubled for expertise) vs a DC. It resolves on the total — unlike an attack, a natural 20 is not an automatic success and a natural 1 is not an automatic failure. Use the skill_check tool for perception, athletics, arcana, stealth, persuasion, etc., naming the skill so proficiency applies. To resist an effect happening TO you, use saving_throw instead.",
     "spell_attack": "Some spells (e.g. chromatic_orb) require a spell attack roll: d20 + spellcasting ability modifier + proficiency vs the target's AC; a miss deals no damage. Auto-hit spells (e.g. magic_missile) skip the roll. Always cast with cast_spell, which spends the slot and lets the engine own the damage; a natural 20 doubles the spell's dice.",
     "initiative": "When combat begins, every combatant rolls d20 + Dex modifier; the highest acts first, ties breaking toward the higher Dex. The engine is the sole authority on turn order — never narrate a different order or let a combatant act out of turn.",
     "surprise": "Before combat the party may attempt a stealth ambush (attempt_ambush): the engine rolls a Dex check for each conscious party member against the highest alertness DC among the living hostiles. On success the hostiles are surprised and lose their first turn; on failure the fight is fair. Some foes are always alert and cannot be ambushed.",

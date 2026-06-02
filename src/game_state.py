@@ -54,8 +54,14 @@ class Character:
     spellcasting_ability: str = ""  # ability modifier key used for spell attack/save, e.g. "int", "wis"
     spells: list[str] = field(default_factory=list)  # known spell ids, e.g. ["magic_missile"]
     # Ability keys this character is proficient in for SAVING THROWS, e.g. ["wis", "con"].
-    # Proficient saves add proficiency_bonus; plain ability checks (skill_check) never do.
+    # Proficient saves add proficiency_bonus; a plain ability check adds none.
     save_proficiencies: list[str] = field(default_factory=list)
+    # SKILL names this character is proficient in, e.g. ["stealth", "perception"] (see
+    # rules.SKILLS for the skill->ability map). A skill_check that names a proficient skill
+    # adds proficiency_bonus; expertise skills add it twice. Without a named skill, a check
+    # is a raw ability roll.
+    skill_proficiencies: list[str] = field(default_factory=list)
+    expertise: list[str] = field(default_factory=list)
     death_save_successes: int = 0
     death_save_failures: int = 0
     dead: bool = False

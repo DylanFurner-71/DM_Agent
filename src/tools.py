@@ -344,6 +344,10 @@ TOOLS = [
         "description": (
             "Roll d20 + a character's ability modifier against a Difficulty Class (DC). "
             "Use for any non-attack check — perception, persuasion, athletics, stealth, arcana, etc. "
+            "Whenever the check corresponds to a named skill, pass skill (e.g. 'stealth', "
+            "'persuasion'): the engine then uses that skill's governing ability and adds the "
+            "character's proficiency bonus if they're proficient (twice for expertise). Omit skill "
+            "for a raw ability check. You never supply the bonus — the engine owns it. "
             "Set use_inspiration=true ONLY when the player chooses to spend that character's "
             "inspiration on this check — the engine rolls with advantage (2d20 keep higher) and "
             "spends the point; if they hold none the result reports inspiration_used=false."
@@ -352,8 +356,9 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "character": {"type": "string", "description": "Name of the character making the check"},
-                "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha"},
+                "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha (ignored if a known skill is named)"},
                 "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
+                "skill": {"type": "string", "description": "Optional 5e skill, e.g. 'stealth', 'perception', 'persuasion'. Names the skill so the engine can add proficiency/expertise and pick the governing ability."},
                 "use_inspiration": {"type": "boolean", "description": "Spend the character's inspiration for advantage on this check. Only when the player opts to."},
             },
             "required": ["character", "ability", "dc"],
@@ -1275,10 +1280,14 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(character.name, state)
         if err:
             return err
-        res = rules.skill_check(character, args["ability"], int(args["dc"]), bool(args.get("use_inspiration", False)))
+        res = rules.skill_check(character, args["ability"], int(args["dc"]),
+                                bool(args.get("use_inspiration", False)),
+                                skill=args.get("skill"))
         if res["ok"]:
             insp = " (inspired)" if res.get("inspiration_used") else ""
-            state.record(f"{character.name} {args['ability']} check DC {args['dc']}{insp}: {'success' if res['success'] else 'failure'}")
+            prof = " (expertise)" if res.get("expertise") else (" (proficient)" if res.get("proficient") else "")
+            label = res.get("skill", args["ability"])
+            state.record(f"{character.name} {label} check DC {args['dc']}{prof}{insp}: {'success' if res['success'] else 'failure'}")
         return res
 
     if name == "saving_throw":

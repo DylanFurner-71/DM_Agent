@@ -850,6 +850,66 @@ def test_skill_check_case_insensitive():
     assert res["modifier"] == 3
 
 
+# --- skill proficiency & expertise -------------------------------------------
+
+def test_skill_check_named_skill_adds_proficiency():
+    rules.force_rolls([10])
+    c = Character(name="Rogue", ability_modifiers={"dex": 3}, proficiency_bonus=2,
+                  skill_proficiencies=["stealth"])
+    res = rules.skill_check(c, "dex", dc=10, skill="stealth")
+    assert res["skill"] == "stealth"
+    assert res["proficient"] is True and res["expertise"] is False
+    assert res["modifier"] == 5   # dex 3 + proficiency 2
+    assert res["total"] == 15
+
+
+def test_skill_check_expertise_doubles_proficiency():
+    rules.force_rolls([10])
+    c = Character(name="Rogue", ability_modifiers={"dex": 3}, proficiency_bonus=2,
+                  skill_proficiencies=["stealth"], expertise=["stealth"])
+    res = rules.skill_check(c, "dex", dc=10, skill="stealth")
+    assert res["proficient"] is True and res["expertise"] is True
+    assert res["modifier"] == 7   # dex 3 + 2 * proficiency 2
+
+
+def test_skill_check_named_skill_not_proficient_no_bonus():
+    rules.force_rolls([10])
+    c = Character(name="Fighter", ability_modifiers={"dex": 1}, proficiency_bonus=2,
+                  skill_proficiencies=["athletics"])  # proficient in a different skill
+    res = rules.skill_check(c, "dex", dc=10, skill="stealth")
+    assert res["proficient"] is False
+    assert res["modifier"] == 1
+
+
+def test_skill_check_named_skill_fixes_governing_ability():
+    # The engine owns the skill->ability map: a named skill overrides a wrong ability arg.
+    rules.force_rolls([10])
+    c = Character(name="Cleric", ability_modifiers={"wis": 3, "str": -1}, proficiency_bonus=2,
+                  skill_proficiencies=["perception"])
+    res = rules.skill_check(c, "str", dc=10, skill="perception")
+    assert res["ability"] == "wis"      # perception is a WIS skill, not the passed str
+    assert res["modifier"] == 5         # wis 3 + proficiency 2
+
+
+def test_skill_check_without_skill_is_raw_ability():
+    # No skill named → raw ability roll, no proficiency, no skill fields (backward compatible).
+    rules.force_rolls([10])
+    c = Character(name="Rogue", ability_modifiers={"dex": 3}, proficiency_bonus=2,
+                  skill_proficiencies=["stealth"])
+    res = rules.skill_check(c, "dex", dc=10)
+    assert res["modifier"] == 3
+    assert "skill" not in res and "proficient" not in res
+
+
+def test_skill_check_unknown_skill_keeps_passed_ability():
+    rules.force_rolls([10])
+    c = Character(name="Hero", ability_modifiers={"dex": 2}, proficiency_bonus=2)
+    res = rules.skill_check(c, "dex", dc=10, skill="lockpicking")
+    assert res["ability"] == "dex"      # unknown skill doesn't remap the ability
+    assert res["proficient"] is False
+    assert res["modifier"] == 2
+
+
 # --- saving throws (reactive twin of skill_check) ----------------------------
 
 def test_saving_throw_uses_ability_modifier():

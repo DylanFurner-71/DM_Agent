@@ -243,6 +243,20 @@ def test_save_proficiencies_preserved(tmp_path):
     assert loaded.party["wisp"].save_proficiencies == []
 
 
+def test_skill_proficiencies_and_expertise_round_trip(tmp_path):
+    """skill_proficiencies / expertise survive save+load; older saves default to []."""
+    gs = GameState(party={
+        "rogue": Character(name="Rogue", skill_proficiencies=["stealth", "perception"],
+                           expertise=["stealth"]),
+        "plain": Character(name="Plain"),  # no skill data → defaults
+    })
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.party["rogue"].skill_proficiencies == ["stealth", "perception"]
+    assert loaded.party["rogue"].expertise == ["stealth"]
+    assert loaded.party["plain"].skill_proficiencies == []
+    assert loaded.party["plain"].expertise == []
+
+
 def test_sprung_hazards_preserved(tmp_path):
     """sprung one-shot hazards must survive the round-trip so a reloaded session
     doesn't re-arm a trap the party already triggered."""
