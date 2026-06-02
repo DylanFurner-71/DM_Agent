@@ -1754,9 +1754,9 @@ def test_from_dict_expands_template_npc():
 
 
 def test_scenario2_loads_correctly():
-    """two_scenes_test.json (multi-scene format) populates state from current_scene."""
+    """two_scene_loot_quest_item.json (multi-scene format) populates state from current_scene."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     # current_scene is barrow_entrance → snik should be in the live roster
     assert "snik" in gs.npcs
@@ -1795,7 +1795,7 @@ def test_multi_scene_load_location_and_scene_text():
 def test_move_scene_replaces_npcs_and_updates_location():
     """move_scene with a scene_key replaces the NPC roster and updates location/scene."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     assert "snik" in gs.npcs
 
@@ -1814,7 +1814,7 @@ def test_move_scene_replaces_npcs_and_updates_location():
 def test_move_scene_npc_stats_and_overrides():
     """move_scene expands template NPCs and applies per-entry overrides (e.g. max_hp)."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
 
@@ -1832,7 +1832,7 @@ def test_move_scene_npc_stats_and_overrides():
 def test_move_scene_party_untouched():
     """Scene transitions must never modify the party."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     gs.party["aldric"].hp = 10   # simulate damage
 
@@ -1846,7 +1846,7 @@ def test_move_scene_party_untouched():
 def test_move_scene_unknown_key_rejected():
     """move_scene with an unknown scene_key returns ok=False."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     original_location = gs.location
 
@@ -1860,7 +1860,7 @@ def test_move_scene_unknown_key_rejected():
 def test_move_scene_missing_scene_key_rejected():
     """move_scene without scene_key when scenes are defined returns ok=False."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
 
     res = tools.dispatch("move_scene", {"location": "Somewhere"}, gs)
@@ -1880,7 +1880,7 @@ def test_move_scene_free_form_without_scenes():
 def test_multi_scene_savegame_round_trip():
     """Saving and reloading preserves scenes dict and live NPC state (not re-expanded)."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     gs.npcs["snik"].hp = 3   # simulate combat damage
 
@@ -3261,7 +3261,7 @@ def test_game_over_emits_epilogue_no_prompt():
 def test_move_scene_follows_declared_exit():
     """move_scene to a scene_key that is a declared exit of the current scene succeeds."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     assert gs.current_scene == "barrow_entrance"
     res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
@@ -5214,7 +5214,7 @@ def test_surprised_hostile_is_valid_offensive_target():
 def test_move_scene_resets_ambush_flags():
     """Successful scene change resets pending_ambush and ambush_attempted to False."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     gs.pending_ambush = True
     gs.ambush_attempted = True

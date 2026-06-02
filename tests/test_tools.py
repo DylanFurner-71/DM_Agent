@@ -400,7 +400,7 @@ def test_narration_stream_gate_suppresses_leading_dump():
 def test_get_state_surfaces_available_scenes():
     """get_state returns the current scene's exits, not the global scene list."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     res = tools.dispatch("get_state", {}, gs)
     assert res["ok"] is True
@@ -450,7 +450,7 @@ def test_get_state_history_trim_does_not_touch_saves():
 def test_get_state_surfaces_current_exits():
     """get_state returns the current scene's exits dict, not a global scene list."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scenes_test.json")
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
     gs = GameState.load(path)
     assert gs.current_scene == "barrow_entrance"
     res = tools.dispatch("get_state", {}, gs)
