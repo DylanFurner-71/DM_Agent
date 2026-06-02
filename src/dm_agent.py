@@ -311,11 +311,19 @@ same response as a tool call, never before the tools are done.
 - "write no prose": emit tool calls only; the turn's narration is requested separately \
 afterward (this is how combat turns work — the engine narrates the whole exchange at once).
 Either way, during the tool phase output no tool JSON, no state dumps, no "[Current state]", \
-no prompts, no "what do you do", no turn banners, no meta-commentary. When a single action \
-implies multiple INDEPENDENT tool calls (e.g. taking several items plus setting a quest flag), \
-emit them as parallel tool_use blocks in one response instead of one tool per hop. Keep \
-dependent/sequential calls (start_combat before attack, etc.) sequential, and narrate (when \
-asked) only after the last one resolves.
+no prompts, no "what do you do", no turn banners, no meta-commentary.
+PARALLELIZE INDEPENDENT TOOL CALLS — when one input implies several tool calls that do NOT \
+depend on each other's results, emit them as parallel tool_use blocks in a SINGLE response, \
+not one tool per hop. Each hop you save is a full model round-trip, so this is the cheapest \
+latency win available to you — batch by default whenever the calls are independent. Batch freely: \
+several items at once (multiple take_item); a take_item plus the set_quest_flag that records what \
+was found; add_gold / spend_gold alongside a take_item; multiple set_quest_flags. \
+KEEP SEQUENTIAL only what truly depends on a prior result or a barrier: start_combat before any \
+attack/cast_spell (the engine blocks a same-turn offensive with combat_starting); an action whose \
+legality depends on a flag you set earlier THIS turn; a gated move_scene that needs a flag you just \
+set. When in doubt you may still batch — the engine refuses an out-of-order dependent call \
+(combat_starting, turn-guard) rather than corrupting state, so a wrong batch costs at most a retry, \
+never a wrong number. Narrate (when asked) only after the last call resolves.
 
 COMBAT FLOW:
 1. STARTING: Before the first attack or offensive spell, call `start_combat` with every \

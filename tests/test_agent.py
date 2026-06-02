@@ -1376,6 +1376,64 @@ def test_take_turn_start_combat_defers_attack():
     assert "you're up" in narration
 
 
+def test_parallel_independent_tools_resolve_in_one_hop():
+    """Independent tool calls batched into one response resolve in a SINGLE tool-use
+    hop — the parallel-tool_use latency lever (DECISIONS.md §8).
+
+    Three independent tools (two take_item + one set_quest_flag) emitted as parallel
+    blocks must all dispatch in one hop, not three. Resolved sequentially they would be
+    three thinking calls; batched they are one. Asserts exactly one `thinking` api_stats
+    entry, all results ok, and the resulting state (both items carried, flag set).
+    """
+    from unittest.mock import MagicMock
+    from src.dm_agent import DMAgent
+
+    rules.seed(0)
+    gs = GameState(location="Vault")
+    gs.party["aldric"] = Character(name="Aldric")   # sole PC → take_item auto-resolves carrier
+    gs.current_scene = "vault"
+    gs.scenes = {"vault": {"loot": ["dagger", "rope"], "exits": {}}}
+
+    # One response, three parallel tool_use blocks: take dagger, take rope, set a flag.
+    take1 = MagicMock(); take1.type = "tool_use"; take1.id = "t1"
+    take1.name = "take_item"; take1.input = {"item": "dagger"}
+    take2 = MagicMock(); take2.type = "tool_use"; take2.id = "t2"
+    take2.name = "take_item"; take2.input = {"item": "rope"}
+    flag = MagicMock(); flag.type = "tool_use"; flag.id = "t3"
+    flag.name = "set_quest_flag"; flag.input = {"flag": "looted_vault"}
+    exec_resp = MagicMock(); exec_resp.stop_reason = "tool_use"
+    exec_resp.content = [take1, take2, flag]
+
+    # Terminal turn = the captured out-of-combat narration.
+    narr_block = MagicMock(); narr_block.type = "text"
+    narr_block.text = "You pocket the dagger and coil the rope."
+    narr_resp = MagicMock(); narr_resp.stop_reason = "end_turn"; narr_resp.content = [narr_block]
+
+    fake_client = MagicMock()
+    fake_client.messages.create.side_effect = [exec_resp, narr_resp]
+
+    agent = DMAgent(gs, client=fake_client)
+    agent.take_turn("grab the dagger and the rope")
+
+    # All three tools dispatched, each ok.
+    names = [c["name"] for c in agent.tool_trace]
+    assert names == ["take_item", "take_item", "set_quest_flag"], names
+    assert all(c["result"]["ok"] for c in agent.tool_trace)
+
+    # The win: a SINGLE tool-use hop, not one per tool. (Out of combat the terminal
+    # turn is the captured narration — phase 'narrating' — so 'thinking' counts hops.)
+    thinking = [s for s in agent.api_stats if s["phase"] == "thinking"]
+    assert len(thinking) == 1, (
+        f"expected 1 tool-use hop for 3 batched tools; sequential resolution would be 3. "
+        f"got {len(thinking)}"
+    )
+
+    # State reflects all three.
+    assert "dagger" in gs.party["aldric"].inventory
+    assert "rope" in gs.party["aldric"].inventory
+    assert gs.quest_flags.get("looted_vault") is True
+
+
 
 
 def test_first_pc_not_skipped():
