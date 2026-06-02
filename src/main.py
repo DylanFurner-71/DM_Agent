@@ -276,6 +276,8 @@ def main() -> None:
     agent.on_retry = _notify_retry
 
     banner(scenario)
+    if agent.fast_model and agent.fast_model != agent.model:
+        print(f"  Models: {agent.model} (narration) · {agent.fast_model} (tool-selection)")
     if args.seed is not None:
         print(f"  Dice RNG seeded with {args.seed} — rolls are reproducible this session.")
     mode = _launch_mode(state)

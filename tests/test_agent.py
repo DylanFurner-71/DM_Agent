@@ -1338,6 +1338,27 @@ def test_strip_turn_prompt_removes_youre_up_variant():
     assert _strip_turn_prompt(text, _NAMES) == "The heat is unbearable."
 
 
+def test_strip_turn_prompt_removes_name_only_bold_prompt():
+    """The narrator's '**Sage**, …?' form (bold around the name only) — the run-2 leak."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "Cinderfang's tail catches her ribs.\n\n**Sage**, what do you do?"
+    assert _strip_turn_prompt(text, _NAMES) == "Cinderfang's tail catches her ribs."
+
+
+def test_strip_turn_prompt_removes_emdash_separated_prompt():
+    """'**Sage** — … — what do you do?' (em-dash after the bold name)."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "The world tilts.\n\n**Sage** — still standing, barely — what do you do?"
+    assert _strip_turn_prompt(text, _NAMES) == "The world tilts."
+
+
+def test_strip_turn_prompt_not_over_strips_midsentence_name():
+    """A name+comma INSIDE a sentence (not at a sentence boundary) is left alone."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "Do you trust Sage, knowing what you do?"
+    assert _strip_turn_prompt(text, _NAMES) == text
+
+
 def test_strip_turn_prompt_preserves_party_wide_exploration_prompt():
     """A combat-over close ends with a deliberate, un-named 'What do you do?' — keep it."""
     from src.dm_agent import _strip_turn_prompt

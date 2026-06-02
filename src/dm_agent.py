@@ -32,6 +32,15 @@ from . import tools
 
 # NOTE: confirm the current model string at https://docs.anthropic.com/en/docs/about-claude/models
 MODEL = "claude-sonnet-4-6"
+# Faster/cheaper model for the mechanical tool-selection ("thinking") calls — the
+# two-model split (README roadmap rank #1). It runs ONLY the combat / NPC-fallback
+# tool-use loops, whose terminating text is scrubbed (capture_narration=False); the
+# quality MODEL still writes every line of player-facing narration. Profiling showed
+# tool-selection is ~35% of per-turn wall doing low-output (~83 tok) work — exactly
+# what a fast model should do, with no prose-quality risk (the engine still enforces
+# every number, and a wrong-arg pick surfaces as an ok=false the quality model narrates).
+# Set fast_model=None on DMAgent to disable the split (everything runs on MODEL).
+FAST_MODEL = "claude-haiku-4-5-20251001"
 MAX_TOOL_HOPS = 12      # safety cap on tool calls per _execute call
 NARRATION_WINDOW = 4    # past (player_input, narration) pairs kept in model context
 UNDO_DEPTH = 20         # how many completed turns /undo can rewind
@@ -385,12 +394,19 @@ def _strip_turn_prompt(text: str, names) -> str:
     """Remove a trailing combat-turn prompt the model wrote into its own prose.
 
     The engine owns the per-turn prompt (DMAgent._closing_prompt); when the model
-    ALSO ends its narration with one — e.g. '**Brom, what do you do?**' — the player
-    sees a duplicate, and the line is stored in the rolling narration window where the
-    model reads it back and imitates it (a self-reinforcing leak). We strip ONLY a
-    trailing prompt addressed to a known actor BY NAME followed by a comma, so a
-    deliberate party-wide exploration prompt ('… What do you do?') from the
-    combat-over close — which names no one — is preserved.
+    ALSO ends its narration with one — e.g. '**Brom, what do you do?**' or
+    '**Sage**, what do you do?' — the player sees a duplicate, and the line is stored
+    in the rolling narration window where the model reads it back and imitates it (a
+    self-reinforcing leak). We strip ONLY a trailing prompt addressed to a known actor
+    BY NAME, so a deliberate party-wide exploration prompt ('… What do you do?') from
+    the combat-over close — which names no one — is preserved.
+
+    The name may be wrapped in its own bold (`**Sage**`) and separated from the prompt
+    by a comma, em/en-dash, or colon — the narrator uses all of these (`**Sage**, …?`,
+    `**Sage** — …?`). The whole prompt must be the final sentence: the match is anchored
+    to a sentence boundary (start, '.'/'!'/'?', or newline) before the name, so a name
+    that merely appears mid-sentence ('Do you trust Sage, after that?') is left alone,
+    and [^.\\n] keeps the prompt itself to one sentence so preceding prose is never eaten.
 
     Returns the text unchanged when no such prompt is found, or when stripping would
     leave nothing (defensive: never blank out a whole beat). Note: this cleans the
@@ -402,11 +418,15 @@ def _strip_turn_prompt(text: str, names) -> str:
     if not text or not names:
         return text
     alt = "|".join(re.escape(n) for n in sorted(set(names), key=len, reverse=True))
-    # Trailing: optional **, a known name, a comma, then prompt text up to a final
-    # ? or !, optional closing **, at end of string. [^.\n] keeps the match to the
-    # final sentence so preceding prose is never eaten.
-    pat = re.compile(r"\s*\*{0,2}\s*(?:" + alt + r")\s*,[^.\n]*?[?!]\s*\*{0,2}\s*$")
-    new = pat.sub("", text)
+    # (boundary) optional ** + a known name + optional closing ** + a separator
+    # (comma / em-dash / en-dash / colon) + prompt text up to a final ? or ! +
+    # optional closing **, at end of string. The leading boundary group is preserved
+    # via the \1 backreference so the prior sentence's punctuation isn't eaten.
+    pat = re.compile(
+        r"(^|[.!?]|\n)\s*\*{0,2}\s*(?:" + alt + r")\*{0,2}\s*[,:—–-]\s*"
+        r"[^.\n]*?[?!]\s*\*{0,2}\s*$"
+    )
+    new = pat.sub(r"\1", text)
     if new == text:
         return text
     new = new.rstrip()
@@ -528,10 +548,14 @@ def _context_from_transcript(transcript: list[dict], bound: int) -> list[dict]:
 
 
 class DMAgent:
-    def __init__(self, state, client: Anthropic | None = None, model: str = MODEL):
+    def __init__(self, state, client: Anthropic | None = None, model: str = MODEL,
+                 fast_model: str | None = FAST_MODEL):
         self.state = state
         self.client = client or Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         self.model = model
+        # Fast model for tool-selection-only loops (combat / NPC fallbacks). None
+        # disables the two-model split — every call then runs on self.model.
+        self.fast_model = fast_model
         # Optional sink for live narration deltas. When set, the dedicated narration
         # calls stream their prose to it (behind a leak gate) for perceived latency;
         # when None, narration is produced with the buffered create() path unchanged.
@@ -683,11 +707,16 @@ class DMAgent:
         text is scrubbed so premature prose can't leak forward, and "" is returned.
         """
         self.messages.append({"role": "user", "content": prompt})
+        # Two-model split: a tool-selection-only loop (capture_narration=False — combat
+        # player action and batched NPC fallbacks, whose terminating text is scrubbed)
+        # runs on the fast model. The folded out-of-combat loop (capture_narration=True)
+        # stays on the quality model because its terminating turn IS the narration.
+        model = self.fast_model if (self.fast_model and not capture_narration) else self.model
         narration = ""
         for _ in range(MAX_TOOL_HOPS):
             _t0 = time.monotonic()
             resp = self._call_with_retries(lambda: self.client.messages.create(
-                model=self.model,
+                model=model,
                 max_tokens=1024,
                 system=_SYSTEM,
                 tools=_TOOLS_CACHED,
@@ -696,7 +725,7 @@ class DMAgent:
             _elapsed = time.monotonic() - _t0
             terminal = resp.stop_reason != "tool_use"
             phase = "narrating" if (terminal and capture_narration) else "thinking"
-            self.api_stats.append({"phase": phase, "elapsed": round(_elapsed, 2), "usage": _usage_dict(resp.usage)})
+            self.api_stats.append({"phase": phase, "elapsed": round(_elapsed, 2), "model": model, "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
             if terminal:
                 if capture_narration:
@@ -764,7 +793,7 @@ class DMAgent:
                 system=_SYSTEM,
                 messages=self.messages,
             ))
-            self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(resp.usage)})
+            self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "model": self.model, "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
             return _extract_narration(resp.content)
 
@@ -794,7 +823,7 @@ class DMAgent:
                 delay = _retry_delay(attempt, exc)
                 self._notify_retry(attempt, delay, exc)
                 self._sleep(delay)
-        self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(final.usage)})
+        self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "model": self.model, "usage": _usage_dict(final.usage)})
         self.messages.append({"role": "assistant", "content": final.content})
         return _extract_narration(final.content)
 
