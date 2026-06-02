@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.views import format_hud, _hp_bar, _combatant_marker
+from src.views import format_hud, _hp_bar, _combatant_marker, _known_spell_groups
 from src.game_state import Character, NPC, GameState
 
 
@@ -134,3 +134,49 @@ def test_combatant_marker_cases():
     assert _combatant_marker(gs.party["pc"], "pc", gs) == "(dead)"
     gs.npcs["foe"].hp = 0
     assert _combatant_marker(gs.npcs["foe"], "foe", gs) == "(down)"
+
+
+# --- known spells grouped by level (HUD sub-lines) ---------------------------
+
+def _caster_state() -> GameState:
+    gs = GameState(location="Tower")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, spell_slots={1: 2},
+                                   spells=["guiding_bolt"], spellcasting_ability="wis")
+    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=16, spell_slots={1: 2, 2: 1},
+                                 spells=["magic_missile", "chromatic_orb"],
+                                 spellcasting_ability="int")
+    return gs
+
+
+def test_known_spell_groups_order_and_labels():
+    c = Character(name="W", spells=["magic_missile", "fire_bolt", "chromatic_orb"])
+    # cantrips ('C') first, then ascending level; names sorted, display-cased
+    assert _known_spell_groups(c) == [("C", "Fire Bolt"), ("L1", "Chromatic Orb, Magic Missile")]
+
+
+def test_known_spell_groups_untabled_bucketed():
+    c = Character(name="W", spells=["feather_fall"])   # not in SPELLS
+    assert _known_spell_groups(c) == [("?", "Feather Fall")]
+
+
+def test_known_spell_groups_empty_for_non_caster():
+    assert _known_spell_groups(Character(name="F")) == []
+
+
+def test_hud_lists_known_spells_grouped():
+    hud = format_hud(_caster_state())
+    assert "L1 Guiding Bolt" in hud
+    assert "L1 Chromatic Orb, Magic Missile" in hud
+
+
+def test_hud_spell_subline_indented_under_bar():
+    hud = format_hud(_caster_state())
+    line = next(ln for ln in hud.splitlines() if "Guiding Bolt" in ln)
+    # aligned under the HP bar: 2 + namew(6 for 'Aldric') + 2 = 10 leading spaces
+    assert line == " " * 10 + "L1 Guiding Bolt"
+
+
+def test_hud_non_caster_adds_no_spell_line():
+    # _two_pc_state PCs have slots but no known spells → no spell sub-lines
+    hud = format_hud(_two_pc_state())
+    assert len(hud.splitlines()) == 4   # 2 rules + 2 PC lines, nothing extra

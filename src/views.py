@@ -175,6 +175,30 @@ def _spell_name(spell_id: str) -> str:
     return spell_id.replace("_", " ").title()
 
 
+def _known_spell_groups(c) -> list[tuple[str, str]]:
+    """Known spells grouped by level for the compact HUD: ordered (label, names).
+
+    Cantrips ('C') first, then ascending level ('L1', 'L2', …), then any spell not in
+    the SPELLS table under '?'. Unlike _known_spells_by_level (the /state block) this
+    lists ONLY levels the caster knows a spell at — no upcast-only rows and no slot
+    fractions, since the HUD's PC line already carries the slot counts. names uses the
+    SPELLS display name (title-cased id fallback), sorted and comma-joined.
+    """
+    buckets: dict = {}
+    for sid in c.spells:
+        entry = SPELLS.get(sid)
+        lvl = entry.get("level") if entry else None
+        buckets.setdefault(lvl, []).append(_spell_name(sid))
+    rows: list[tuple[str, str]] = []
+    if 0 in buckets:
+        rows.append(("C", ", ".join(sorted(buckets.pop(0)))))
+    for lvl in sorted(k for k in buckets if isinstance(k, int)):
+        rows.append((f"L{lvl}", ", ".join(sorted(buckets[lvl]))))
+    if None in buckets:
+        rows.append(("?", ", ".join(sorted(buckets[None]))))
+    return rows
+
+
 def _known_spells_by_level(c) -> list[tuple[str, str, bool]]:
     """Build the spell-block rows for a caster: known spells grouped by level, with
     that level's slot budget — the block is the single home for a caster's slots.
@@ -406,6 +430,10 @@ def format_hud(state: GameState, width: int = 60) -> str:
         if tags:
             seg += f"  [{', '.join(tags)}]"
         lines.append(seg)
+        # Known spells grouped by level, one sub-line per level, indented to align
+        # under the HP bar. Only casters add lines; the PC line above owns the slots.
+        for label, names in _known_spell_groups(c):
+            lines.append(f"  {' ' * namew}  {label} {names}")
     if state.combat_round > 0 and state.combat_order:
         all_actors = {**state.party, **state.npcs}
         active_key = state.combat_order[state.combat_index]
