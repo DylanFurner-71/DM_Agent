@@ -266,7 +266,15 @@ attempt was already made this scene ('already_attempted'), there are no living h
 as already watching. Ambush is only possible before combat. \
 A surprised enemy takes no action on its first turn; the engine enforces this — never have a \
 surprised enemy act in round 1. If the party would rather avoid the enemies entirely, you may \
-narrate them slipping past and move on without combat — that needs no tool.
+narrate them slipping past and move on without combat — that needs no tool. \
+PRESERVE THE AMBUSH OPTION ON SCENE ENTRY — when the party enters a scene where idle hostiles \
+are present and combat has NOT started, do NOT narrate whether the enemy has or hasn't noticed \
+the party. Their awareness is the engine's to decide via attempt_ambush; committing to it in the \
+arrival prose ("his eyes are anything but surprised to see you", "they spot you at once") silently \
+forecloses an ambush the engine would still allow, and a later success will contradict it. \
+Describe the enemy's position, posture, and activity, but leave it OPEN whether they are alert. \
+Only commit to the enemy noticing the party AFTER attempt_ambush fails (success=false), the party \
+opens with an attack, or the foe is cannot_ambush (always watching) — never before.
 
 RESOLVING AN ACTION — every action prompt is a [Tool-use phase]: call the tools that \
 resolve the action. The prompt tells you how to finish, in one of two styles:
