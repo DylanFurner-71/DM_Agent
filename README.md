@@ -299,20 +299,24 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json)
-tests/                 # ~600 tests total, all no-API
-  test_rules.py        # 334 — enforcement core: dice, combat, spells, death saves
-  test_tools.py        #  62 — dispatch, guards, target/redaction, get_state
+tests/                 # ~610 tests total, all no-API
+  test_rules.py        # 222 — enforcement core: dice, attack, spells, combat/turn guards
+  test_tools.py        #  67 — dispatch, guards, target/redaction, get_state
+  test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
   test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
+  test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
+  test_hud.py          #  38 — status HUD: bars, spells, inventory, color
   test_validate.py     #  34 — scenario linter checks
-  test_hud.py          #  37 — status HUD: bars, spells, inventory, color
   test_save.py         #  23 — /save + /export helpers
+  test_persistence.py  #  20 — JSON save/load round-trip
+  test_items.py        #  20 — take_item / use_item / consumables
   test_answer_gate.py  #  15 — answer-gated exits + password redaction
-  test_narrative.py    #  12 — narration recording / transcript
+  test_narrative.py    #  13 — narration recording / transcript
   test_retry.py        #  10 — API retry/backoff
-  test_persistence.py  #   9 — JSON save/load round-trip
   test_undo.py         #   9 — /undo per-turn rewind
+  test_cli.py          #   9 — CLI args, --seed, launch/resume
   test_input_history.py#   6 — readline input history
-  test_cli.py          #   5 — CLI args + --seed
+  _helpers.py          #   –  shared test fixtures (no tests)
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
 ```
 
@@ -323,7 +327,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python -m pytest -q                       # ~600 enforcement tests, no API needed
+python -m pytest -q                       # ~610 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -366,7 +370,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 600 tests across `tests/`, all running with **no API**. They drive the
+Roughly 610 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and

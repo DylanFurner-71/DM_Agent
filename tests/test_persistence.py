@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src import rules, tools
 from src.game_state import Character, NPC, GameState
 
 
@@ -271,3 +272,165 @@ def test_savegame_branch_used_not_scene_expansion(tmp_path):
         "scene definition must retain template entries; the live npcs key is what "
         "provides the actual loaded state"
     )
+
+
+# --- moved from test_rules.py ------------------------------------------------
+def test_state_round_trips_through_json(tmp_path=None):
+    gs = GameState(location="Crypt")
+    gs.party["w"] = Character(name="Wisp", spell_slots={1: 2, 2: 1}, inventory=["dagger"])
+    gs.npcs["g"] = NPC(name="Goblin")
+    gs.quest_flags["door_open"] = True
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.location == "Crypt"
+    assert restored.party["w"].spell_slots == {1: 2, 2: 1}  # int keys preserved
+    assert restored.npcs["g"].name == "Goblin"
+    assert restored.quest_flags["door_open"] is True
+
+
+
+
+def test_combat_state_round_trips_through_json():
+    gs = GameState(location="Arena")
+    gs.party["w"] = Character(name="Wisp")
+    gs.npcs["g"] = NPC(name="Goblin")
+    gs.combat_order = ["w", "g"]
+    gs.combat_index = 1
+    gs.combat_round = 3
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.combat_order == ["w", "g"]
+    assert restored.combat_index == 1
+    assert restored.combat_round == 3
+
+
+
+
+def test_multi_scene_savegame_round_trip():
+    """Saving and reloading preserves scenes dict and live NPC state (not re-expanded)."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
+    gs = GameState.load(path)
+    gs.npcs["snik"].hp = 3   # simulate combat damage
+
+    restored = GameState.from_dict(gs.to_dict())
+
+    assert restored.current_scene == "barrow_entrance"
+    assert "ember_chamber" in restored.scenes
+    assert restored.npcs["snik"].hp == 3   # live state, not re-expanded from template
+
+
+
+
+def test_game_over_roundtrips():
+    """game_over and game_outcome survive to_dict/from_dict; absent keys load as defaults."""
+    gs = GameState(location="End")
+    gs.game_over = True
+    gs.game_outcome = "victory"
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.game_over is True
+    assert restored.game_outcome == "victory"
+
+    # Old save without the keys must load with clean defaults.
+    old = GameState.from_dict({"location": "Old", "party": {}, "npcs": {}})
+    assert old.game_over is False
+    assert old.game_outcome == ""
+
+
+
+
+def test_character_death_save_fields_round_trip():
+    gs = GameState(location="Test")
+    c = Character(name="Hero", max_hp=20, hp=0,
+                  death_save_successes=2, death_save_failures=1,
+                  dead=False, stable=False)
+    gs.party["hero"] = c
+    restored = GameState.from_dict(gs.to_dict())
+    rc = restored.party["hero"]
+    assert rc.death_save_successes == 2
+    assert rc.death_save_failures == 1
+    assert rc.dead is False
+    assert rc.stable is False
+
+
+
+
+# --- round-trip: take_item then to_dict / from_dict ----------------------------
+
+def test_take_item_round_trip_inventory_and_loot():
+    """take_item then to_dict → from_dict: inventory has the item; scene loot is depleted."""
+    gs = GameState(
+        current_scene="vault",
+        scenes={
+            "vault": {
+                "location": "The Vault",
+                "scene": "Stone walls.",
+                "loot": ["healing_potion", "pearl_of_power"],
+                "exits": {},
+            }
+        },
+    )
+    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=10, inventory=[])
+
+    tools.dispatch("take_item", {"item": "healing_potion", "carrier": "Aldric"}, gs)
+
+    # Round-trip through dict (same path as save/load but without touching disk).
+    restored = GameState.from_dict(gs.to_dict())
+
+    assert "healing_potion" in restored.party["aldric"].inventory
+    assert restored.scenes["vault"]["loot"] == ["pearl_of_power"]  # one copy gone, one remains
+
+
+
+
+def test_npc_disposition_fields_round_trip():
+    """disposition_dc and social_attempted survive to_dict / from_dict."""
+    gs = GameState()
+    gs.party["hero"] = Character(name="Hero", max_hp=10, hp=10)
+    gs.npcs["guard"] = NPC(name="Guard", disposition_dc=12, social_attempted=True)
+    gs.npcs["brute"] = NPC(name="Brute")  # defaults: None / False
+
+    restored = GameState.from_dict(gs.to_dict())
+
+    guard = restored.npcs["guard"]
+    assert guard.disposition_dc == 12
+    assert guard.social_attempted is True
+
+    brute = restored.npcs["brute"]
+    assert brute.disposition_dc is None
+    assert brute.social_attempted is False
+
+
+
+
+def test_ambush_npc_fields_round_trip():
+    """alertness_dc and surprised survive to_dict → from_dict;
+    pending_ambush and ambush_attempted are NOT in the serialized dict."""
+    gs = GameState(location="Test")
+    gs.npcs["guard"] = NPC(name="Guard", alertness_dc=12, surprised=True, hostile=True)
+    gs.pending_ambush = True
+    gs.ambush_attempted = True
+
+    d = gs.to_dict()
+
+    # NPC fields present
+    assert d["npcs"]["guard"]["alertness_dc"] == 12
+    assert d["npcs"]["guard"]["surprised"] is True
+
+    # Transient GameState flags absent
+    assert "pending_ambush" not in d
+    assert "ambush_attempted" not in d
+
+    restored = GameState.from_dict(d)
+    assert restored.npcs["guard"].alertness_dc == 12
+    assert restored.npcs["guard"].surprised is True
+    assert restored.pending_ambush is False
+    assert restored.ambush_attempted is False
+
+
+
+
+def test_companion_flag_round_trips():
+    """The companion flag survives save/load."""
+    gs = GameState(location="Camp")
+    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True)
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.npcs["brak"].companion is True

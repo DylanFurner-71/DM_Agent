@@ -170,3 +170,19 @@ def test_agent_empty_transcript_seeds_empty_history():
     gs.party["aldric"] = Character(name="Aldric")
     agent = DMAgent(gs, client=MagicMock())
     assert agent.narration_history == []
+
+
+# --- moved from test_rules.py ------------------------------------------------
+# --- narrative persistence & launch-mode tests --------------------------------
+
+def test_narrative_persisted():
+    """Narrative beats survive to_dict -> from_dict round-trip intact."""
+    gs = GameState(location="Dungeon")
+    gs.party["hero"] = Character(name="Hero")
+    gs.narrative.append({"turn": 1, "text": "The hero slays the goblin."})
+    gs.narrative.append({"turn": 2, "text": "The treasure chest is opened."})
+
+    restored = GameState.from_dict(gs.to_dict())
+    assert restored.narrative == gs.narrative
+    assert restored.narrative[0]["text"] == "The hero slays the goblin."
+    assert restored.narrative[1]["text"] == "The treasure chest is opened."
