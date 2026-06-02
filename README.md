@@ -157,7 +157,9 @@ token usage — including prompt-cache reads and writes. A compact **status HUD*
 prints before each prompt — per-PC HP bars, spell slots, and conditions, plus, in
 combat, the round and initiative order with the active actor marked and
 dying/dead/companion tags (toggle with `/hud` or start with `--no-hud`). In-session
-commands include `/help`, `/state`, `/recap` (replay the story so far),
+commands include `/help`, `/state` (a full readout: per-PC HP/AC/spell-slot caps
+and death-save progress, companion allies, hostiles, and the current scene's exits
+and loot), `/recap` (replay the story so far),
 `/roll <notation>` (open flavor rolls), `/undo` (rewind the last turn), `/cost`
 (session token usage and estimated spend, derived from the per-call stats),
 `/export` (write the story so far to a shareable Markdown session log), and `/save`.

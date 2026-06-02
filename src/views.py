@@ -160,12 +160,54 @@ def print_state(state: GameState) -> None:
         _print_state_plain(state)
 
 
+def _pc_slots(c) -> str:
+    """Spell slots as 'LN:current/max', surfacing the per-level cap (max_spell_slots)."""
+    caps = getattr(c, "max_spell_slots", {}) or {}
+    parts = [f"L{lvl}:{n}/{caps.get(lvl, n)}" for lvl, n in sorted(c.spell_slots.items())]
+    return ", ".join(parts) or "none"
+
+
+def _pc_status(c) -> str:
+    """Health summary with the death-save lifecycle made explicit: a dying PC shows
+    its running successes/failures, a stabilized one reads 'stable', a corpse 'dead'.
+    Other conditions (poisoned, prone, …) are appended; the raw 'unconscious'/'dead'
+    tags are folded into the lifecycle word so they don't double up."""
+    if getattr(c, "dead", False):
+        tags = ["dead"]
+    elif c.is_dying:
+        tags = [f"dying ({c.death_save_successes}✓ {c.death_save_failures}✗)"]
+    elif getattr(c, "stable", False) and c.is_down:
+        tags = ["stable"]
+    else:
+        tags = []
+    tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
+    return ", ".join(tags) or "ok"
+
+
+def _npc_descriptor(n) -> tuple[str, str]:
+    """(kind, disposition) for an NPC line — distinguishes a recruited companion
+    ('ally'/'companion') from a plain hostile or neutral bystander."""
+    if getattr(n, "companion", False):
+        return "ally", "companion"
+    return "NPC", ("hostile" if n.hostile else "friendly")
+
+
+def _scene_nav(state) -> tuple[list[str], list[str]]:
+    """(exit labels, loot ids) for the current scene; both empty in a free-form or
+    terminal (exit-less) scene. Hidden hazards/DCs are deliberately not surfaced."""
+    scene = state.scenes.get(state.current_scene, {}) if state.current_scene else {}
+    return list(scene.get("exits", {}).keys()), list(scene.get("loot", []) or [])
+
+
 def _print_state_plain(state: GameState) -> None:
     print(f"\n  Location: {state.location}")
+    exits, loot = _scene_nav(state)
+    if exits:
+        print(f"  Exits: {', '.join(exits)}")
+    if loot:
+        print(f"  Loot here: {', '.join(loot)}")
     for c in state.party.values():
-        slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
-        status = ", ".join(c.conditions) or "ok"
-        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | slots {slots} | {status}")
+        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac} | slots {_pc_slots(c)} | {_pc_status(c)}")
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
@@ -174,9 +216,9 @@ def _print_state_plain(state: GameState) -> None:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
             print(f"    Spells{ability}: {', '.join(c.spells)}")
     for n in state.npcs.values():
-        disposition = "hostile" if n.hostile else "friendly"
+        kind, disposition = _npc_descriptor(n)
         status = " [down]" if n.is_down else ""
-        print(f"  {n.name} (NPC){status}: HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}")
+        print(f"  {n.name} ({kind}){status}: HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}")
         if n.inventory:
             print(f"    Inventory: {', '.join(n.inventory)}")
     if state.combat_round > 0:
@@ -198,12 +240,15 @@ def _print_state_rich(state: GameState) -> None:
     interpolated string is escape()d so scenario/player text can't inject markup."""
     con = _console()
     con.print(f"\n  Location: [bold]{escape(state.location)}[/bold]")
+    exits, loot = _scene_nav(state)
+    if exits:
+        con.print(f"  Exits: {escape(', '.join(exits))}")
+    if loot:
+        con.print(f"  Loot here: [yellow]{escape(', '.join(loot))}[/yellow]")
     for c in state.party.values():
-        slots = ", ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items())) or "none"
-        status = ", ".join(c.conditions) or "ok"
         con.print(
             f"  [bold cyan]{escape(c.name)}[/bold cyan]: "
-            f"HP {c.hp}/{c.max_hp} | slots {escape(slots)} | {escape(status)}"
+            f"HP {c.hp}/{c.max_hp} | AC {c.ac} | slots {escape(_pc_slots(c))} | {escape(_pc_status(c))}"
         )
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
@@ -213,11 +258,11 @@ def _print_state_rich(state: GameState) -> None:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
             con.print(f"    Spells{escape(ability)}: {escape(', '.join(c.spells))}")
     for n in state.npcs.values():
-        color = "red" if n.hostile else "green"
-        disposition = "hostile" if n.hostile else "friendly"
+        kind, disposition = _npc_descriptor(n)
+        color = "cyan" if kind == "ally" else ("red" if n.hostile else "green")
         status = " [dim](down)[/dim]" if n.is_down else ""
         con.print(
-            f"  [{color}]{escape(n.name)}[/{color}] (NPC){status}: "
+            f"  [{color}]{escape(n.name)}[/{color}] ({kind}){status}: "
             f"HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}"
         )
         if n.inventory:

@@ -71,14 +71,99 @@ def test_print_roll_plain_no_ansi(capsys):
     assert ESC not in out
 
 
-def test_print_state_plain_unchanged(capsys):
+def test_print_state_plain_core_fields(capsys):
     views.set_plain(True)
     views.print_state(_state())
     out = capsys.readouterr().out
-    assert "Aldric: HP 7/24" in out
+    assert "Aldric: HP 7/24 | AC 12" in out   # PC AC now shown, like NPCs
     assert "Grik (NPC)" in out
     assert "hostile" in out
     assert ESC not in out
+
+
+# --- /state: death-save status ----------------------------------------------
+
+def test_print_state_shows_death_save_progress(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Crypt")
+    dying = Character(name="Aldric", max_hp=24, hp=0, conditions=["unconscious"])
+    dying.death_save_successes, dying.death_save_failures = 2, 1
+    gs.party["a"] = dying
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "dying" in out
+    assert "2✓" in out and "1✗" in out
+    assert "unconscious" not in out   # folded into the 'dying' lifecycle word
+
+
+def test_print_state_shows_stable_and_dead(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Crypt")
+    gs.party["b"] = Character(name="Boric", max_hp=30, hp=0, stable=True)
+    gs.party["g"] = Character(name="Grak", max_hp=22, hp=0, dead=True, conditions=["dead"])
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Boric: HP 0/30 | AC" in out and "| stable" in out
+    assert "Grak" in out and "| dead" in out
+
+
+# --- /state: companion allies -----------------------------------------------
+
+def test_print_state_tags_companion_ally(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Road")
+    gs.npcs["lyra"] = NPC(name="Lyra", hostile=False, companion=True, hp=22, max_hp=22)
+    gs.npcs["grik"] = NPC(name="Grik", hostile=True, hp=18, max_hp=18)
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Lyra (ally)" in out and "| companion" in out
+    assert "Grik (NPC)" in out and "| hostile" in out
+
+
+# --- /state: PC AC + slot caps ----------------------------------------------
+
+def test_print_state_shows_pc_ac_and_slot_caps(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Hall")
+    gs.party["w"] = Character(name="Wisp", max_hp=18, hp=18, ac=13,
+                              spell_slots={1: 0, 2: 1}, max_spell_slots={1: 2, 2: 1})
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "AC 13" in out
+    assert "L1:0/2" in out and "L2:1/1" in out
+
+
+# --- /state: scene exits & loot ---------------------------------------------
+
+def test_print_state_lists_exits_and_loot(capsys):
+    views.set_plain(True)
+    gs = GameState(location="The Ember Chamber", current_scene="ember")
+    gs.scenes = {"ember": {"location": "The Ember Chamber",
+                           "exits": {"the dark passage": "tomb"},
+                           "loot": ["healing_potion", "iron key"]}}
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Exits: the dark passage" in out
+    assert "Loot here: healing_potion, iron key" in out
+
+
+def test_print_state_omits_nav_when_free_form(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Nowhere")
+    gs.party["a"] = Character(name="A")
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Exits:" not in out
+    assert "Loot here:" not in out
+
+
+def test_print_state_rich_tags_companion(monkeypatch, capsys):
+    _force_rich(monkeypatch)
+    gs = GameState(location="Road")
+    gs.npcs["lyra"] = NPC(name="Lyra", hostile=False, companion=True, hp=22, max_hp=22)
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Lyra (ally)" in out and "companion" in out
 
 
 def test_banner_plain(capsys):
