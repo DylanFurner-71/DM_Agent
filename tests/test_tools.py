@@ -168,6 +168,17 @@ def test_extract_narration_strips_whitespace():
     assert _extract_narration(content) == "The goblin falls."
 
 
+def test_extract_narration_passes_brace_first_dump_sanitize_is_backstop():
+    """Layering contract: _extract_narration / _screen_narration_text only suppress a
+    *bracket-first* dump. A brace-first dump (no [Current state] header) passes through
+    _extract_narration unchanged — by design, the take_turn-level _sanitize_narration is
+    the backstop that catches it. Pins the two-function split so a refactor that stored
+    _extract_narration's output directly (skipping _sanitize_narration) surfaces here."""
+    brace_first = '{"location": "Dungeon", "party": {"Wisp": {"hp": "8/8"}}}'
+    assert _extract_narration(_make_text_blocks(brace_first)) == brace_first  # NOT cleaned
+    assert _sanitize_narration(brace_first) == ""                              # backstop cleans it
+
+
 # ---------------------------------------------------------------------------
 # _sanitize_narration
 # ---------------------------------------------------------------------------
@@ -308,6 +319,52 @@ def test_narration_leak_regression():
     assert '{"location"' not in state.narrative[-1]["text"]
     assert "[Current state]" not in state.transcript[-1]["text"]
     assert '{"location"' not in state.transcript[-1]["text"]
+
+
+def test_take_turn_backstops_a_brace_first_dump_extract_misses():
+    """End-to-end layering: a BRACE-first dump in the terminating turn slips
+    _extract_narration (bracket-only, so it returns the dump verbatim) but is removed by
+    take_turn's _sanitize_narration before it reaches the return value, state.narrative,
+    or state.transcript. Distinct from test_narration_leak_regression, whose leak is
+    bracket-first and so caught one layer earlier — this one exercises the backstop."""
+    BRACE_DUMP = '{"location": "Dungeon", "party": {"Wisp": {"hp": "8/8"}}}\n\nGrik lunges at Wisp.'
+    # sanity: the dump is exactly the kind _extract_narration does NOT clean
+    assert _extract_narration(_make_text_blocks(BRACE_DUMP)) == BRACE_DUMP
+
+    tool_use_block = MagicMock()
+    tool_use_block.type = "tool_use"
+    tool_use_block.id = "tu_1"
+    tool_use_block.name = "get_state"
+    tool_use_block.input = {}
+    usage = _make_mock_usage()
+    resp_tool_use = MagicMock()
+    resp_tool_use.stop_reason = "tool_use"
+    resp_tool_use.content = [tool_use_block]
+    resp_tool_use.usage = usage
+
+    leak_block = MagicMock()
+    leak_block.type = "text"
+    leak_block.text = BRACE_DUMP
+    resp_terminal = MagicMock()
+    resp_terminal.stop_reason = "end_turn"
+    resp_terminal.content = [leak_block]
+    resp_terminal.usage = usage
+
+    client = MagicMock()
+    client.messages.create.side_effect = [resp_tool_use, resp_terminal]
+
+    state = GameState(
+        party={"wisp": Character(name="Wisp", hp=8, max_hp=8)},
+        npcs={"grik": NPC(name="Grik", hp=10, max_hp=10, hostile=True)},
+    )
+    agent = DMAgent(state, client=client)
+    result = agent.take_turn("Wisp casts magic missile at Grik.")
+
+    # the dump is gone end-to-end; the legit prose survives
+    assert result == "Grik lunges at Wisp."
+    for blob in (result, state.narrative[-1]["text"], state.transcript[-1]["text"]):
+        assert '"location"' not in blob and '"party"' not in blob
+        assert "Grik lunges at Wisp." in blob
 
 
 def test_execute_capture_narration_keeps_terminal_prose():
