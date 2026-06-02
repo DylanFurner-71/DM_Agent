@@ -108,6 +108,12 @@ further: a **director** (goals/pacing), a **tactician** (NPC turns, #2), a **nar
 (prose), a **rules-lawyer** (tool selection + validation), an **author** (#5). Clean
 separation, each specialized.
 
+## 9. Interactive clarification → negotiation. 
+You already stop and ask on underspecified actions. Generalize that from a hardcoded ambiguous_target special-case into a policy: the agent can ask a bounded clarifying question whenever intent is genuinely ambiguous, and NPCs can make counter-offers the player negotiates against (reuse influence_npc's machinery). Asking good questions is itself agency, and you've already proven the pattern is safe.
+
+## 10. A self-play eval harness. 
+Your caveat asks you to measure agency but doesn't build the tool. A "player agent" that plays scripted goals against DMAgent gives you: (a) the agency yardstick the caveat wants (autonomy horizon, self-initiated NPC actions/session, recovery-from-ok=false rate), (b) cheap regression traces for every other vector, and (c) a way to A/B "did tactical NPCs actually raise the agency metric, and what did it cost?" It turns the honest caveat into instrumentation.
+
 ---
 
 ## Where I'd actually start
