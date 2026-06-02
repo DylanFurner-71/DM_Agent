@@ -316,7 +316,14 @@ Future work, ranked roughly least → most difficult to implement.
 - **Races / species & traits:** a species layer applied at character build that grants passive traits — darkvision, type-specific damage resistances (e.g. dwarven resistance to poison), movement quirks, an extra language, advantage on certain saves, and small ability adjustments. Mostly data plus a few hooks into the systems above (resistances, advantage). Pairs with character creation.
 - **Classes & class features:** the biggest structural gap — and the thing that most makes a character feel like *D&D*. Today a `Character` is a generic stat-block (ability mods, attack bonus, slots); 5e characters are defined by a **class** and its level-scaling **features** — Sneak Attack, Rage, Action Surge, Channel Divinity, Fighting Styles, and class-driven spellcasting progression. Needs a class/subclass model plus a feature system that hooks the engine (extra damage dice on a qualifying hit, a granted bonus action, a to-hit/AC/save modifier, resource pools like ki or superiority dice). Depends on most of the systems above (action economy, conditions, resources) and feeds **XP & leveling** (features unlock by level) and **character creation**.
 - **Character creation:** build a party at the start of a session instead of authored pre-generated characters.
-- **The big swings:** the full 5e ruleset, multiplayer, persistent multi-session campaigns, image/voice, a polished GUI, and procedural map generation.
+*The big swings (largest scope, most ambitious):*
+
+- **Full 5e ruleset:** the complete SRD — every class, subclass, spell, monster, and rule interaction — rather than the simplified subset modeled today.
+- **Multiplayer:** multiple human players sharing one session (turn handoff, per-player input), instead of a single player driving the whole party.
+- **Persistent multi-session campaigns:** carry characters, inventory, and world state across sessions — saved progression beyond the single-session scope this is built for.
+- **Image / voice:** generated scene and character art plus spoken narration and voice input, beyond the text terminal.
+- **Polished GUI:** a graphical client (web or desktop) in place of the terminal REPL.
+- **Procedural map generation:** engine-generated scene graphs and encounters instead of hand-authored scenario JSON.
 
 ## Layout
 
