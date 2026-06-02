@@ -128,8 +128,8 @@ def test_autosave_writes_overwriting_state_only(monkeypatch):
     """_autosave calls _do_save with the autosave name, overwrite on, no sidecar."""
     captured = {}
 
-    def fake_do_save(state, raw, *args, overwrite=False, trace=None, **kwargs):
-        captured.update(raw=raw, overwrite=overwrite, trace=trace)
+    def fake_do_save(state, raw, *args, overwrite=False, stats_trace=None, **kwargs):
+        captured.update(raw=raw, overwrite=overwrite, stats_trace=stats_trace)
         return ("saved", "saves/autosave.json")
 
     monkeypatch.setattr(main, "_do_save", fake_do_save)
@@ -138,7 +138,7 @@ def test_autosave_writes_overwriting_state_only(monkeypatch):
 
     assert captured["raw"] == main.AUTOSAVE_NAME
     assert captured["overwrite"] is True
-    assert captured["trace"] == []  # state only — no trace sidecar on autosave
+    assert captured["stats_trace"] is None  # state only — no trace sidecar on autosave
 
 
 def test_autosave_reports_error_without_raising(monkeypatch, capsys):
@@ -153,7 +153,7 @@ def test_autosave_roundtrips_to_disk(tmp_path, monkeypatch):
     gs = GameState(location="The Vault")
     gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=9)
     gs.turn = 3
-    main._do_save(gs, main.AUTOSAVE_NAME, base_dir=tmp_path, overwrite=True, trace=[])
+    main._do_save(gs, main.AUTOSAVE_NAME, base_dir=tmp_path, overwrite=True)
 
     loaded = GameState.load(str(tmp_path / "autosave.json"))
     assert loaded.turn == 3

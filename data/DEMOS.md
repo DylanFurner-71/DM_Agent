@@ -436,8 +436,8 @@ and a **stealthy undead route** (crypt — ambushable foes, reward: a Pearl of P
 
 The save/resume round-trip works from any of the above:
 
-1. Part-way through a session: `/save my_run` → writes `saves/my_run.json` plus trace
-   sidecars (`my_run.trace.jsonl`, `my_run_stats_trace.json`).
+1. Part-way through a session: `/save my_run` → writes `saves/my_run.json` plus the
+   trace sidecar (`my_run_stats_trace.json`).
 2. `/quit`.
 3. Resume exactly where you left off — same HP, slots, scene, combat state, flags:
    ```bash

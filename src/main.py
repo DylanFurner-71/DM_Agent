@@ -113,7 +113,6 @@ def _do_save(
     base_dir: Path = SAVE_DIR,
     overwrite: bool = False,
     *,
-    trace: list,
     stats_trace: list | None = None,
 ) -> tuple:
     """Resolve path and write state; return (status, path_or_message).
@@ -121,10 +120,9 @@ def _do_save(
     status values: "saved", "exists" (no-clobber), "error".
     Never raises — all failures are captured and returned as ("error", msg).
 
-    When trace is provided, also writes a sidecar at <name>.trace.jsonl —
-    one JSON record per list element, one per line.
-    When stats_trace is provided, also writes <name>_stats_trace.json.
-    Sidecar failures are silently swallowed so they never block the save.
+    When stats_trace is provided, also writes a sidecar at <name>_stats_trace.json
+    (the per-turn tool-call + API-stats record). Sidecar failure is silently
+    swallowed so it never blocks the save.
     """
     try:
         path = _resolve_save_path(raw, base_dir)
@@ -136,14 +134,6 @@ def _do_save(
         game_state.save(str(path))
     except Exception as e:
         return ("error", str(e))
-    if trace:
-        sidecar = path.with_suffix(".trace.jsonl")
-        try:
-            with open(sidecar, "w") as _f:
-                for record in trace:
-                    _f.write(json.dumps(record) + "\n")
-        except Exception:
-            pass
     if stats_trace is not None:
         stats_path = path.with_name(path.stem + "_stats_trace.json")
         try:
@@ -187,7 +177,7 @@ def _autosave(state) -> None:
     `python -m src.main saves/autosave.json`. Disk errors are reported quietly
     but never raise, so a failed autosave can't end the session.
     """
-    status, val = _do_save(state, AUTOSAVE_NAME, overwrite=True, trace=[])
+    status, val = _do_save(state, AUTOSAVE_NAME, overwrite=True)
     if status == "error":
         print(f"  (autosave failed: {val})")
 
@@ -369,14 +359,8 @@ def main() -> None:
                 except (EOFError, KeyboardInterrupt):
                     print()
                     continue
-            # Flatten per-turn groups into one record per tool call.
-            trace = [
-                {"turn": entry["turn"], **call}
-                for entry in agent.full_trace
-                for call in entry["calls"]
-            ]
             stats = _build_stats_trace(agent.full_trace)
-            status, val = _do_save(state, raw, trace=trace, stats_trace=stats)
+            status, val = _do_save(state, raw, stats_trace=stats)
             if status == "saved":
                 print(f"  Saved to {val}")
             elif status == "exists":
@@ -386,7 +370,7 @@ def main() -> None:
                     print()
                     continue
                 if confirm == "y":
-                    status2, val2 = _do_save(state, raw, overwrite=True, trace=trace, stats_trace=stats)
+                    status2, val2 = _do_save(state, raw, overwrite=True, stats_trace=stats)
                     if status2 == "saved":
                         print(f"  Saved to {val2}")
                     else:
@@ -423,13 +407,8 @@ def main() -> None:
                     print()
                     raw = ""
                 if raw:
-                    end_trace = [
-                        {"turn": entry["turn"], **call}
-                        for entry in agent.full_trace
-                        for call in entry["calls"]
-                    ]
                     end_stats = _build_stats_trace(agent.full_trace)
-                    status, val = _do_save(state, raw, trace=end_trace, stats_trace=end_stats)
+                    status, val = _do_save(state, raw, stats_trace=end_stats)
                     if status == "saved":
                         print(f"  Saved to {val}")
                     elif status == "exists":
@@ -439,7 +418,7 @@ def main() -> None:
                             print()
                             confirm = "n"
                         if confirm == "y":
-                            status2, val2 = _do_save(state, raw, overwrite=True, trace=end_trace, stats_trace=end_stats)
+                            status2, val2 = _do_save(state, raw, overwrite=True, stats_trace=end_stats)
                             print(f"  {'Saved to ' + val2 if status2 == 'saved' else val2}")
                     else:
                         print(f"  {val}")
