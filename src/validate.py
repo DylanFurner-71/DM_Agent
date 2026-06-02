@@ -27,7 +27,7 @@ from collections import deque
 
 from . import rules
 from . import tools
-from .game_state import Character, NPC
+from .game_state import Character, GameState, NPC
 
 _ABILITIES = {"str", "dex", "con", "int", "wis", "cha"}
 _CHARACTER_FIELDS = {f.name for f in dataclasses.fields(Character)}
@@ -35,6 +35,17 @@ _NPC_FIELDS = {f.name for f in dataclasses.fields(NPC)}
 _EXIT_KEYS = {"to", "requires", "requires_answer", "denied"}
 _HAZARD_KEYS = {"name", "ability", "dc", "damage", "damage_type", "on_success",
                 "once", "requires", "hidden"}
+# Top-level scenario keys the loader/saver knows. Derived from GameState.to_dict so it
+# tracks the real schema (savegame fields included) and can't drift.
+_TOP_LEVEL_KEYS = set(GameState().to_dict())
+# Known fields whose VALUES the dataclasses don't type-check: a wrong type loads fine
+# via Character(**v)/NPC(**v) and only crashes mid-session, so the validator does.
+_CHARACTER_INT_FIELDS = ("level", "max_hp", "hp", "ac", "attack_bonus", "proficiency_bonus",
+                         "death_save_successes", "death_save_failures", "inspiration")
+_CHARACTER_LIST_FIELDS = ("inventory", "conditions", "spells", "save_proficiencies",
+                          "skill_proficiencies", "expertise")
+_NPC_INT_FIELDS = ("max_hp", "hp", "ac", "attack_bonus")
+_NPC_NULLABLE_INT_FIELDS = ("disposition_dc", "alertness_dc")  # int or null
 
 
 class Report:
@@ -70,6 +81,86 @@ def _suggest(name: str, options) -> str:
     import difflib
     match = difflib.get_close_matches(str(name), list(options), n=1, cutoff=0.7)
     return f" (did you mean {match[0]!r}?)" if match else ""
+
+
+def _is_int(v) -> bool:
+    """True for a real integer — JSON booleans are ints in Python, so exclude them."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _check_ability_modifiers(rep: Report, where: str, am) -> None:
+    """ability_modifiers must be an {ability: int} map; a non-int value breaks roll math."""
+    if am is None:
+        return
+    if not isinstance(am, dict):
+        rep.error(where, f"ability_modifiers must be an object, got {type(am).__name__}")
+        return
+    for ab, val in am.items():
+        if isinstance(ab, str) and ab.strip().lower() not in _ABILITIES:
+            rep.warn(where, f"ability_modifiers key {ab!r} is not a known ability {sorted(_ABILITIES)} — it is ignored")
+        if not _is_int(val):
+            rep.error(where, f"ability_modifiers[{ab!r}] must be an integer, got {val!r}")
+
+
+def _check_hp_ac_sanity(rep: Report, where: str, hp, max_hp, ac) -> None:
+    """Flag impossible HP/AC values (warnings — they load, but make no sense at play)."""
+    if _is_int(max_hp) and max_hp < 1:
+        rep.warn(where, f"max_hp is {max_hp} — a creature with no positive max HP starts down")
+    if _is_int(hp) and hp < 0:
+        rep.warn(where, f"hp is {hp} — negative HP; the engine treats <= 0 as down")
+    if _is_int(hp) and _is_int(max_hp) and hp > max_hp:
+        rep.warn(where, f"hp {hp} exceeds max_hp {max_hp}")
+    if _is_int(ac) and ac < 1:
+        rep.warn(where, f"ac is {ac} — unusually low; nearly every attack will hit")
+
+
+def _effective_name(entry) -> str | None:
+    """The name find_actor will see for an NPC entry: the explicit name, else the
+    template's default name (so two bare {'template': 'goblin'} entries collide)."""
+    if not isinstance(entry, dict):
+        return None
+    if isinstance(entry.get("name"), str) and entry["name"].strip():
+        return entry["name"]
+    template = rules.MONSTERS.get(entry.get("template", ""))
+    return template["name"] if template else None
+
+
+def _check_name_collisions(rep: Report, party, scenes) -> None:
+    """find_actor matches case-insensitively by name across party + the active scene's
+    NPCs, returning the first match — so a shared name makes later actors untargetable.
+    Collisions only matter among actors that can be present at once (party + one scene +
+    its reinforcements), not across different scenes.
+    """
+    party_names: dict[str, list[str]] = {}
+    if isinstance(party, dict):
+        for k, m in party.items():
+            name = m.get("name") if isinstance(m, dict) else None
+            if isinstance(name, str) and name.strip():
+                party_names.setdefault(name.strip().lower(), []).append(f"party.{k}")
+    for low, locs in party_names.items():
+        if len(locs) > 1:
+            rep.warn("party", f"name {low!r} is shared by {', '.join(locs)} — find_actor can't tell them apart")
+
+    if not isinstance(scenes, dict):
+        return
+    for skey, scene in scenes.items():
+        if not isinstance(scene, dict):
+            continue
+        seen = {low: locs[0] for low, locs in party_names.items()}  # party is present in every scene
+        for group in ("npcs", "reinforcements"):
+            entries = scene.get(group) or {}
+            if not isinstance(entries, dict):
+                continue
+            for nkey, entry in entries.items():
+                name = _effective_name(entry)
+                if not isinstance(name, str):
+                    continue
+                low = name.strip().lower()
+                loc = f"scenes.{skey}.{group}.{nkey}"
+                if low in seen:
+                    rep.warn(loc, f"name {name!r} collides with {seen[low]} — find_actor matches by name and can't target both")
+                else:
+                    seen[low] = loc
 
 
 def _check_gate_flag(rep: Report, where: str, flag) -> None:
@@ -119,16 +210,35 @@ def _check_npc_entry(rep: Report, where: str, entry: dict, *, allow_requires: bo
         if key not in allowed:
             rep.error(where, f"unknown NPC field {key!r} — would crash on load{_suggest(key, allowed)}")
 
+    if "name" in entry and not isinstance(entry["name"], str):
+        rep.error(where, f"name must be a string, got {entry['name']!r}")
+    for f in _NPC_INT_FIELDS:
+        if f in entry and not _is_int(entry[f]):
+            rep.error(where, f"{f} must be an integer, got {entry[f]!r} — crashes the engine math at play")
+    for f in _NPC_NULLABLE_INT_FIELDS:
+        if f in entry and entry[f] is not None and not _is_int(entry[f]):
+            rep.error(where, f"{f} must be an integer or null, got {entry[f]!r}")
+    _check_ability_modifiers(rep, where, entry.get("ability_modifiers"))
+    # Resolve the effective max HP (a template supplies it when not overridden) so an
+    # hp override that exceeds it is caught even for template NPCs.
+    template = rules.MONSTERS.get(entry.get("template", "")) if "template" in entry else None
+    eff_max = entry["max_hp"] if "max_hp" in entry else (template.get("max_hp") if template else None)
+    _check_hp_ac_sanity(rep, where, entry.get("hp"), eff_max, entry.get("ac"))
+
     if "requires" in entry and allow_requires:
         _check_gate_flag(rep, f"{where}.requires", entry["requires"])
 
-    for item in entry.get("inventory", []) or []:
-        if isinstance(item, str) and item.strip().lower() not in rules.WEAPONS:
-            rep.warn(
-                where,
-                f"inventory item {item!r} is not in WEAPONS — if it was meant as a "
-                f"weapon the NPC will fall back to an unarmed attack{_suggest(item.strip().lower(), rules.WEAPONS)}",
-            )
+    inventory = entry.get("inventory", [])
+    if "inventory" in entry and not isinstance(inventory, list):
+        rep.error(where, f"inventory must be a list, got {type(inventory).__name__}")
+    elif isinstance(inventory, list):
+        for item in inventory:
+            if isinstance(item, str) and item.strip().lower() not in rules.WEAPONS:
+                rep.warn(
+                    where,
+                    f"inventory item {item!r} is not in WEAPONS — if it was meant as a "
+                    f"weapon the NPC will fall back to an unarmed attack{_suggest(item.strip().lower(), rules.WEAPONS)}",
+                )
 
 
 def _check_party(rep: Report, party) -> None:
@@ -145,12 +255,27 @@ def _check_party(rep: Report, party) -> None:
         for k in member:
             if k not in _CHARACTER_FIELDS:
                 rep.error(where, f"unknown character field {k!r} — would crash on load{_suggest(k, _CHARACTER_FIELDS)}")
+        if "name" in member and not isinstance(member["name"], str):
+            rep.error(where, f"name must be a string, got {member['name']!r}")
+        for f in _CHARACTER_INT_FIELDS:
+            if f in member and not _is_int(member[f]):
+                rep.error(where, f"{f} must be an integer, got {member[f]!r} — crashes the engine math at play")
+        for f in _CHARACTER_LIST_FIELDS:
+            if f in member and not isinstance(member[f], list):
+                rep.error(where, f"{f} must be a list, got {type(member[f]).__name__}")
+        _check_ability_modifiers(rep, where, member.get("ability_modifiers"))
+        _check_hp_ac_sanity(rep, where, member.get("hp"), member.get("max_hp"), member.get("ac"))
         for slots_field in ("spell_slots", "max_spell_slots"):
             slots = member.get(slots_field, {})
-            if isinstance(slots, dict):
-                for lvl in slots:
-                    if not str(lvl).lstrip("-").isdigit():
-                        rep.error(where, f"{slots_field} level key {lvl!r} is not an integer — would crash on load")
+            if not isinstance(slots, dict):
+                if slots_field in member:
+                    rep.error(where, f"{slots_field} must be an object of level->count, got {type(slots).__name__}")
+                continue
+            for lvl, count in slots.items():
+                if not str(lvl).lstrip("-").isdigit():
+                    rep.error(where, f"{slots_field} level key {lvl!r} is not an integer — would crash on load")
+                if not _is_int(count):
+                    rep.error(where, f"{slots_field}[{lvl!r}] count must be an integer, got {count!r}")
         ability = member.get("spellcasting_ability", "")
         spells = member.get("spells", []) or []
         if ability and ability not in _ABILITIES:
@@ -267,7 +392,12 @@ def validate_scenario(data: dict) -> Report:
         rep.error("root", f"scenario must be a JSON object, got {type(data).__name__}")
         return rep
 
+    for key in data:
+        if key not in _TOP_LEVEL_KEYS:
+            rep.warn("root", f"unknown top-level key {key!r} — ignored by the loader{_suggest(key, _TOP_LEVEL_KEYS)}")
+
     _check_party(rep, data.get("party"))
+    _check_name_collisions(rep, data.get("party"), data.get("scenes"))
 
     scenes = data.get("scenes")
     if scenes is None:

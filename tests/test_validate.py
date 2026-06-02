@@ -302,3 +302,120 @@ def test_main_handles_bad_json(tmp_path):
     p = tmp_path / "broken.json"
     p.write_text("{not valid json")
     assert validate.main([str(p)]) == 1
+
+
+# --- field-value type checks (load-clean, crash-at-play bugs) ------------------
+
+def test_party_non_integer_hp_is_error():
+    data = _valid()
+    data["party"]["hero"]["hp"] = "twelve"
+    assert "hp must be an integer" in _errs(data)
+
+
+def test_party_non_integer_ac_is_error():
+    data = _valid()
+    data["party"]["hero"]["ac"] = 15.5  # floats are not ints
+    assert "ac must be an integer" in _errs(data)
+
+
+def test_party_list_field_as_string_is_error():
+    data = _valid()
+    data["party"]["hero"]["inventory"] = "mace"  # must be a list
+    assert "inventory must be a list" in _errs(data)
+
+
+def test_ability_modifiers_non_int_value_is_error():
+    data = _valid()
+    data["party"]["hero"]["ability_modifiers"] = {"str": "+3"}
+    assert "ability_modifiers['str'] must be an integer" in _errs(data)
+
+
+def test_ability_modifiers_unknown_ability_is_warning():
+    data = _valid()
+    data["party"]["hero"]["ability_modifiers"] = {"strength": 3}
+    assert "not a known ability" in _warns(data)
+
+
+def test_spell_slot_value_non_int_is_error():
+    data = _valid()
+    data["party"]["hero"]["spell_slots"] = {"1": "two"}
+    assert "count must be an integer" in _errs(data)
+
+
+def test_npc_non_integer_max_hp_is_error():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["max_hp"] = "lots"
+    assert "max_hp must be an integer" in _errs(data)
+
+
+def test_npc_nullable_dc_allows_null_and_int():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["disposition_dc"] = None
+    assert validate_scenario(data).ok
+    data["scenes"]["a"]["npcs"]["snik"]["disposition_dc"] = 12
+    assert validate_scenario(data).ok
+
+
+def test_npc_non_integer_dc_is_error():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["alertness_dc"] = "high"
+    assert "alertness_dc must be an integer or null" in _errs(data)
+
+
+def test_unknown_top_level_key_is_warning():
+    data = _valid()
+    data["scens"] = {}  # typo for "scenes"
+    assert "unknown top-level key 'scens'" in _warns(data)
+
+
+# --- sanity checks: impossible HP/AC and ambiguous actor names -----------------
+
+def test_hp_exceeds_max_hp_is_warning():
+    data = _valid()
+    data["party"]["hero"].update({"max_hp": 10, "hp": 20})
+    assert "hp 20 exceeds max_hp 10" in _warns(data)
+    assert validate_scenario(data).ok  # a warning, not an error
+
+
+def test_nonpositive_max_hp_is_warning():
+    data = _valid()
+    data["party"]["hero"]["max_hp"] = 0
+    assert "max_hp is 0" in _warns(data)
+
+
+def test_low_ac_is_warning():
+    data = _valid()
+    data["party"]["hero"]["ac"] = 0
+    assert "ac is 0" in _warns(data)
+
+
+def test_npc_hp_exceeds_template_max_is_warning():
+    # A goblin (template max_hp 12) given hp 100 with no max override → flagged.
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["hp"] = 100
+    assert "exceeds max_hp 12" in _warns(data)
+
+
+def test_duplicate_party_name_is_warning():
+    data = _valid()
+    data["party"]["twin"] = {"name": "Hero"}  # same name as party.hero
+    assert "shared by" in _warns(data)
+
+
+def test_npc_name_collides_with_party_is_warning():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["name"] = "Hero"  # collides with the PC
+    assert "collides with party.hero" in _warns(data)
+
+
+def test_two_scene_npcs_same_name_is_warning():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik2"] = {"template": "goblin", "name": "Snik"}
+    assert "collides with" in _warns(data)
+
+
+def test_same_name_in_different_scenes_is_clean():
+    # The same NPC name in two separate scenes is fine — they're never present together.
+    data = _valid()
+    data["scenes"]["b"]["npcs"]["snik_again"] = {"template": "goblin", "name": "Snik"}
+    assert "collides" not in _warns(data)

@@ -188,7 +188,12 @@ template-based NPC spawning from the scenario file.
 scenario before play, catching content bugs that would otherwise only surface
 mid-session: exits that point at nonexistent scenes, NPC/reinforcement `template`s
 not in `MONSTERS`, hazard `damage` that isn't valid dice or an unknown save ability,
-scene/party entries whose keys would crash the loader, and the subtle one — a gate
+scene/party entries whose keys would crash the loader, **wrong-typed field values**
+that load fine but crash the engine math later (a non-integer `hp`/`ac`/`dc`, an
+`ability_modifiers` value or a list field that isn't the right type), unknown
+top-level keys, sanity issues that load but make no sense at play (an `hp` above
+`max_hp`, a non-positive `max_hp`, or two actors that share a name — which makes
+`find_actor` unable to target both), and the subtle one — a gate
 `requires` flag that isn't in normalized form, which `set_quest_flag` could never
 satisfy. Every check is derived from how the engine actually consumes the data, so it
 can't drift from a separate schema. Issues are split into **errors** (the scenario
@@ -350,14 +355,14 @@ data/
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
-tests/                 # ~639 tests total, all no-API
+tests/                 # ~657 tests total, all no-API
   test_rules.py        # 142 — enforcement core: dice, attack, spells, combat/turn guards
   test_tools.py        #  71 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
   test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
   test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
   test_hud.py          #  38 — status HUD: bars, spells, inventory, color
-  test_validate.py     #  34 — scenario linter checks
+  test_validate.py     #  52 — scenario linter checks
   test_scenes.py       #  27 — scene loading, move_scene, gated exits, terminal conclusion
   test_ambush.py       #  26 — attempt_ambush, surprise, companions
   test_save.py         #  23 — /save + /export helpers
@@ -383,7 +388,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
-python3 -m pytest -q                       # ~639 enforcement tests, no API needed
+python3 -m pytest -q                       # ~657 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -431,7 +436,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 639 tests across `tests/`, all running with **no API**. They drive the
+Roughly 657 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
