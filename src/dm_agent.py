@@ -310,17 +310,25 @@ _DUMP_SENTINELS = ('[Current state]', '[Engine:', '{"location"', '"party":')
 
 
 def _sanitize_narration(text: str) -> str:
-    """Guard against state-dump leaks reaching persistent storage.
+    """Guard against state-dump leaks reaching the player or persistent storage.
 
-    Checks every line for known internal preambles. If one is found, splits on
-    the first blank paragraph boundary and returns only what follows. If nothing
-    survives, returns "". Logs a warning whenever text is trimmed.
+    A leaked dump is the injected `[Current state]` block — `json.dumps(indent=2)`,
+    which contains no blank lines, so it is always a single blank-line-delimited
+    paragraph. We split on paragraph boundaries and drop every paragraph that has a
+    known dump sentinel at the start of any line, keeping the rest. This removes a
+    dump *wherever* it sits — leading, trailing, or between prose — rather than
+    assuming it comes first (which would keep the dump and drop the prose in a
+    prose-then-dump leak). Clean text (no sentinel anywhere) is returned unchanged
+    (same object). Logs a warning whenever it drops something.
     """
-    if not any(line.lstrip().startswith(s) for line in text.splitlines() for s in _DUMP_SENTINELS):
+    def _is_dump(block: str) -> bool:
+        return any(line.lstrip().startswith(s) for line in block.splitlines() for s in _DUMP_SENTINELS)
+
+    if not _is_dump(text):
         return text
-    tail = text.split("\n\n", 1)[1].strip() if "\n\n" in text else ""
-    logging.warning("_sanitize_narration: trimmed likely state-dump from narration: %.80s", text)
-    return tail
+    kept = [para for para in text.split("\n\n") if not _is_dump(para)]
+    logging.warning("_sanitize_narration: dropped state-dump paragraph(s) from narration: %.80s", text)
+    return "\n\n".join(kept).strip()
 
 
 def _screen_narration_text(text: str) -> str:

@@ -208,6 +208,33 @@ def test_sanitize_narration_no_mutation_on_clean():
     assert _sanitize_narration(text) is text
 
 
+# --- dump-anywhere: a dump is dropped wherever it sits, not assumed dump-first ---
+
+def test_sanitize_drops_trailing_dump_keeps_prose():
+    """prose-THEN-dump: the leading prose survives and the trailing dump is dropped.
+    (Previously _sanitize_narration assumed dump-first and returned the dump here.)"""
+    text = 'The relic gleams in the torchlight.\n\n[Current state]\n{"location": "Vault"}'
+    assert _sanitize_narration(text) == "The relic gleams in the torchlight."
+
+
+def test_sanitize_drops_dump_between_prose():
+    text = 'Wisp steps forward.\n\n[Current state]\n{"party": {}}\n\nThe door groans open.'
+    assert _sanitize_narration(text) == "Wisp steps forward.\n\nThe door groans open."
+
+
+def test_sanitize_drops_multiple_dump_paragraphs():
+    text = ('[Current state]\n{"location": "A"}\n\n'
+            'Grik lunges.\n\n'
+            '[Engine: Narl attacked Hero: hit]\n\n'
+            'Steel rings on steel.')
+    assert _sanitize_narration(text) == "Grik lunges.\n\nSteel rings on steel."
+
+
+def test_sanitize_all_dump_paragraphs_returns_empty():
+    text = '[Current state]\n{"location": "A"}\n\n"party": {"Hero": {}}'
+    assert _sanitize_narration(text) == ""
+
+
 # ---------------------------------------------------------------------------
 # End-to-end narration leak regression (mocked client, no API)
 # ---------------------------------------------------------------------------
@@ -436,6 +463,14 @@ def test_sanitize_trims_real_brace_first_snapshot_dump():
     is still caught (via the 'party:' sentinel on a later line)."""
     snap = _realistic_snapshot()
     leak = f"{snap}\n\nThe relic gleams in the torchlight."
+    assert _sanitize_narration(leak) == "The relic gleams in the torchlight."
+
+
+def test_sanitize_drops_trailing_real_snapshot_keeps_prose():
+    """The realistic worst case: legit prose FOLLOWED by a verbatim real snapshot.
+    The prose must survive and the whole multi-line snapshot paragraph be dropped."""
+    snap = _realistic_snapshot()
+    leak = f"The relic gleams in the torchlight.\n\n[Current state]\n{snap}"
     assert _sanitize_narration(leak) == "The relic gleams in the torchlight."
 
 
