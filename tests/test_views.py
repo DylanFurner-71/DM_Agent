@@ -198,11 +198,22 @@ def test_spinner_context_manager_plain():
 # --- forced-rich path: renders without raising, strips to plain on capture ---
 
 def _force_rich(monkeypatch):
-    """Drive the rich branches under pytest capture. rich detects the non-tty sink
-    and emits no ANSI, so we exercise the code path and assert content, not color."""
+    """Drive the rich branches under pytest capture and assert content, not color.
+
+    We pin a deterministic Console (no color, no auto-highlight, wide enough not to
+    wrap) so these tests stay stable regardless of the ambient terminal env — in
+    particular FORCE_COLOR/COLORTERM, which would otherwise make rich emit ANSI even
+    into a non-tty capture and split the asserted substrings (e.g. 'HP 7/24' →
+    'HP <esc>7<esc>/<esc>24<esc>'). Markup parsing still runs, so the escaping
+    contract (a bracketed name rendered literally) is still exercised."""
     if not views._RICH:
         pytest.skip("rich not installed")
+    from rich.console import Console
     monkeypatch.setattr(views, "_rich_on", lambda: True)
+    monkeypatch.setattr(
+        views, "_CONSOLE",
+        Console(no_color=True, highlight=False, force_terminal=False, width=200),
+    )
 
 
 def test_print_state_rich_renders_names(monkeypatch, capsys):
