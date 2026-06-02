@@ -77,15 +77,24 @@ def cast_spell(caster, spell_level: int) -> dict:
     return {"ok": True, "reason": "slot expended", "slots_remaining": available - 1}
 
 
-def _d20(advantage: bool = False) -> tuple[int, list[int]]:
-    """Roll a d20, or 2d20-keep-higher with advantage. Returns (kept_nat, all_rolls).
+def _d20(advantage: bool = False, disadvantage: bool = False) -> tuple[int, list[int]]:
+    """Roll a d20, or 2d20 keeping the higher (advantage) / lower (disadvantage).
 
-    Goes through roll('1d20') so force_rolls/seed still drive the dice deterministically.
+    Returns (kept_nat, all_rolls). Goes through roll('1d20') so force_rolls/seed still
+    drive the dice deterministically. Per the SRD, advantage and disadvantage cancel:
+    if both are set the roll is a single straight d20.
     """
+    if advantage and disadvantage:
+        nat = roll("1d20").rolls[0]
+        return nat, [nat]
     if advantage:
         a = roll("1d20").rolls[0]
         b = roll("1d20").rolls[0]
         return max(a, b), [a, b]
+    if disadvantage:
+        a = roll("1d20").rolls[0]
+        b = roll("1d20").rolls[0]
+        return min(a, b), [a, b]
     nat = roll("1d20").rolls[0]
     return nat, [nat]
 
@@ -315,8 +324,13 @@ def _weapon_modifier(character, finesse: bool) -> tuple[str, int]:
     return "str", str_mod
 
 
-def attack(attacker, defender, weapon: str | None = None) -> dict:
+def attack(attacker, defender, weapon: str | None = None,
+           advantage: bool = False, disadvantage: bool = False) -> dict:
     """Resolve a single attack: d20 + bonus vs AC, then damage on a hit.
+
+    advantage/disadvantage roll the to-hit as 2d20 keeping the higher/lower (they
+    cancel if both set); when one is active the result carries roll_mode and the
+    pair of dice in to_hit_rolls so the model can narrate it.
 
     PC attacker: must name their weapon; validated against inventory, to-hit =
     ability_mod + proficiency_bonus, damage = weapon dice + ability_mod.
@@ -379,8 +393,7 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
         weapon_name = weapon
         damage_type = entry["type"]
 
-    d20 = roll("1d20")
-    nat = d20.rolls[0]
+    nat, d20_rolls = _d20(advantage=advantage, disadvantage=disadvantage)
     to_hit = nat + to_hit_bonus
     hit = nat == 20 or (nat != 1 and to_hit >= defender.ac)
     result = {
@@ -394,6 +407,9 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
         "hit": hit,
         "critical": nat == 20,
     }
+    if advantage != disadvantage:  # exactly one set; both cancel to a straight roll
+        result["roll_mode"] = "advantage" if advantage else "disadvantage"
+        result["to_hit_rolls"] = d20_rolls
     if weapon_name:
         result["weapon"] = weapon_name
         result["damage_type"] = damage_type
@@ -604,8 +620,12 @@ SPELLS: dict[str, dict] = {
 }
 
 
-def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> dict:
+def cast_damaging_spell(caster, target, spell_name: str, spell_level: int,
+                        advantage: bool = False, disadvantage: bool = False) -> dict:
     """Consume a spell slot and apply spell damage atomically.
+
+    advantage/disadvantage only affect a "spell_attack" roll (2d20 keep higher/lower;
+    they cancel if both set) — "auto_hit" spells make no roll, so the flags are inert.
 
     Validates before consuming anything:
       (a) caster knows the spell (spell_id in caster.spells, when attribute present)
@@ -678,8 +698,7 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
         proficiency = 2 + (getattr(caster, "level", 1) - 1) // 4
         spell_attack_bonus = ability_mod + proficiency
 
-        d20_res = roll("1d20")
-        nat = d20_res.rolls[0]
+        nat, d20_rolls = _d20(advantage=advantage, disadvantage=disadvantage)
         to_hit_total = nat + spell_attack_bonus
         hit = nat == 20 or (nat != 1 and to_hit_total >= target.ac)
 
@@ -691,6 +710,9 @@ def cast_damaging_spell(caster, target, spell_name: str, spell_level: int) -> di
             "hit": hit,
             "critical": nat == 20,
         })
+        if advantage != disadvantage:  # exactly one set; both cancel to a straight roll
+            result["roll_mode"] = "advantage" if advantage else "disadvantage"
+            result["to_hit_rolls"] = d20_rolls
 
         if not hit:
             return result  # slot consumed; no damage on a miss

@@ -139,6 +139,15 @@ higher** inside the same atomic roll, then spends the point (trying to spend wit
 rolls normally and reports `inspiration_used: false`). The model's discretion only decides
 *whether* a reroll is offered — never the number, which stays in the engine.
 
+**Advantage & disadvantage.** Attacks and spell attacks can be rolled with advantage or
+disadvantage: the model sets `advantage`/`disadvantage` on `attack` / `cast_spell` when the
+fiction clearly favors or hinders the attacker (flanking or a prone target vs. a blinded
+attacker), and the engine rolls **2d20 and keeps the higher (or lower)** — they cancel to a
+straight roll if both are set, and an auto-hit spell like `magic_missile` ignores them. As
+with inspiration, the *judgment* to apply it is the model's, but the dice and the kept
+result are engine-owned (the shared `rules._d20` primitive also backs inspiration's
+keep-higher reroll on checks and saves).
+
 **Hazards & traps.** Author-placed scene dangers — a dart trap, a spore cloud, a
 rune-ward — declared in a scene's `hazards` manifest and sprung with `trigger_hazard`.
 The manifest is the sole authority (mirroring loot, exits, and reinforcements): the model
@@ -278,7 +287,6 @@ Future work, ranked roughly least → most difficult to implement.
 - **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
 - **Equipment Table and Functionality** implement an equipment table for items like 'spellbook' and 'holy symbol' using 5de's descriptions of the items. Many of these items enable certain abilities, requires more effort.
-- **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks. *(The keep-higher primitive already exists — `rules._d20(advantage=True)`, used by Inspiration on `skill_check`/`saving_throw`; what remains is threading it through `attack`/`cast_damaging_spell` and adding the keep-lower disadvantage direction.)*
 - **Resting:** a short/long rest that restores HP and spell slots between encounters.
 - **Conditions beyond unconscious:** prone, poisoned, frightened, restrained, etc., with mechanical effects on rolls.
 - **Enemy-initiated stealth:** let foes ambush the party — the mirror of `attempt_ambush`.
@@ -310,7 +318,7 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json)
-tests/                 # ~612 tests total, all no-API
+tests/                 # ~631 tests total, all no-API
   test_rules.py        # 120 — enforcement core: dice, attack, spells, combat/turn guards
   test_tools.py        #  68 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
@@ -343,7 +351,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python3 -m pytest -q                       # ~614 enforcement tests, no API needed
+python3 -m pytest -q                       # ~631 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -386,7 +394,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 614 tests across `tests/`, all running with **no API**. They drive the
+Roughly 631 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and

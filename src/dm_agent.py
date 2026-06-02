@@ -249,6 +249,11 @@ you: when a player explicitly chooses to use their inspiration on a check or sav
 it. If they try to spend with none held, the result reports inspiration_used=false — narrate that \
 there was no luck left and use the plain roll. The engine owns the reroll and the result; never \
 invent the outcome.
+- ADVANTAGE / DISADVANTAGE — when the situation clearly favors the attacker (flanking, a prone or \
+restrained target, striking from hiding) set `advantage: true` on `attack` / `cast_spell`; when it \
+clearly hinders them (attacker blinded or prone, target heavily obscured) set `disadvantage: true`. \
+The engine rolls 2d20 and keeps the higher / lower. Don't set either by default, and setting both \
+cancels to a normal roll; the dice and the kept result stay engine-owned.
 
 STEALTH — getting the drop. Before a fight starts, when the party wants to sneak up on the \
 enemy, call attempt_ambush with NO arguments. It is a group stealth check: the engine rolls \

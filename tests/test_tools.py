@@ -946,3 +946,43 @@ def test_saving_throw_dispatch_spends_inspiration():
     assert res["roll"] == 16
     assert res["inspiration_used"] is True
     assert gs.party["Hero"].inspiration == 0
+
+
+def _combat_state(actor_key, actor, npc=None):
+    gs = GameState()
+    gs.party[actor_key] = actor
+    gs.npcs["d"] = npc or NPC(name="D", ac=1, hp=30, max_hp=30, hostile=True)
+    gs.combat_order = [actor_key, "d"]
+    gs.combat_index = 0
+    gs.combat_round = 1
+    gs.action_used = False
+    return gs
+
+
+def test_dispatch_attack_passes_advantage_and_tags_log():
+    from src import rules
+    actor = Character(name="A", attack_bonus=0, inventory=["mace"],
+                      ability_modifiers={"str": 0}, proficiency_bonus=2)
+    gs = _combat_state("a", actor)
+    rules.force_rolls([3, 17, 4])  # 2d20 keep 17
+    res = tools.dispatch("attack", {"attacker": "A", "defender": "D", "weapon": "mace",
+                                    "advantage": True}, gs)
+    assert res["ok"] is True
+    assert res["roll_mode"] == "advantage"
+    assert res["to_hit_roll"] == 17
+    assert any("(advantage)" in e for e in gs.log)
+
+
+def test_dispatch_cast_spell_passes_disadvantage_and_tags_log():
+    from src import rules
+    actor = Character(name="Wisp", level=1, spells=["chromatic_orb"], spell_slots={1: 1},
+                      spellcasting_ability="int", ability_modifiers={"int": 3})
+    gs = _combat_state("w", actor, npc=NPC(name="D", ac=25, hp=40, max_hp=40, hostile=True))
+    rules.force_rolls([18, 2])  # keep 2 → miss vs AC 25
+    res = tools.dispatch("cast_spell", {"caster": "Wisp", "spell_name": "chromatic_orb",
+                                        "spell_level": 1, "target": "D", "disadvantage": True}, gs)
+    assert res["ok"] is True
+    assert res["roll_mode"] == "disadvantage"
+    assert res["to_hit_roll"] == 2
+    assert res["hit"] is False
+    assert any("(disadvantage)" in e for e in gs.log)

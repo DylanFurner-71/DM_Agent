@@ -157,6 +157,8 @@ TOOLS = [
                 "attacker": {"type": "string", "description": "Name of the attacking actor"},
                 "defender": {"type": "string", "description": "Name of the defending actor. Omit to auto-select the sole living hostile."},
                 "weapon":   {"type": "string", "description": "Weapon name, e.g. 'mace', 'dagger', 'longsword'. Must be in the attacker's inventory."},
+                "advantage":    {"type": "boolean", "description": "Set true ONLY when the fiction clearly favors the attacker (flanking, target prone/restrained, attacking from hiding). The engine rolls 2d20 and keeps the higher. Don't set by default."},
+                "disadvantage": {"type": "boolean", "description": "Set true ONLY when the attacker is clearly hindered (attacker blinded/prone, target heavily obscured). The engine rolls 2d20 and keeps the lower. Setting both advantage and disadvantage cancels to a normal roll."},
             },
             "required": ["attacker"],
         },
@@ -180,6 +182,8 @@ TOOLS = [
                 "spell_level": {"type": "integer", "description": "Slot level (0 for a cantrip)"},
                 "spell_name": {"type": "string", "description": "Spell name, e.g. 'magic_missile'. Required for damaging spells."},
                 "target": {"type": "string", "description": "Target name. Omit to auto-select the sole living hostile."},
+                "advantage":    {"type": "boolean", "description": "For a spell-attack spell only: set true ONLY when the fiction clearly favors the caster (target prone/restrained, casting from hiding). The engine rolls 2d20 and keeps the higher. Inert for auto-hit spells like magic_missile."},
+                "disadvantage": {"type": "boolean", "description": "For a spell-attack spell only: set true ONLY when the caster is clearly hindered (blinded, target heavily obscured). The engine rolls 2d20 and keeps the lower. Setting both cancels to a normal roll."},
             },
             "required": ["caster", "spell_level"],
         },
@@ -775,9 +779,12 @@ def dispatch(name: str, args: dict, state) -> dict:
         if err:
             state.action_used = False
             return err
-        res = rules.attack(attacker, target, args.get("weapon"))
+        res = rules.attack(attacker, target, args.get("weapon"),
+                           advantage=bool(args.get("advantage", False)),
+                           disadvantage=bool(args.get("disadvantage", False)))
         if res["ok"]:
-            state.record(f"{attacker.name} attacks {target.name}: {'hit' if res['hit'] else 'miss'}")
+            mode = f" ({res['roll_mode']})" if res.get("roll_mode") else ""
+            state.record(f"{attacker.name} attacks {target.name}: {'hit' if res['hit'] else 'miss'}{mode}")
             if auto_selected:
                 res["auto_target"] = target.name
             if res["hit"] and hasattr(target, "hostile") and not target.hostile:
@@ -804,9 +811,12 @@ def dispatch(name: str, args: dict, state) -> dict:
             if err:
                 state.action_used = False
                 return err
-            res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]))
+            res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]),
+                                            advantage=bool(args.get("advantage", False)),
+                                            disadvantage=bool(args.get("disadvantage", False)))
             if res["ok"]:
-                state.record(f"{caster.name} casts {spell_name} at {target.name}: {res.get('damage_detail', 'no damage table')}")
+                mode = f" ({res['roll_mode']})" if res.get("roll_mode") else ""
+                state.record(f"{caster.name} casts {spell_name} at {target.name}: {res.get('damage_detail', 'no damage table')}{mode}")
                 if auto_selected:
                     res["auto_target"] = target.name
             else:

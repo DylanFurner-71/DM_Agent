@@ -977,6 +977,99 @@ def test_saving_throw_npc_has_no_proficiency():
     assert res["total"] == 15
 
 
+# --- advantage / disadvantage -------------------------------------------------
+
+def test_d20_advantage_keeps_higher():
+    rules.force_rolls([3, 17])
+    nat, rolls = rules._d20(advantage=True)
+    assert nat == 17 and rolls == [3, 17]
+
+
+def test_d20_disadvantage_keeps_lower():
+    rules.force_rolls([17, 3])
+    nat, rolls = rules._d20(disadvantage=True)
+    assert nat == 3 and rolls == [17, 3]
+
+
+def test_d20_advantage_and_disadvantage_cancel():
+    # Both set → a single straight d20 (only one value consumed).
+    rules.force_rolls([5, 20])
+    nat, rolls = rules._d20(advantage=True, disadvantage=True)
+    assert nat == 5 and rolls == [5]
+
+
+def _melee_pc():
+    return Character(name="A", attack_bonus=0, inventory=["mace"],
+                     ability_modifiers={"str": 0}, proficiency_bonus=2)
+
+
+def test_attack_advantage_keeps_higher_to_hit():
+    rules.force_rolls([3, 17, 4])  # 2d20 keep 17, then 4 damage
+    res = rules.attack(_melee_pc(), NPC(name="D", ac=1, hp=30, max_hp=30), "mace", advantage=True)
+    assert res["to_hit_roll"] == 17
+    assert res["roll_mode"] == "advantage"
+    assert res["to_hit_rolls"] == [3, 17]
+    assert res["hit"] is True
+
+
+def test_attack_disadvantage_keeps_lower_to_hit():
+    rules.force_rolls([17, 3])  # keep 3 → to-hit 5 vs AC 10 → miss, no damage die
+    res = rules.attack(_melee_pc(), NPC(name="D", ac=10, hp=30, max_hp=30), "mace", disadvantage=True)
+    assert res["to_hit_roll"] == 3
+    assert res["roll_mode"] == "disadvantage"
+    assert res["to_hit_rolls"] == [17, 3]
+    assert res["hit"] is False
+
+
+def test_attack_without_flags_has_no_roll_mode():
+    rules.force_rolls([12, 4])
+    res = rules.attack(_melee_pc(), NPC(name="D", ac=1, hp=30, max_hp=30), "mace")
+    assert res["to_hit_roll"] == 12
+    assert "roll_mode" not in res and "to_hit_rolls" not in res
+
+
+def test_attack_both_flags_cancel_to_straight_roll():
+    rules.force_rolls([9, 20, 4])  # both set → one d20 (9); 20 is the damage die
+    res = rules.attack(_melee_pc(), NPC(name="D", ac=1, hp=30, max_hp=30), "mace",
+                       advantage=True, disadvantage=True)
+    assert res["to_hit_roll"] == 9
+    assert "roll_mode" not in res  # cancelled → not reported as a mode
+
+
+def _spell_attacker():
+    return Character(name="Wisp", level=1, spells=["chromatic_orb"], spell_slots={1: 1},
+                     spellcasting_ability="int", ability_modifiers={"int": 3})
+
+
+def test_cast_damaging_spell_advantage_keeps_higher():
+    rules.force_rolls([2, 16, 4, 4, 4])  # 2d20 keep 16, then 3d8 damage
+    res = rules.cast_damaging_spell(_spell_attacker(), NPC(name="D", ac=1, hp=40, max_hp=40),
+                                    "chromatic_orb", 1, advantage=True)
+    assert res["to_hit_roll"] == 16
+    assert res["roll_mode"] == "advantage"
+    assert res["to_hit_rolls"] == [2, 16]
+    assert res["hit"] is True
+
+
+def test_cast_damaging_spell_disadvantage_keeps_lower():
+    rules.force_rolls([18, 2])  # keep 2 → to-hit 7 vs AC 25 → miss
+    res = rules.cast_damaging_spell(_spell_attacker(), NPC(name="D", ac=25, hp=40, max_hp=40),
+                                    "chromatic_orb", 1, disadvantage=True)
+    assert res["to_hit_roll"] == 2
+    assert res["roll_mode"] == "disadvantage"
+    assert res["hit"] is False
+
+
+def test_cast_auto_hit_spell_ignores_advantage():
+    # magic_missile auto-hits — no attack roll, so the flag is inert (no roll_mode).
+    caster = Character(name="Wisp", level=1, spells=["magic_missile"], spell_slots={1: 1},
+                       spellcasting_ability="int", ability_modifiers={"int": 3})
+    res = rules.cast_damaging_spell(caster, NPC(name="D", ac=10, hp=40, max_hp=40),
+                                    "magic_missile", 1, advantage=True)
+    assert res["auto_hit"] is True
+    assert "roll_mode" not in res and "to_hit_roll" not in res
+
+
 def test_saving_throw_dispatch_is_not_turn_guarded():
     # A save is reactive: it must resolve for any actor regardless of whose turn it is,
     # unlike skill_check which is the active actor's action and IS turn-guarded.
