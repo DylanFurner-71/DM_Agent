@@ -444,7 +444,8 @@ terminal scene — an exploration/puzzle ending such as the vault beyond the iro
 door, a relic chamber — had no reliable victory trigger. The only engine path was
 the player calling `move_scene` with a non-exit key, which the system prompt forbade
 ("empty exits = dead end, nowhere to go"). Observed in a real run
-(`saves/epilogue_not_firing_stats_trace.json`): the party spoke the password, entered
+(trace `saves/epilogue_not_firing_stats_trace.json` — TODO: since-cleared saves; re-capture
+and re-link this evidence if needed): the party spoke the password, entered
 the empty terminal vault, looted it, and tried to "leave"/"exit" twice — the model
 never called `move_scene`, so `game_over` was never set and the epilogue never fired;
 the run hung in the winning room.

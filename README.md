@@ -227,8 +227,8 @@ unified turn), so the decode-bound generation never runs longer than the prose n
   resolves plain NPC attacks in-engine with no API call, batches un-resolvable NPC
   turns into one call, and right-sizes each narration `max_tokens`. Narration also
   **streams** to the terminal as it generates (behind a leak gate), so the player reads
-  from the first token. `get_state` was trimmed of unbounded session history. A
-  profiling harness (`profile_api.py`) measures the before/after. The remaining levers
+  from the first token. `get_state` was trimmed of unbounded session history. (Profiling
+  was driven off the per-call stats sidecar surfaced by `/cost`.) The remaining levers
   are captured in the table below.
 
 **Remaining latency levers** — recorded here so they aren't lost. Profiling a full run
@@ -290,9 +290,20 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json, five_scene_branching.json)
-tests/
-  test_rules.py        # ~500 enforcement tests — no API needed
-  test_answer_gate.py  # answer-gated-exit behaviour + redaction, no API needed
+tests/                 # ~580 tests total, all no-API
+  test_rules.py        # 332 — enforcement core: dice, combat, spells, death saves
+  test_tools.py        #  50 — dispatch, guards, target/redaction, get_state
+  test_views.py        #  42 — rich/plain rendering: /state, /cost, /export
+  test_validate.py     #  34 — scenario linter checks
+  test_hud.py          #  31 — status HUD: bars, spells, inventory, color
+  test_save.py         #  23 — /save + /export helpers
+  test_answer_gate.py  #  15 — answer-gated exits + password redaction
+  test_narrative.py    #  12 — narration recording / transcript
+  test_retry.py        #  10 — API retry/backoff
+  test_persistence.py  #   9 — JSON save/load round-trip
+  test_undo.py         #   9 — /undo per-turn rewind
+  test_input_history.py#   6 — readline input history
+  test_cli.py          #   5 — CLI args + --seed
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
 ```
 
@@ -303,7 +314,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python -m pytest -q                       # ~500 enforcement tests, no API needed
+python -m pytest -q                       # ~580 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -346,7 +357,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 500 tests across `tests/`, all running with **no API**. They drive the
+Roughly 580 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
