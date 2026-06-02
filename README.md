@@ -15,6 +15,17 @@ result thwarts the story (a failed spell *fizzles*). The enforcement is also rea
 in code: `cast_spell` decrements actual slots and returns `ok=false` when they're
 gone, so the model literally cannot cheat.
 
+## Quickstart
+
+```bash
+pip install -r requirements.txt          # in a virtualenv — see Run for the full setup
+cp .env.example .env && $EDITOR .env     # add your ANTHROPIC_API_KEY
+python3 -m src.main                       # play the default scenario
+```
+
+See [Run](#run) for the isolated-venv setup, [Demos](#demos) for guided feature
+walkthroughs, and [`data/ADVENTURES.md`](data/ADVENTURES.md) for full play-throughs.
+
 ## The design in one picture
 
 ```
@@ -86,8 +97,7 @@ a terminal scene produces a victory epilogue. The engine decides when the run en
 against a `disposition_dc` (`None` = unreachable by talk). Each monster template
 carries a **randomly-assigned default** `disposition_dc` (it is not a 5e stat, unlike
 `alertness_dc`, which derives from passive Perception); authors can override it per-NPC.
-Success flips
-a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and de-escalating
+Success flips a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and de-escalating
 the *last* hostile ends combat. In combat it costs the actor's action. A won-over NPC
 can then be recruited with `recruit_npc`: a **companion** follows the party across
 scenes and, once added to `start_combat`, fights hostiles on the party's side (the
@@ -318,12 +328,17 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json)
+  demos/scripts/       # smoke-test input scripts (one .txt per demo)
+  ADVENTURES.md        # index of the full, play-through adventures
+  adventures/          # full multi-scene adventures (*.json)
+smoke_test.py          # replay every demo end-to-end against the live model
+.env.example           # copy to .env and add ANTHROPIC_API_KEY
 tests/                 # ~631 tests total, all no-API
-  test_rules.py        # 120 — enforcement core: dice, attack, spells, combat/turn guards
-  test_tools.py        #  68 — dispatch, guards, target/redaction, get_state
+  test_rules.py        # 136 — enforcement core: dice, attack, spells, combat/turn guards
+  test_tools.py        #  70 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
   test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
-  test_agent.py        #  40 — agent loop: context, narration routing, closing prompts
+  test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
   test_hud.py          #  38 — status HUD: bars, spells, inventory, color
   test_validate.py     #  34 — scenario linter checks
   test_scenes.py       #  27 — scene loading, move_scene, gated exits, terminal conclusion
@@ -350,7 +365,7 @@ DECISIONS.md           # architecture decision log (the soft/hard boundaries, ca
 python3 -m venv .venv                     # create an isolated environment (.venv is git-ignored)
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
-cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
+cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
 python3 -m pytest -q                       # ~631 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
@@ -370,8 +385,13 @@ python3 -m src.main --seed 42              # fix the dice RNG for reproducible r
 **Per-feature demo scenarios.** [`data/DEMOS.md`](data/DEMOS.md) is an index of
 focused, ready-to-run scenarios (`data/demos/`) — one per feature-cluster
 (combat, death saves, social & companions, stealth, gates & loot, spells & items,
-skill checks, saves & hazards, reinforcements) — each with the exact player inputs to type to trigger the feature
+skill checks, saves & hazards, reinforcements, flat effects) — each with the exact player inputs to type to trigger the feature
 and what to watch for in `/state` and `/trace`.
+
+**Full adventures.** For longer, play-through scenarios (vs. the one-feature demos),
+[`data/ADVENTURES.md`](data/ADVENTURES.md) indexes the multi-scene adventures in
+`data/adventures/` — each a self-contained session with its own party, a branching or
+trap-laden map, and a boss — with launch and validate commands for each.
 
 **The money shot — enforcement you can see.** The starting scenario gives the mage
 **Wisp** exactly one level-1 slot, on purpose:
