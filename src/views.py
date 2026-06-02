@@ -384,7 +384,7 @@ def _print_state_rich(state: GameState) -> None:
                 labelcol = "dim hot_pink" if tapped else "hot_pink"
                 padded = f"{label:<{width}}"
                 con.print(f"      [{labelcol}]{escape(padded)}[/{labelcol}]  "
-                          f"[dim hot_pink]{escape(names)}[/dim hot_pink]")
+                          f"[medium_purple3]{escape(names)}[/medium_purple3]")
     for n in state.npcs.values():
         kind, disposition = _npc_descriptor(n)
         color = "cyan" if kind == "ally" else ("red" if n.hostile else "green")
@@ -569,7 +569,7 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
             else:
                 p(f"{indent}{escape(inv_line)}")
         for label, names in _known_spell_groups(c):
-            p(f"{indent}[dim]{escape(label)}[/dim] [dim hot_pink]{escape(names)}[/dim hot_pink]")
+            p(f"{indent}[dim]{escape(label)}[/dim] [medium_purple3]{escape(names)}[/medium_purple3]")
     if state.combat_round > 0 and state.combat_order:
         all_actors = {**state.party, **state.npcs}
         active_key = state.combat_order[state.combat_index]
