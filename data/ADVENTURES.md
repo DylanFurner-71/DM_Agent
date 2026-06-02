@@ -30,6 +30,7 @@ The game autosaves to `saves/autosave.json` after every turn.
 | `emberdeep_mine.json` | Descend a dragon-held dwarven mine | Combat; **branching paths** (drain-the-sluice flag gate vs. a cave-in route); three **hazards** (DEX/CON saves, half-on-success); cold-themed **spells**; a young-red-dragon boss in a terminal scene |
 | `the_velvet_mask.json` | A masquerade heist for a damning ledger | **Social** (`disposition_dc` to talk past Crispin / Bront / Vael); **stealth** (low-`alertness_dc` kitchen guards = ambush); an **answer gate** (passphrase "nightingale"); an optional-combat boss |
 | `tomb_of_the_sunken_king.json` | A cursed trap-tomb crawl | Four **hazards** (including a repeating undertow); **reinforcements** gated on `crypt_disturbed`; a two-half **sigil flag gate** into the vault; undead plus a mummy-king boss |
+| `stormhold_keep.json` | Storm a raider-held keep by two roads | **Branching geography** — a hard ramparts route and a quiet crypt route that **rejoin** at a shared finale; **social** (`disposition_dc` on the raiders); **stealth** (low-`alertness_dc` crypt skeletons = ambush); spells; a bandit-captain boss in a terminal scene |
 
 ## Launch / validate
 
@@ -54,7 +55,14 @@ python -m src.main data/adventures/tomb_of_the_sunken_king.json
 python -m src.validate data/adventures/tomb_of_the_sunken_king.json
 ```
 
-Validate all three at once:
+**Stormhold Keep**
+
+```bash
+python -m src.main data/adventures/stormhold_keep.json
+python -m src.validate data/adventures/stormhold_keep.json
+```
+
+Validate all of them at once:
 
 ```bash
 python -m src.validate data/adventures/*.json
