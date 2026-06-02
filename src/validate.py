@@ -240,6 +240,18 @@ def _check_npc_entry(rep: Report, where: str, entry: dict, *, allow_requires: bo
                     f"weapon the NPC will fall back to an unarmed attack{_suggest(item.strip().lower(), rules.WEAPONS)}",
                 )
 
+    shop = entry.get("shop")
+    if shop is not None:
+        if not isinstance(shop, dict):
+            rep.error(where, f"shop must be an object of item->price, got {type(shop).__name__}")
+        else:
+            for item_id, price in shop.items():
+                if not _is_int(price) or price < 1:
+                    rep.error(where, f"shop price for {item_id!r} must be a positive integer, got {price!r}")
+                norm = str(item_id).strip().lower()
+                if norm not in rules.WEAPONS and norm not in rules.CONSUMABLES:
+                    rep.warn(where, f"shop item {item_id!r} is not a known weapon or consumable — sellable but mechanically inert{_suggest(norm, list(rules.WEAPONS) + list(rules.CONSUMABLES))}")
+
 
 def _check_party(rep: Report, party) -> None:
     if not isinstance(party, dict) or not party:

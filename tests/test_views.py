@@ -81,6 +81,15 @@ def test_print_state_plain_core_fields(capsys):
     assert ESC not in out
 
 
+def test_print_state_shows_merchant_shop(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Market")
+    gs.npcs["garric"] = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Shop:" in out and "longsword (15 gp)" in out
+
+
 def test_print_state_shows_gold_when_held(capsys):
     views.set_plain(True)
     gs = GameState(location="Vault")

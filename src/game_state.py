@@ -107,6 +107,10 @@ class NPC:
     alertness_dc: int | None = None     # None = always alert (cannot be ambushed); numeric = stealth DC
     surprised: bool = False             # True during the surprise round; cleared when the NPC's slot is skipped
     companion: bool = False             # recruited ally: travels across scenes, fights hostiles on the party's side
+    # Merchant catalogue: {item_id: price_gp}. A non-empty shop marks this NPC a merchant;
+    # stock is an infinite priced catalogue (buy_item/sell_item), and the merchant buys back
+    # only what it stocks, at half price (see rules.buy_item/sell_item).
+    shop: dict[str, int] = field(default_factory=dict)
 
     @property
     def is_down(self) -> bool:

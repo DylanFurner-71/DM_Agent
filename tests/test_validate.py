@@ -374,6 +374,18 @@ def test_non_integer_gold_is_error():
     assert "gold must be an integer" in _errs(data)
 
 
+def test_shop_bad_price_is_error():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["shop"] = {"longsword": -5}
+    assert "shop price for 'longsword' must be a positive integer" in _errs(data)
+
+
+def test_shop_unknown_item_is_warning():
+    data = _valid()
+    data["scenes"]["a"]["npcs"]["snik"]["shop"] = {"flying carpet": 500}
+    assert "is not a known weapon or consumable" in _warns(data)
+
+
 def test_negative_gold_is_warning():
     data = _valid()
     data["party"]["hero"]["gold"] = -5

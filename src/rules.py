@@ -173,6 +173,54 @@ def spend_gold(character, amount: int) -> dict:
     return {"ok": True, "character": character.name, "amount": amount, "gold": character.gold}
 
 
+SELL_RATE = 0.5  # a merchant buys back stocked items at this fraction of the catalogue price
+
+
+def buy_item(buyer, merchant, item: str) -> dict:
+    """Buy one of `item` from a merchant's catalogue, paying its price in gold.
+
+    Engine-owned and never raises. Refuses an item the merchant doesn't stock
+    (`not_for_sale`) and an unaffordable purchase (delegates to spend_gold, returning its
+    `insufficient_gold` refusal without transferring the item). Stock is an infinite
+    catalogue, so a buy never depletes it. On success the item lands in buyer.inventory.
+    """
+    key = item.strip().lower()
+    shop = getattr(merchant, "shop", {}) or {}
+    if key not in shop:
+        return {"ok": False, "reason": "not_for_sale", "item": key, "merchant": merchant.name,
+                "error": f"{merchant.name} does not sell {key!r}."}
+    price = shop[key]
+    paid = spend_gold(buyer, price)
+    if not paid["ok"]:
+        return paid  # insufficient_gold (or invalid) — nothing bought
+    buyer.inventory.append(key)
+    return {"ok": True, "buyer": buyer.name, "merchant": merchant.name,
+            "item": key, "price": price, "gold": buyer.gold}
+
+
+def sell_item(seller, merchant, item: str) -> dict:
+    """Sell one of `item` to a merchant for half its catalogue price.
+
+    Refuses an item the seller isn't carrying (`not_in_inventory`) and one the merchant
+    doesn't stock (`not_buying` — a merchant only buys back what it sells). On success one
+    instance leaves seller.inventory and the buyback credits their gold.
+    """
+    key = item.strip().lower()
+    inv_lower = [i.strip().lower() for i in seller.inventory]
+    if key not in inv_lower:
+        return {"ok": False, "reason": "not_in_inventory", "item": key, "seller": seller.name,
+                "error": f"{seller.name} is not carrying {key!r}."}
+    shop = getattr(merchant, "shop", {}) or {}
+    if key not in shop:
+        return {"ok": False, "reason": "not_buying", "item": key, "merchant": merchant.name,
+                "error": f"{merchant.name} does not buy {key!r}."}
+    price = int(shop[key] * SELL_RATE)
+    seller.inventory.pop(inv_lower.index(key))  # remove one instance
+    add_gold(seller, price)
+    return {"ok": True, "seller": seller.name, "merchant": merchant.name,
+            "item": key, "price": price, "gold": seller.gold}
+
+
 def _mark_dead(target) -> None:
     """Transition a PC to dead and keep condition tags consistent.
 

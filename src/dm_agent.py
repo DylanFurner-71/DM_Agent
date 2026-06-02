@@ -207,6 +207,13 @@ it with `add_gold` / `spend_gold`, naming the character; the engine owns each PC
 never invent or track a total yourself. `spend_gold` REFUSES an overspend (ok=false \
 'insufficient_gold') without deducting — narrate that they can't afford it rather than spending \
 coin they lack.
+- MERCHANTS — some NPCs are shopkeepers, shown in the state with a `shop` catalogue of \
+{item: price}. To trade, use `buy_item` / `sell_item` (naming the `merchant` when more than one \
+is present), NOT add_gold/spend_gold + take_item by hand. The engine owns the prices and the \
+purse: `buy_item` fails 'not_for_sale' for an item not in the catalogue and 'insufficient_gold' \
+if the buyer can't afford it (narrate the shortfall); `sell_item` pays half the catalogue price \
+and the merchant only buys what it stocks ('not_buying'). Never invent a price or sell an item \
+the catalogue doesn't list.
 - REVEALS — never gate authored content behind a check you invent. Loot present in the state and \
 facts written into a scene are found by the player's interaction — searching, reading, examining — \
 NOT by a skill_check or roll_dice you make up. Do not roll to decide whether the party finds placed \
@@ -576,6 +583,8 @@ class DMAgent:
                     entry["surprised"] = True
                 if getattr(n, "companion", False):
                     entry["companion"] = True
+                if getattr(n, "shop", None):
+                    entry["shop"] = n.shop  # merchant catalogue {item: price}
                 return entry
             snap["npcs"] = {n.name: _npc_entry(n) for n in s.npcs.values()}
         if s.current_scene:

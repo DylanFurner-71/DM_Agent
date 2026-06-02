@@ -243,6 +243,14 @@ def test_save_proficiencies_preserved(tmp_path):
     assert loaded.party["wisp"].save_proficiencies == []
 
 
+def test_npc_shop_round_trips(tmp_path):
+    """A merchant NPC's shop catalogue survives save+load."""
+    gs = GameState(location="Market", current_scene="", scenes={})
+    gs.npcs["garric"] = NPC(name="Garric", hostile=False, shop={"longsword": 15, "dagger": 2})
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.npcs["garric"].shop == {"longsword": 15, "dagger": 2}
+
+
 def test_gold_round_trips_and_defaults(tmp_path):
     """Character.gold survives save+load; an older save with no gold key defaults to 0."""
     gs = GameState(party={

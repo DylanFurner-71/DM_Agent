@@ -336,6 +336,8 @@ def _print_state_plain(state: GameState) -> None:
         print(f"  {n.name} ({kind}){status}: HP {n.hp}/{n.max_hp} | AC {n.ac} | atk +{n.attack_bonus} | {disposition}")
         if n.inventory:
             print(f"    Inventory: {', '.join(n.inventory)}")
+        if getattr(n, "shop", None):
+            print(f"    Shop: {', '.join(f'{it} ({pr} gp)' for it, pr in n.shop.items())}")
     if state.combat_round > 0:
         all_actors = {**state.party, **state.npcs}
         order = " → ".join(
@@ -402,6 +404,9 @@ def _print_state_rich(state: GameState) -> None:
         )
         if n.inventory:
             con.print(f"    Inventory: [grey70]{escape(', '.join(n.inventory))}[/grey70]")
+        if getattr(n, "shop", None):
+            listing = ", ".join(f"{escape(str(it))} ([gold1]{int(pr)} gp[/gold1])" for it, pr in n.shop.items())
+            con.print(f"    Shop: {listing}")
     if state.combat_round > 0:
         all_actors = {**state.party, **state.npcs}
         order = " → ".join(

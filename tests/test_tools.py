@@ -998,6 +998,51 @@ def test_dispatch_gold_on_npc_is_not_a_pc():
     assert res["ok"] is False and res["reason"] == "not_a_pc"
 
 
+def _shop_state(gold=20):
+    gs = _make_state()
+    gs.party["Hero"].gold = gold
+    gs.npcs["garric"] = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    return gs
+
+
+def test_dispatch_buy_item_auto_selects_sole_merchant_and_logs():
+    gs = _shop_state()
+    res = tools.dispatch("buy_item", {"character": "Hero", "item": "longsword"}, gs)
+    assert res["ok"] is True and res["price"] == 15
+    assert gs.party["Hero"].gold == 5
+    assert "longsword" in gs.party["Hero"].inventory
+    assert any("buys longsword from Garric" in e for e in gs.log)
+
+
+def test_dispatch_sell_item_pays_and_logs():
+    gs = _shop_state(gold=0)
+    gs.party["Hero"].inventory = ["longsword"]
+    res = tools.dispatch("sell_item", {"character": "Hero", "item": "longsword"}, gs)
+    assert res["ok"] is True and gs.party["Hero"].gold == 7
+    assert any("sells longsword to Garric" in e for e in gs.log)
+
+
+def test_dispatch_buy_item_refused_when_merchant_hostile():
+    gs = _shop_state()
+    gs.npcs["garric"].hostile = True
+    res = tools.dispatch("buy_item", {"character": "Hero", "item": "longsword"}, gs)
+    assert res["ok"] is False and res["reason"] == "no_merchant"
+
+
+def test_dispatch_buy_item_buyer_must_be_pc():
+    gs = _shop_state()
+    res = tools.dispatch("buy_item", {"character": "Garric", "item": "longsword"}, gs)
+    assert res["ok"] is False and res["reason"] == "not_a_pc"
+
+
+def test_dispatch_buy_item_ambiguous_merchant():
+    gs = _shop_state()
+    gs.npcs["tilda"] = NPC(name="Tilda", hostile=False, shop={"dagger": 2})
+    res = tools.dispatch("buy_item", {"character": "Hero", "item": "longsword"}, gs)
+    assert res["ok"] is False and res["reason"] == "ambiguous_merchant"
+    assert set(res["candidates"]) == {"Garric", "Tilda"}
+
+
 def test_dispatch_skill_check_passes_skill_and_tags_log():
     from src import rules
     gs = _make_state()

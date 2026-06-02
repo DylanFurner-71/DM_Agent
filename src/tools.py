@@ -610,6 +610,46 @@ TOOLS = [
             "required": ["character", "amount"],
         },
     },
+    {
+        "name": "buy_item",
+        "description": (
+            "Buy an item from a merchant's catalogue for a party member, paying its price in "
+            "gold. The engine owns prices and the purse: ok=false 'not_for_sale' if the item "
+            "isn't in the merchant's stock, and 'insufficient_gold' (nothing bought) if the "
+            "buyer can't afford it — narrate the shortfall rather than completing the sale. "
+            "Never invent a price or an item. merchant is optional — omit it to auto-select the "
+            "sole shopkeeper present ('ambiguous_merchant' lists candidates if several, "
+            "'no_merchant' if none). The buyer must be a party member ('not_a_pc')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member buying"},
+                "item": {"type": "string", "description": "Item to buy; must be in the merchant's catalogue"},
+                "merchant": {"type": "string", "description": "Name of the shopkeeper. Omit to auto-select the sole merchant present."},
+            },
+            "required": ["character", "item"],
+        },
+    },
+    {
+        "name": "sell_item",
+        "description": (
+            "Sell an item from a party member's inventory to a merchant for half its catalogue "
+            "price (engine-owned). ok=false 'not_in_inventory' if they aren't carrying it, or "
+            "'not_buying' if the merchant doesn't stock it (a merchant only buys back what it "
+            "sells). merchant is optional — omit to auto-select the sole shopkeeper present. "
+            "The seller must be a party member ('not_a_pc')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member selling"},
+                "item": {"type": "string", "description": "Item to sell from the seller's inventory"},
+                "merchant": {"type": "string", "description": "Name of the shopkeeper. Omit to auto-select the sole merchant present."},
+            },
+            "required": ["character", "item"],
+        },
+    },
 ]
 
 
@@ -796,6 +836,34 @@ def resolve_npc_action(npc, state) -> tuple[dict, dict] | None:
     # scans hostile NPCs (PC→NPC direction) and won't auto-target for these cases.
     args = {"attacker": npc.name, "defender": target.name}
     return args, dispatch("attack", args, state)
+
+
+def _resolve_merchant(state, merchant_arg: str) -> tuple:
+    """Resolve the merchant for a buy/sell. Returns (merchant, None) or (None, error_dict).
+
+    An eligible merchant is an NPC with a non-empty shop that is not hostile and not down.
+    Named: must exist and be eligible. Omitted: auto-select the sole eligible merchant
+    ('no_merchant' if none, 'ambiguous_merchant' with candidates if several).
+    """
+    eligible = [n for n in state.npcs.values()
+                if getattr(n, "shop", None) and not n.hostile and not n.is_down]
+    name = (merchant_arg or "").strip()
+    if name:
+        npc = state.find_actor(name)
+        if not npc or not getattr(npc, "shop", None):
+            return None, {"ok": False, "reason": "no_merchant",
+                          "error": f"{name!r} is not a merchant here."}
+        if npc.hostile or npc.is_down:
+            return None, {"ok": False, "reason": "merchant_unavailable",
+                          "error": f"{npc.name} won't trade right now."}
+        return npc, None
+    if not eligible:
+        return None, {"ok": False, "reason": "no_merchant", "error": "There is no merchant here to trade with."}
+    if len(eligible) > 1:
+        return None, {"ok": False, "reason": "ambiguous_merchant",
+                      "error": "Several merchants here — name one.",
+                      "candidates": [n.name for n in eligible]}
+    return eligible[0], None
 
 
 def dispatch(name: str, args: dict, state) -> dict:
@@ -1385,6 +1453,27 @@ def dispatch(name: str, args: dict, state) -> dict:
                 state.record(f"{character.name} spends {amount} gp (→ {res['gold']})")
             else:
                 state.record(f"{character.name} cannot spend {amount} gp ({res['reason']})")
+        return res
+
+    if name in ("buy_item", "sell_item"):
+        pc = state.find_actor(args["character"])
+        if not pc or not hasattr(pc, "proficiency_bonus"):
+            return {"ok": False, "reason": "not_a_pc",
+                    "error": f"Unknown party member {args['character']!r}; only PCs can trade."}
+        merchant, err = _resolve_merchant(state, args.get("merchant", ""))
+        if err:
+            return err
+        item = args.get("item", "").strip()
+        if not item:
+            return {"ok": False, "error": "item is required."}
+        if name == "buy_item":
+            res = rules.buy_item(pc, merchant, item)
+            if res["ok"]:
+                state.record(f"{pc.name} buys {res['item']} from {merchant.name} for {res['price']} gp (→ {res['gold']})")
+        else:
+            res = rules.sell_item(pc, merchant, item)
+            if res["ok"]:
+                state.record(f"{pc.name} sells {res['item']} to {merchant.name} for {res['price']} gp (→ {res['gold']})")
         return res
 
     if name == "trigger_hazard":

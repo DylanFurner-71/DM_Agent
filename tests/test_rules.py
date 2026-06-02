@@ -1023,6 +1023,58 @@ def test_spend_gold_refuses_overspend_without_deducting():
     assert c.gold == 5  # nothing was deducted
 
 
+# --- merchants (buy / sell) ---------------------------------------------------
+
+def _buyer_and_shop(gold=20):
+    buyer = Character(name="Aldric", gold=gold)
+    merchant = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    return buyer, merchant
+
+
+def test_buy_item_deducts_gold_and_grants_item():
+    buyer, merchant = _buyer_and_shop()
+    res = rules.buy_item(buyer, merchant, "longsword")
+    assert res["ok"] is True and res["price"] == 15 and res["gold"] == 5
+    assert "longsword" in buyer.inventory
+
+
+def test_buy_item_not_for_sale():
+    buyer, merchant = _buyer_and_shop()
+    res = rules.buy_item(buyer, merchant, "plate armor")
+    assert res["ok"] is False and res["reason"] == "not_for_sale"
+    assert buyer.gold == 20  # untouched
+
+
+def test_buy_item_insufficient_gold_grants_nothing():
+    buyer, merchant = _buyer_and_shop(gold=10)
+    res = rules.buy_item(buyer, merchant, "longsword")
+    assert res["ok"] is False and res["reason"] == "insufficient_gold"
+    assert buyer.gold == 10 and "longsword" not in buyer.inventory  # nothing changed
+
+
+def test_sell_item_pays_half_and_removes():
+    seller = Character(name="Aldric", gold=0, inventory=["longsword"])
+    merchant = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    res = rules.sell_item(seller, merchant, "longsword")
+    assert res["ok"] is True and res["price"] == 7  # 15 * 0.5, floored
+    assert seller.gold == 7 and "longsword" not in seller.inventory
+
+
+def test_sell_item_not_in_inventory():
+    seller = Character(name="Aldric", inventory=[])
+    merchant = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    res = rules.sell_item(seller, merchant, "longsword")
+    assert res["ok"] is False and res["reason"] == "not_in_inventory"
+
+
+def test_sell_item_merchant_not_buying_unstocked():
+    seller = Character(name="Aldric", inventory=["dagger"])
+    merchant = NPC(name="Garric", hostile=False, shop={"longsword": 15})
+    res = rules.sell_item(seller, merchant, "dagger")
+    assert res["ok"] is False and res["reason"] == "not_buying"
+    assert "dagger" in seller.inventory  # not removed
+
+
 def test_skill_check_inspiration_keeps_higher_and_spends():
     c = Character(name="Aldric", ability_modifiers={"dex": 0}, inspiration=1)
     rules.force_rolls([3, 17])  # 2d20 with advantage → keep 17
