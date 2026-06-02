@@ -427,6 +427,22 @@ def test_print_state_rich_groups_spells(monkeypatch, capsys):
     assert "Cantrips" in out and "Magic Missile" in out and "L2 (1/2)" in out
 
 
+def test_print_state_rich_colored_inventory_and_npc_atk_render(monkeypatch, capsys):
+    """The colored /state paths — per-item inventory markup (gear vs. consumable),
+    AC, and the hostile-only atk color — must render without markup errors and keep
+    their content under the no-color console (a malformed tag would raise or drop text)."""
+    _force_rich(monkeypatch)
+    gs = GameState(location="Hall")
+    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=16, ac=12,
+                                 inventory=["dagger", "healing_potion"])
+    gs.npcs["grik"] = NPC(name="Grik", max_hp=18, hp=18, hostile=True, inventory=["shortsword"])
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "dagger" in out and "healing_potion (consumable)" in out   # gear + consumable
+    assert "AC 12" in out
+    assert "Grik" in out and "shortsword" in out and "atk +3" in out  # hostile atk path
+
+
 # --- "block owns slots": header drops slots for casters; upcast-only rows -----
 
 def test_known_spells_upcast_only_level_shown():
