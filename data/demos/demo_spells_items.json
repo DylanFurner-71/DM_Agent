@@ -1,4 +1,6 @@
 {
+  "title": "Spells & Items Demo",
+  "blurb": "The spell-slot economy money shot, the Pearl-of-Power slot cap, use_item consumables, and lookup_rule.",
   "current_scene": "spellbreaker_hall",
   "scenes": {
     "spellbreaker_hall": {

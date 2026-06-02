@@ -1,4 +1,6 @@
 {
+  "title": "Death Saves Demo",
+  "blurb": "The downed-at-0-HP death-save cycle, revival, and the defeat/victory epilogue.",
   "current_scene": "collapsing_crypt",
   "scenes": {
     "collapsing_crypt": {

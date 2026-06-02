@@ -1,4 +1,6 @@
 {
+  "title": "Gates & Loot Demo",
+  "blurb": "Multi-scene exploration with a flag gate, an answer (password) gate, take_item loot, and quest flags.",
   "current_scene": "antechamber",
   "scenes": {
     "antechamber": {

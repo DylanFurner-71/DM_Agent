@@ -1,4 +1,6 @@
 {
+  "title": "Ashen Barrow \u2014 Loot & Relic",
+  "blurb": "A two-scene barrow run featuring take_item loot and a quest relic.",
   "current_scene": "barrow_entrance",
   "scenes": {
     "barrow_entrance": {

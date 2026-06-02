@@ -1,4 +1,6 @@
 {
+  "title": "Reinforcements Demo",
+  "blurb": "add_npc author-declared reinforcements \u2014 trigger-gated and inserted mid-combat at the right initiative slot.",
   "current_scene": "alarm_post",
   "scenes": {
     "alarm_post": {

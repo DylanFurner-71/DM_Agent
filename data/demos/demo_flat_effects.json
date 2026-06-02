@@ -1,4 +1,6 @@
 {
+  "title": "Flat Effects Demo",
+  "blurb": "modify_hp exact damage/heal and roll_dice fiction-only flavor rolls.",
   "current_scene": "warded_vault",
   "scenes": {
     "warded_vault": {

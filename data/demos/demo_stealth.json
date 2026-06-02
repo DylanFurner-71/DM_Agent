@@ -1,4 +1,6 @@
 {
+  "title": "Stealth & Ambush Demo",
+  "blurb": "Group stealth checks, the surprise round, and an always-alert foe that cannot be ambushed.",
   "current_scene": "sleeping_sentries",
   "scenes": {
     "sleeping_sentries": {

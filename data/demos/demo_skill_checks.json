@@ -1,4 +1,6 @@
 {
+  "title": "Skill Checks Demo",
+  "blurb": "Proactive skill_check rolls \u2014 perception, athletics, arcana \u2014 including fail-forward and in-combat checks.",
   "current_scene": "proving_hall",
   "scenes": {
     "proving_hall": {

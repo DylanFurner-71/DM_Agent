@@ -1,4 +1,6 @@
 {
+  "title": "The Ashen Barrow",
+  "blurb": "A road-worn cleric and a near-spent mage breach a goblin-held barrow \u2014 the default scenario and the spell-slot enforcement money shot.",
   "current_scene": "barrow_entrance",
   "scenes": {
     "barrow_entrance": {

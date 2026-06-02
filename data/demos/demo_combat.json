@@ -1,4 +1,6 @@
 {
+  "title": "Combat Demo",
+  "blurb": "Initiative, the turn guard, AC/crit resolution, auto-target and ambiguous_target, and auto-ending combat.",
   "current_scene": "ruined_guardroom",
   "scenes": {
     "ruined_guardroom": {

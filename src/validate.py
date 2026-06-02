@@ -425,8 +425,14 @@ def validate_scenario(data: dict) -> Report:
         rep.error("scenes", "'scenes' must be a non-empty object")
         return rep
 
-    if not data.get("title"):
-        rep.warn("root", "no 'title' — the start menu will fall back to the filename")
+    # A scene-based scenario is a menu-facing adventure, so it must carry the
+    # start-menu metadata. (Free-form scenarios returned above are exempt — they have
+    # no menu presence.)
+    for field in ("title", "blurb"):
+        val = data.get(field)
+        if not isinstance(val, str) or not val.strip():
+            rep.error("root", f"missing required {field!r} — every scene-based scenario "
+                              f"must declare a non-empty {field} (shown in the start menu)")
 
     scene_keys = set(scenes)
     current = data.get("current_scene")

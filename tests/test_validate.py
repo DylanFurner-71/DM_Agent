@@ -68,13 +68,25 @@ def test_title_blurb_are_known_top_level_keys():
     assert "unknown top-level key" not in _warns(_valid())
 
 
-def test_missing_title_warns_but_still_ok():
-    """A scene-based scenario without a title still loads, but the menu warns."""
+def test_missing_title_is_error():
+    """A scene-based scenario must declare a title (start-menu metadata)."""
     d = _valid()
     del d["title"]
-    rep = validate_scenario(d)
-    assert rep.ok, rep.errors
-    assert any("no 'title'" in w for w in rep.warnings), rep.warnings
+    assert "missing required 'title'" in _errs(d)
+
+
+def test_missing_blurb_is_error():
+    """A scene-based scenario must declare a blurb (start-menu metadata)."""
+    d = _valid()
+    del d["blurb"]
+    assert "missing required 'blurb'" in _errs(d)
+
+
+def test_empty_title_or_blurb_is_error():
+    """A present-but-blank title/blurb is still missing the metadata."""
+    d = _valid()
+    d["title"] = "   "
+    assert "missing required 'title'" in _errs(d)
 
 
 def test_all_shipped_scenarios_validate():

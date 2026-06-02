@@ -1,4 +1,6 @@
 {
+  "title": "Saving Throws & Hazards Demo",
+  "blurb": "Author-placed traps via trigger_hazard plus bare saving_throw reactions to resist an effect.",
   "current_scene": "trapped_gallery",
   "scenes": {
     "trapped_gallery": {

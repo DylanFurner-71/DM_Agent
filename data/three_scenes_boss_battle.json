@@ -1,4 +1,6 @@
 {
+  "title": "Ashen Barrow \u2014 Three Scenes",
+  "blurb": "A short three-scene descent through the barrow to a boss battle, with a journal clue along the way.",
     "current_scene": "barrow_entrance",
     "scenes": {
         "barrow_entrance": {

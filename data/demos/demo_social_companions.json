@@ -1,4 +1,6 @@
 {
+  "title": "Social & Companions Demo",
+  "blurb": "influence_npc persuasion, an immovable foe, recruit_npc, and an ally fighting at the party's side.",
   "current_scene": "parley_ledge",
   "scenes": {
     "parley_ledge": {

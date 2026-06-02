@@ -1,4 +1,6 @@
 {
+  "title": "Ashen Barrow \u2014 Skirmish",
+  "blurb": "A minimal one-PC, one-NPC encounter at the barrow mouth \u2014 a bare-bones combat sandbox.",
   "current_scene": "barrow_entrance",
   "scenes": {
     "barrow_entrance": {
