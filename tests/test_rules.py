@@ -5443,6 +5443,31 @@ def test_leading_npc_surprised_skipped_in_take_turn():
     assert attack_calls == [], f"Surprised guard must not attack in round 1; got {attack_calls}"
 
 
+# --- SRD_RULES / lookup_rule coverage ---------------------------------------
+
+def test_srd_covers_core_mechanics():
+    """Every core mechanic the engine enforces must have a lookup_rule entry, so the
+    model narrates it from the reference (aligned with the code) rather than training
+    memory. The expected set is the contract: adding a mechanic means adding both the
+    SRD_RULES entry and its key here (per CLAUDE.md's "add a test for any new rules
+    function"). Fails loudly if an entry is dropped or a core mechanic ships unreferenced."""
+    expected = {
+        "advantage", "disadvantage", "death_saves", "saving_throws", "spell_slots",
+        "armor_class", "attack", "critical_hit", "skill_check", "spell_attack",
+        "initiative", "surprise", "influence", "magic_missile", "chromatic_orb",
+    }
+    missing = expected - set(rules.SRD_RULES)
+    assert not missing, f"SRD_RULES is missing core entries: {sorted(missing)}"
+    for key in expected:
+        assert rules.lookup_rule(key)["ok"] is True, f"lookup_rule({key!r}) should resolve"
+
+
+def test_lookup_rule_unknown_topic():
+    res = rules.lookup_rule("teleportation")
+    assert res["ok"] is False
+    assert "Known topics" in res["text"]   # miss path lists the available topics
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
