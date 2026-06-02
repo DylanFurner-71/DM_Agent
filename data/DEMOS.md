@@ -34,6 +34,7 @@ compact status header shown before each prompt), `/recap` (story so far),
 | Checks (proactive `skill_check`: perception/athletics/arcana, fail-forward, in-combat) | `demo_skill_checks.json` |
 | Saving throws & hazards/traps (`trigger_hazard` author-placed traps + bare `saving_throw`) | `demo_saving_throws.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
+| Flat effects & flavor rolls (`modify_hp` exact damage/heal, `roll_dice` fiction-only) | `demo_flat_effects.json` |
 | Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
 | Persistence & resume | any scenario — see the bottom section |
 | Autosave & `/undo` (rewind a turn) | any scenario — see the bottom section |
@@ -311,6 +312,41 @@ turn), and one-spawn-per-id.
    initiative slot. (Before the flag is set, an attempt to spawn the ogre is refused —
    it's hidden and `locked`.)
 4. Survive the wave to win. Each reinforcement can arrive only once.
+
+---
+
+## demo_flat_effects.json — Flat effects & flavor rolls (`modify_hp`, `roll_dice`)
+
+**Party:** Aldric (a cleric, starting **wounded at 18/24** so a heal is visible) and
+Wisp (16/16). **Scene (warded_vault):** a single, peaceful terminal room with three
+curiosities — a warding glyph that deals a *flat, exact* toll, a restorative font that
+heals a *flat, exact* amount, and a burst strongbox of loose coin to be *counted* —
+plus the silver reliquary to claim before leaving.
+
+**Shows:** the two tools no other demo exercises. `modify_hp` for a **flat, known**
+HP change — the engine applies an exact amount the fiction states, *not* a dice roll
+(that would be `apply_dice`) and *not* an author-placed trap (that would be
+`trigger_hazard`, which needs a `hazards` manifest — there is none here). And
+`roll_dice` for **fiction-only** randomness that touches no tracked state (the coin
+count) — the roll the engine forbids from feeding HP.
+
+> Watch `/trace`: the ward and font fire a single `modify_hp` each (exact ±amount);
+> the coin count fires `roll_dice` and **no** `modify_hp`. `/state` shows HP move by
+> precisely the stated number, and the font heal **clamping at max HP**.
+
+**Play it:**
+1. `Wisp counts the spilled coins` → a **`roll_dice`** flavor roll (e.g. `3d6`×10 gp):
+   the DM narrates the haul, and **nothing changes** in `/state` — fiction-only.
+2. `Aldric lays his hand on the warding runes` → **`modify_hp` −6** on Aldric
+   (`/state`: 18 → 12, exactly 6, no roll). The flat toll the scene names.
+3. `Aldric drinks from the restorative font` → **`modify_hp` +8** healing (12 → 20).
+   Then `Aldric drinks again` — the font has gone dark, so the DM narrates no effect;
+   or have a full-HP PC drink to watch the heal **clamp at max** rather than overfill.
+4. `take the silver reliquary` (`take_item`), then `we have what we came for — let's
+   leave` → the engine concludes the terminal scene and fires the **victory epilogue**.
+
+> The bound is real too: `modify_hp` refuses a magnitude larger than the target's max
+> HP (reason `amount_out_of_range`) — a flat effect can't exceed a full bar in one hit.
 
 ---
 

@@ -1,0 +1,49 @@
+{
+  "current_scene": "warded_vault",
+  "scenes": {
+    "warded_vault": {
+      "location": "The Warded Vault",
+      "scene": "A round stone vault, long sealed, holds three curiosities and a prize. Set into the floor is a ring of old warding runes — a flat, impartial glyph that bites anyone who lays a hand on it for exactly 6 points of vitality: no saving throw, no dice, the toll is always the same. Beside it a cracked basin cups a thread of glowing water — a restorative font that knits exactly 8 hit points into the first wounded soul to drink, then goes dark. Against the far wall a burst strongbox spills loose coin across the flagstones — a fortune, though how much only a count will tell. At the center, on a plain plinth, rests the silver reliquary you came to claim. Nothing here stirs or threatens; the room is yours to work.",
+      "npcs": {},
+      "loot": ["silver_reliquary"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "aldric": {
+      "name": "Aldric",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 18,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2},
+      "ability_modifiers": {"str": 2, "dex": 0, "con": 2, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["mace", "holy symbol", "torch"],
+      "conditions": [],
+      "spellcasting_ability": "wis",
+      "spells": ["guiding_bolt"],
+      "save_proficiencies": ["wis", "cha"]
+    },
+    "wisp": {
+      "name": "Wisp",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2, "2": 1},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook", "50ft rope"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "chromatic_orb"],
+      "save_proficiencies": ["int", "wis"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}
