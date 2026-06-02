@@ -267,21 +267,15 @@ narration. In combat the player's action is resolved tool-only and a single
 `_narrate_turn` covers it plus every NPC beat in order (DECISIONS.md §2). Three further
 call-count cuts live in the loop:
 
-- **Combat fast-path.** Once the active PC's action is resolved — spent *or* refused
-  with a hard-stop `ok=false` (turn-guard, ambiguous target, invalid action) — the tool
-  loop breaks immediately rather than paying for a terminal model turn whose prose would
-  be scrubbed anyway — saving one call on every combat player turn.
+- **Combat fast-path.** Once the active PC's action is spent, the tool loop breaks
+  immediately rather than paying for a terminal model turn whose prose would be
+  scrubbed anyway — saving one call on every combat player turn.
 - **Engine-resolved NPC turns.** A plain hostile or companion attack is resolved
   entirely in Python (`resolve_npc_action`) with **no API call**; a synthetic
   `[Engine: …]` context line is injected so the unified narration still has the exact
   hit/miss/damage facts.
 - **Batched NPC fallbacks.** NPC turns the engine *can't* resolve deterministically are
   queued and flushed in a single `_execute` call, not one call per NPC.
-- **Parallel tool calls.** Independent tool calls on one turn — a loot sweep, a
-  `take_item` plus the `set_quest_flag` that records the find — are prompted to emit as
-  parallel `tool_use` blocks resolved in a single hop, not one tool per round-trip
-  (DECISIONS.md §8). The engine dispatches them in order and refuses any unsafely-batched
-  dependent call, so grouping never corrupts state.
 
 *Bounded output.* Each narration phase requests a right-sized `max_tokens` budget
 (400 for the post-combat close, 300 for the epilogue, `min(256 × beats, 1024)` for the
@@ -310,13 +304,8 @@ by payoff vs. risk:
 | Lever | Payoff | Risk |
 |---|---|---|
 | **Two-model split** — run the mechanical tool-selection ("thinking") calls on a faster, cheaper model (e.g. Haiku), keep the quality model for narration. Needs a second model constant in `dm_agent.py` and routing the tool-use `client` calls to it. | High — ~40% of wall time is mechanical tool-selection | Medium — the cheaper model must still pick the right tool/args, or enforcement narration breaks |
+| **Lean harder on parallel `tool_use`** to cut hops on multi-tool turns (e.g. two `take_item`s + a `move_scene` resolved in one response instead of three) | Low–medium | Low code, but prompt-level and unreliable |
 | **Prompt narration for more brevity** (the `max_tokens` budgets are already right-sized per phase; this is the prose-quality dial) | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
-
-*Done since:* **Lean harder on parallel `tool_use`** — independent tool calls on a turn
-(a loot sweep, a `take_item` + the `set_quest_flag` recording it) are now prompted to
-batch into one hop instead of one tool per round-trip (DECISIONS.md §8). **Redundant
-`get_state` discouraged** and the **combat fast-path** extended to break on a hard-stop
-`ok=false`, not just a spent action.
 
 ## Need to implement
 
