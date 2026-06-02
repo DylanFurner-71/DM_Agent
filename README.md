@@ -284,7 +284,7 @@ python -m src.main data/scenario.json     # explicit scenario, or a savegame pat
 **Per-feature demo scenarios.** [`data/DEMOS.md`](data/DEMOS.md) is an index of
 focused, ready-to-run scenarios (`data/demos/`) — one per feature-cluster
 (combat, death saves, social & companions, stealth, gates & loot, spells & items,
-reinforcements) — each with the exact player inputs to type to trigger the feature
+skill checks, saves & hazards, reinforcements) — each with the exact player inputs to type to trigger the feature
 and what to watch for in `/state` and `/trace`.
 
 **The money shot — enforcement you can see.** The starting scenario gives the mage

@@ -1,0 +1,74 @@
+{
+  "current_scene": "proving_hall",
+  "scenes": {
+    "proving_hall": {
+      "location": "The Proving Hall",
+      "scene": "A vaulted antechamber built to test those who would pass. Three challenges face you, and each rewards a different talent. To the left, one flagstone sits a hair proud of the rest — something may be cached beneath it, for a keen eye. Ahead, a jammed iron portcullis half-blocks an alcove; only raw strength will heave it clear. To the right, a rune-sealed door bars the way deeper, its lock a cipher of interlocking glyphs that a trained mind might read. There are no foes here — only the hall, and what each of you can do. (Each test is a proactive ability CHECK: d20 + the relevant ability modifier vs a DC; a check never adds proficiency.)",
+      "npcs": {},
+      "loot": ["healing_potion"],
+      "exits": {
+        "the rune-sealed door, its cipher deciphered": {
+          "to": "sentinel_span",
+          "requires": "cipher_read",
+          "denied": "The glyph-lock holds fast — the cipher has not yet been read, and the door will not open."
+        }
+      }
+    },
+    "sentinel_span": {
+      "location": "The Sentinel Span",
+      "scene": "Beyond the door, a narrow stone span arcs over a black chasm whose bottom is lost to the dark. Midway stands a Bone Sentinel, an undead warden that lifts its blade as you approach — it will not let you pass. The span is barely two strides wide; a hard enough shove could send the thing over the edge. This is the last test, and the deepest point — there is nowhere further to go.",
+      "npcs": {
+        "sentinel": {"template": "skeleton", "name": "Bone Sentinel"}
+      },
+      "loot": ["warden_token"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "bram": {
+      "name": "Bram",
+      "level": 3,
+      "max_hp": 28,
+      "hp": 28,
+      "ac": 16,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 4, "dex": 1, "con": 3, "int": -1, "wis": 0, "cha": 0},
+      "inventory": ["longsword", "torch", "rope"],
+      "conditions": [],
+      "save_proficiencies": ["str", "con"]
+    },
+    "senna": {
+      "name": "Senna",
+      "level": 3,
+      "max_hp": 20,
+      "hp": 20,
+      "ac": 14,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 1, "dex": 3, "con": 1, "int": 1, "wis": 3, "cha": 1},
+      "inventory": ["shortsword", "shortbow", "lantern"],
+      "conditions": [],
+      "save_proficiencies": ["dex", "wis"]
+    },
+    "orin": {
+      "name": "Orin",
+      "level": 3,
+      "max_hp": 16,
+      "hp": 16,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 2},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
+      "inventory": ["dagger", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["magic_missile", "fire_bolt"],
+      "save_proficiencies": ["int", "wis"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

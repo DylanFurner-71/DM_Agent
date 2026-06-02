@@ -31,6 +31,7 @@ compact status header shown before each prompt), `/recap` (story so far),
 | Stealth & ambush (group stealth, surprise round, always-alert foe) | `demo_stealth.json` |
 | Exploration: scenes, gates & loot + Quest flags (flag gate, answer gate, `take_item`) | `demo_gates_loot.json` |
 | Spells & items (slot economy "money shot", Pearl-of-Power cap, `use_item`, `lookup_rule`) | `demo_spells_items.json` |
+| Checks (proactive `skill_check`: perception/athletics/arcana, fail-forward, in-combat) | `demo_skill_checks.json` |
 | Saving throws & hazards/traps (`trigger_hazard` author-placed traps + bare `saving_throw`) | `demo_saving_throws.json` |
 | Reinforcements (`add_npc`, author-declared, trigger-gated, mid-combat insertion) | `demo_reinforcements.json` |
 | Branching geography (a fork with two routes that reconverge, multi-scene) | `five_scene_branching.json` |
@@ -196,6 +197,55 @@ free cantrips, the **Pearl-of-Power cap** (refused when slots are already full, 
 5. `Aldric drinks his healing potion` → `use_item` self-heal (roll-and-apply).
 6. `how do spell slots work?` → the DM answers via `lookup_rule`. Clear the kobolds
    to win.
+
+---
+
+## demo_skill_checks.json — Checks (proactive `skill_check`)
+
+**Party:** Bram (STR +4, the muscle), Senna (WIS +3 / DEX +3, the eyes), Orin
+(INT +4, the scholar) — each strong in a different ability. **Scene 1
+(proving_hall):** three challenges, one per talent — a loose flagstone (a
+**perception** find), a jammed portcullis (an **athletics** heave), and a
+rune-sealed door whose cipher needs reading (an **arcana/investigation** check).
+**Scene 2 (sentinel_span):** a Bone Sentinel guarding a narrow span over a chasm —
+terminal.
+
+**Shows:** `skill_check` as a proactive `d20 + ability modifier` vs a DC, the
+ability modifier (not proficiency) driving the roll so a different PC shines on each
+test, a **fail-forward** consequence applied with `apply_dice`, a check **gating
+progress** via a quest flag, and — in the fight — a `skill_check` that **is the
+acting character's turn-guarded action** (the reactive `saving_throw` twin lives in
+`demo_saving_throws.json`).
+
+> A check never adds proficiency — only the raw ability modifier — which is the
+> deliberate contrast with a proficient *saving throw*. Watch `/trace`: each test is
+> a single `skill_check`; a failed heave is followed by an `apply_dice`.
+
+**Play it:**
+1. `Senna scans the floor for anything out of place` → a **perception** (WIS) check.
+   On a success the DM reveals the cache under the loose flagstone — `take the
+   healing potion` (`take_item`). Senna's high WIS makes her the one to spot it.
+2. `Bram heaves the jammed portcullis open` → an **athletics** (STR) check; Bram's
+   +4 makes it likely. *Fail-forward:* if the check fails, the slab slips and the DM
+   applies a few points with `apply_dice` (e.g. `1d4` to Bram) — a failed check costs
+   something rather than just stalling. (`/state` shows the HP dip; `/trace` shows
+   `skill_check` then `apply_dice`.)
+3. `Orin studies the glyph-lock and reads the cipher` → an **arcana/investigation**
+   (INT) check. On a success the DM records the discovery as the `cipher_read` quest
+   flag (see it in `/state`). Try the door **before** this — `go through the rune
+   door` is refused (**locked**) until the flag is set.
+4. `now open the rune door and go through` → `move_scene` succeeds into the span.
+   - *Wrong PC, on purpose:* have Bram attempt the arcana check (`Bram tries to read
+     the glyphs`) — he can roll, but his INT −1 makes failure likely; the point is the
+     ability modifier, not who declares it.
+5. On the span, `we attack the Bone Sentinel` → `start_combat`. On **Bram's** turn,
+   instead of swinging: `Bram tries to shove the Sentinel off the span` → an
+   **in-combat `skill_check`** (athletics). This **is Bram's action** and is
+   turn-guarded — try it on someone else's turn and the engine refuses; try a second
+   action after it and the action guard refuses. The DM narrates the shove from the
+   result.
+6. Drop the Sentinel to clear the terminal span and fire the **victory epilogue**;
+   `take the warden token` first if you like.
 
 ---
 
