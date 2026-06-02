@@ -457,7 +457,8 @@ def _combatant_marker(actor, key: str, state: GameState) -> str:
 def format_hud(state: GameState, width: int = 60) -> str:
     """A compact status header for display before each prompt.
 
-    Shows each PC's HP bar, spell slots, and conditions on its line, then indented
+    Shows each PC's HP bar, AC, spell slots, and status (the shared _pc_status — shown
+    only when not "ok") on its line, then indented
     sub-lines beneath: an Items line for gear and a Consumables line (with counts)
     for any /use-able items carried, and known spells grouped by level. In combat it
     adds the round plus the initiative order with the active actor marked (▶) and
@@ -471,18 +472,16 @@ def format_hud(state: GameState, width: int = 60) -> str:
     rule = "─" * width
     lines = [rule]
     for c in pcs:
-        seg = f"  {c.name:<{namew}}  {_hp_bar(c.hp, c.max_hp)} {c.hp:>3}/{c.max_hp:<3}"
+        seg = f"  {c.name:<{namew}}  {_hp_bar(c.hp, c.max_hp)} {c.hp:>3}/{c.max_hp:<3}  AC {c.ac}"
         slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
         if slots:
             seg += f"  {slots}"
-        tags = []
-        if c.dead:
-            tags.append("dead")
-        elif c.hp <= 0:
-            tags.append("dying")
-        tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
-        if tags:
-            seg += f"  [{', '.join(tags)}]"
+        # Status (death-save lifecycle + conditions), shown only when not plain "ok" —
+        # shared with /state so HUD and full readout agree (and a stable PC reads
+        # 'stable', not 'dying').
+        status = _pc_status(c)
+        if status != "ok":
+            seg += f"  [{status}]"
         lines.append(seg)
         indent = f"  {' ' * namew}  "   # align sub-lines under the HP bar
         # Inventory: an Items line for gear, a Consumables line (with counts) for
@@ -540,19 +539,15 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
         bar = _hp_bar(c.hp, c.max_hp)
         hpcol = _hp_color(c.hp, c.max_hp)
         seg = (f"  [bold cyan]{name}[/bold cyan]"
-               f"  [{hpcol}]{bar} {c.hp:>3}/{c.max_hp:<3}[/{hpcol}]")
+               f"  [{hpcol}]{bar} {c.hp:>3}/{c.max_hp:<3}[/{hpcol}]"
+               f"  AC {c.ac}")
         slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
         if slots:
             seg += f"  {escape(slots)}"
-        tags = []
-        if c.dead:
-            tags.append("dead")
-        elif c.hp <= 0:
-            tags.append("dying")
-        tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
-        if tags:
-            tagcol = "red" if (c.dead or c.hp <= 0) else "yellow"
-            seg += f"  [{tagcol}]{escape('[' + ', '.join(tags) + ']')}[/{tagcol}]"
+        status = _pc_status(c)
+        if status != "ok":
+            statuscol = "red" if (c.dead or c.hp <= 0) else "yellow"
+            seg += f"  [{statuscol}]{escape('[' + status + ']')}[/{statuscol}]"
         p(seg)
         indent = f"  {' ' * namew}  "
         for inv_line in _hud_inventory_lines(c):

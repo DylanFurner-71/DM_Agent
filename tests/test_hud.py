@@ -314,3 +314,53 @@ def test_render_hud_rich_combat_line(monkeypatch, capsys):
     assert "Round 2" in out
     assert "▶Wisp" in out                 # active marker survives coloring
     assert "Narl(down)" in out
+
+
+# --- PC AC + status display (status shown only when not "ok") -----------------
+
+def test_hud_shows_pc_ac():
+    gs = GameState(location="Hall")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ac=16)
+    assert "AC 16" in format_hud(gs)
+
+
+def test_hud_omits_status_when_ok():
+    gs = GameState(location="Hall")
+    gs.party["aldric"] = Character(name="Aldric", max_hp=24, hp=24, ac=16)  # healthy
+    pc_line = next(ln for ln in format_hud(gs).splitlines() if "Aldric" in ln)
+    assert "[" not in pc_line   # no status bracket for an "ok" PC
+
+
+def test_hud_shows_status_when_not_ok():
+    gs = GameState(location="Hall")
+    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=5, ac=12, conditions=["prone"])
+    assert "[prone]" in format_hud(gs)
+
+
+def test_hud_stable_pc_reads_stable_not_dying():
+    """A stable PC (0 HP, stabilized) must read 'stable', not 'dying' — uses the shared
+    _pc_status, fixing the old ad-hoc tag that called any 0-HP PC 'dying'."""
+    gs = GameState(location="Crypt")
+    gs.party["boric"] = Character(name="Boric", max_hp=30, hp=0, ac=18, stable=True)
+    line = next(ln for ln in format_hud(gs).splitlines() if "Boric" in ln)
+    assert "[stable]" in line
+    assert "dying" not in line
+
+
+def test_hud_dying_pc_shows_save_progress():
+    gs = GameState(location="Crypt")
+    dying = Character(name="Aldric", max_hp=24, hp=0, ac=16)
+    dying.death_save_successes, dying.death_save_failures = 1, 2
+    gs.party["a"] = dying
+    line = next(ln for ln in format_hud(gs).splitlines() if "Aldric" in ln)
+    assert "dying (1✓ 2✗)" in line
+
+
+def test_hud_rich_shows_ac_and_status(monkeypatch, capsys):
+    _force_rich(monkeypatch)
+    gs = GameState(location="Hall")
+    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=5, ac=12, conditions=["prone"])
+    render_hud(gs)
+    out = capsys.readouterr().out
+    assert "AC 12" in out
+    assert "[prone]" in out
