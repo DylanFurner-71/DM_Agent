@@ -310,19 +310,24 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json)
-tests/                 # ~614 tests total, all no-API
-  test_rules.py        # 222 — enforcement core: dice, attack, spells, combat/turn guards
-  test_tools.py        #  67 — dispatch, guards, target/redaction, get_state
+tests/                 # ~612 tests total, all no-API
+  test_rules.py        # 120 — enforcement core: dice, attack, spells, combat/turn guards
+  test_tools.py        #  68 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
   test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
-  test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
+  test_agent.py        #  40 — agent loop: context, narration routing, closing prompts
   test_hud.py          #  38 — status HUD: bars, spells, inventory, color
   test_validate.py     #  34 — scenario linter checks
+  test_scenes.py       #  27 — scene loading, move_scene, gated exits, terminal conclusion
+  test_ambush.py       #  26 — attempt_ambush, surprise, companions
   test_save.py         #  23 — /save + /export helpers
+  test_reinforcements.py #22 — add_npc reinforcements + available_reinforcements
   test_persistence.py  #  20 — JSON save/load round-trip
   test_items.py        #  20 — take_item / use_item / consumables
+  test_social.py       #  15 — influence_npc + parley-to-combat
   test_answer_gate.py  #  15 — answer-gated exits + password redaction
   test_narrative.py    #  13 — narration recording / transcript
+  test_hazards.py      #  10 — trigger_hazard traps + available_hazards
   test_retry.py        #  10 — API retry/backoff
   test_undo.py         #   9 — /undo per-turn rewind
   test_cli.py          #   9 — CLI args, --seed, launch/resume

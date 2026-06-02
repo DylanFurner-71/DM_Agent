@@ -27,14 +27,10 @@ def test_spell_slots_run_out():
     assert "no level-1 spell slots" in second["reason"]
 
 
-
-
 def test_cantrips_are_free():
     c = Character(name="C", spell_slots={})
     for _ in range(5):
         assert rules.cast_spell(c, 0)["ok"] is True
-
-
 
 
 def test_damage_downs_and_clamps():
@@ -42,8 +38,6 @@ def test_damage_downs_and_clamps():
     res = rules.apply_damage(n, 100)
     assert res["hp"] == 0  # clamped, never negative
     assert res["downed"] is True
-
-
 
 
 def test_overkill_damage_clamps_hp_to_zero():
@@ -55,8 +49,6 @@ def test_overkill_damage_clamps_hp_to_zero():
     assert res["hp"] == 0
     assert res["downed"] is True
     assert snik.is_down is True
-
-
 
 
 def test_overkill_attack_clamps_hp_to_zero():
@@ -79,8 +71,6 @@ def test_overkill_attack_clamps_hp_to_zero():
         assert res["defender_hp"] == 0
         assert res["downed"] is True
         assert defender.is_down is True
-
-
 
 
 def test_heal_clamps_to_max_and_revives():
@@ -108,8 +98,6 @@ def test_heal_reports_full_amount_when_uncapped():
     assert res["healed"] == 7
 
 
-
-
 def test_weapon_resolves_damage_and_to_hit():
     """Naming a weapon derives dice, damage_type, and to-hit from inventory + stats."""
     rules.seed(0)
@@ -123,8 +111,6 @@ def test_weapon_resolves_damage_and_to_hit():
     assert res["to_hit_bonus"] == 5          # str(3) + proficiency(2)
     if res["hit"]:
         assert "1d6+3" in res["damage_detail"]  # damage = ability_mod only
-
-
 
 
 def test_finesse_weapon_uses_dex_when_higher():
@@ -141,8 +127,6 @@ def test_finesse_weapon_uses_dex_when_higher():
         assert "1d8+5" in res["damage_detail"]
 
 
-
-
 def test_finesse_weapon_uses_str_when_str_higher():
     """Finesse weapon falls back to Str when Str >= Dex."""
     rules.seed(0)
@@ -153,8 +137,6 @@ def test_finesse_weapon_uses_str_when_str_higher():
     assert res["to_hit_bonus"] == 6          # str(4) + proficiency(2)
     if res["hit"]:
         assert "1d4+4" in res["damage_detail"]
-
-
 
 
 def test_no_weapon_arg_uses_attack_bonus_fallback():
@@ -169,8 +151,6 @@ def test_no_weapon_arg_uses_attack_bonus_fallback():
         assert res["damage_detail"].startswith("1d6")
 
 
-
-
 def test_attack_rejects_weapon_not_in_inventory():
     """ok=False with the requested weapon AND the attacker's actual weapons listed."""
     atk = Character(name="Wisp", attack_bonus=0, inventory=["dagger"])
@@ -182,8 +162,6 @@ def test_attack_rejects_weapon_not_in_inventory():
     assert "dagger" in res["error"]     # available weapon listed
 
 
-
-
 def test_attack_rejects_weapon_not_in_inventory_no_weapons():
     """When the attacker carries no weapons at all the error says 'available: none'."""
     atk = Character(name="Wisp", attack_bonus=0, inventory=["rope", "torch"])
@@ -191,8 +169,6 @@ def test_attack_rejects_weapon_not_in_inventory_no_weapons():
     res = rules.attack(atk, dfn, weapon="mace")
     assert res["ok"] is False
     assert "none" in res["error"]
-
-
 
 
 def test_attack_rejects_unknown_weapon():
@@ -204,8 +180,6 @@ def test_attack_rejects_unknown_weapon():
     assert "banana" in res["error"]
 
 
-
-
 def test_attack_respects_ac_deterministically():
     rules.seed(1)  # fixed rolls for reproducibility
     atk = Character(name="A", attack_bonus=0)
@@ -213,8 +187,6 @@ def test_attack_respects_ac_deterministically():
     low_ac = NPC(name="Sack", ac=1, hp=50)
     assert rules.attack(atk, high_ac)["hit"] is False  # cannot beat AC 99
     assert rules.attack(atk, low_ac)["hit"] is True     # always beats AC 1
-
-
 
 
 def test_dice_notation_parsing():
@@ -230,8 +202,6 @@ def test_dice_notation_parsing():
             pass
 
 
-
-
 def test_spawn_npc_goblin_stat_block():
     """spawn_npc returns the correct canonical stat block for a goblin."""
     kwargs = rules.spawn_npc("goblin")
@@ -245,8 +215,6 @@ def test_spawn_npc_goblin_stat_block():
     assert "shortbow" in kwargs["inventory"]
 
 
-
-
 def test_spawn_npc_name_override():
     """spawn_npc allows overriding the display name without changing the stat block."""
     kwargs = rules.spawn_npc("goblin", name="Snik")
@@ -254,14 +222,10 @@ def test_spawn_npc_name_override():
     assert kwargs["max_hp"] == 12
 
 
-
-
 def test_spawn_npc_unknown_raises():
     """spawn_npc raises KeyError for an unrecognised monster id."""
     with pytest.raises(KeyError, match="dragon"):
         rules.spawn_npc("dragon")
-
-
 
 
 # --- expanded SRD tables: integrity + sampling ---------------------------------
@@ -274,8 +238,6 @@ def test_monster_inventories_reference_known_weapons():
     assert bad == [], f"monsters reference weapons absent from WEAPONS: {bad}"
 
 
-
-
 def test_spell_dice_parse_and_have_required_keys():
     """Every SPELLS entry must declare by_slot + resolution, and every dice
     expression must be valid rules.roll() notation."""
@@ -285,15 +247,11 @@ def test_spell_dice_parse_and_have_required_keys():
             rules.roll(expr)  # raises ValueError on bad notation
 
 
-
-
 def test_weapon_entries_have_dice_and_type():
     """Every weapon must have parseable dice and a damage type."""
     for key, w in rules.WEAPONS.items():
         assert w.get("type"), f"{key} has no damage type"
         rules.roll(w["dice"])
-
-
 
 
 def test_spawn_new_monster_full_hp():
@@ -302,8 +260,6 @@ def test_spawn_new_monster_full_hp():
     assert kwargs["name"] == "Ogre"
     assert kwargs["hp"] == kwargs["max_hp"] == 59
     assert "greatclub" in kwargs["inventory"]
-
-
 
 
 def test_attack_with_new_weapon_uses_its_dice_and_type():
@@ -320,8 +276,6 @@ def test_attack_with_new_weapon_uses_its_dice_and_type():
         assert res["damage_detail"].startswith("2d6")
 
 
-
-
 def test_cast_new_save_spell_auto_hits():
     """Fireball (a save-for-half spell, modelled auto_hit) applies full single-target
     damage and consumes the slot."""
@@ -336,8 +290,6 @@ def test_cast_new_save_spell_auto_hits():
     assert target.hp == 40 - res["damage"]
 
 
-
-
 def test_cast_cantrip_is_free_and_resolves():
     """A damaging cantrip (fire_bolt at level 0) resolves without consuming a slot."""
     caster = Character(name="Wisp", spell_slots={1: 1}, spells=["fire_bolt"],
@@ -347,8 +299,6 @@ def test_cast_cantrip_is_free_and_resolves():
     res = rules.cast_damaging_spell(caster, target, "fire_bolt", 0)
     assert res["ok"] is True
     assert caster.spell_slots == {1: 1}  # cantrip spent no slot
-
-
 
 
 def test_spawn_npc_can_attack_with_inventory_weapon():
@@ -363,8 +313,6 @@ def test_spawn_npc_can_attack_with_inventory_weapon():
     assert res["damage_type"] == "piercing"
 
 
-
-
 def test_roll_initiative_returns_all_keys_including_npcs():
     rules.seed(0)
     a = Character(name="Aldric", ability_modifiers={"dex": 0})
@@ -375,8 +323,6 @@ def test_roll_initiative_returns_all_keys_including_npcs():
     assert set(initiatives) == {"aldric", "snik"}
 
 
-
-
 def test_roll_initiative_highest_total_first():
     rules.seed(0)
     # +100 dex → total ≥ 101; -100 dex → total ≤ -80. No overlap possible.
@@ -384,8 +330,6 @@ def test_roll_initiative_highest_total_first():
     slow = Character(name="Slow", ability_modifiers={"dex": -100})
     order, _ = rules.roll_initiative({"fast": fast, "slow": slow})
     assert order == ["fast", "slow"]
-
-
 
 
 def test_roll_initiative_dex_breaks_total_tie():
@@ -405,15 +349,11 @@ def test_roll_initiative_dex_breaks_total_tie():
     assert order[0] == expected_first
 
 
-
-
 def test_combat_defaults_to_not_in_combat():
     gs = GameState.from_dict({"location": "Town"})  # old save without combat fields
     assert gs.combat_order == []
     assert gs.combat_index == 0
     assert gs.combat_round == 0
-
-
 
 
 def test_start_combat_sets_order_and_round():
@@ -429,15 +369,11 @@ def test_start_combat_sets_order_and_round():
     assert res["active"] == gs.combat_order[0]
 
 
-
-
 def test_start_combat_rejects_unknown_key():
     gs = _make_combat_state()
     res = tools.dispatch("start_combat", {"combatants": ["aldric", "nobody"]}, gs)
     assert res["ok"] is False
     assert "nobody" in res["error"]
-
-
 
 
 def test_next_turn_advances_pointer():
@@ -451,8 +387,6 @@ def test_next_turn_advances_pointer():
     assert res["active"] == second
     assert gs.combat_index == 1
     assert res["round"] == 1
-
-
 
 
 def test_next_turn_wraps_and_increments_round():
@@ -470,14 +404,10 @@ def test_next_turn_wraps_and_increments_round():
     assert gs.combat_round == 2
 
 
-
-
 def test_next_turn_without_combat_errors():
     gs = _make_combat_state()
     res = tools.dispatch("next_turn", {}, gs)
     assert res["ok"] is False
-
-
 
 
 def test_damaging_spell_rolled_equals_applied():
@@ -505,8 +435,6 @@ def test_damaging_spell_rolled_equals_applied():
     assert res["slots_remaining"] == 1          # slot was consumed
 
 
-
-
 def test_damaging_spell_no_slot_fails():
     gs = _make_combat_state()
     gs.party["wisp"].spell_slots = {1: 0}
@@ -519,8 +447,6 @@ def test_damaging_spell_no_slot_fails():
     }, gs)
     assert res["ok"] is False
     assert gs.npcs["snik"].hp == snik_hp_before  # no HP change on failed cast
-
-
 
 
 def test_cast_damaging_spell_known_slot_applies_by_slot():
@@ -537,8 +463,6 @@ def test_cast_damaging_spell_known_slot_applies_by_slot():
     assert res["slots_remaining"] == 1               # one slot consumed from two
 
 
-
-
 def test_cast_damaging_spell_unknown_to_caster_fails():
     """Spell not in caster.spells: ok=False before consuming slot or touching HP."""
     caster = Character(name="Wisp", spell_slots={3: 2}, spells=["magic_missile"])
@@ -549,8 +473,6 @@ def test_cast_damaging_spell_unknown_to_caster_fails():
     assert "fireball" in res["reason"]
     assert target.hp == 10              # HP untouched
     assert caster.spell_slots == {3: 2} # slot untouched
-
-
 
 
 def test_cast_damaging_spell_no_slot_fails():
@@ -603,8 +525,6 @@ def test_cast_leveled_spell_upcast_above_base_still_allowed():
     assert caster.spell_slots == {1: 0, 2: 0}        # the L2 slot was spent
 
 
-
-
 def test_spell_attack_bonus_uses_spellcasting_ability_not_attack_bonus():
     """spell_attack bonus = spellcasting_ability_mod + proficiency_from_level.
     The caster's attack_bonus field must NOT be used."""
@@ -634,8 +554,6 @@ def test_spell_attack_bonus_uses_spellcasting_ability_not_attack_bonus():
         assert target.hp == 40                  # miss: no damage applied
 
 
-
-
 def test_spell_attack_miss_slot_consumed_no_damage():
     """On a miss the slot is consumed but no damage is applied and 'damage' is absent."""
     rules.seed(1)  # seed(1) gives a non-20 first 1d20 (confirmed by test_attack_respects_ac)
@@ -656,8 +574,6 @@ def test_spell_attack_miss_slot_consumed_no_damage():
     assert res["slots_remaining"] == 1      # slot consumed despite miss
 
 
-
-
 # --- legacy: kept for dispatch-layer coverage --------------------------------
 
 def test_damaging_spell_unknown_to_caster_fails():
@@ -673,8 +589,6 @@ def test_damaging_spell_unknown_to_caster_fails():
     assert wisp.spell_slots == {3: 2}  # slot untouched
 
 
-
-
 # --- dispatch-level rejection safety (no crash, state unchanged) -------------
 
 def test_dispatch_attack_unowned_weapon_no_crash():
@@ -688,8 +602,6 @@ def test_dispatch_attack_unowned_weapon_no_crash():
     assert res["ok"] is False
     assert gs.npcs["snik"].hp == hp_before  # HP untouched
     assert len(gs.log) == log_len           # no log entry written for a rejection
-
-
 
 
 def test_dispatch_cast_unknown_spell_no_crash():
@@ -710,8 +622,6 @@ def test_dispatch_cast_unknown_spell_no_crash():
     assert gs.party["wisp"].spell_slots == {3: 2}    # slot untouched
 
 
-
-
 def test_turn_guard_blocks_non_active_attacker():
     rules.seed(0)
     gs = _make_combat_state()
@@ -726,8 +636,6 @@ def test_turn_guard_blocks_non_active_attacker():
     assert non_active_name in result["error"]
 
 
-
-
 def test_turn_guard_allows_active_attacker():
     rules.seed(0)
     gs = _make_combat_state()
@@ -740,15 +648,11 @@ def test_turn_guard_allows_active_attacker():
     assert result["ok"] is True
 
 
-
-
 def test_turn_guard_inactive_outside_combat():
     gs = _make_combat_state()
     # No combat started — turn guard must not block anything.
     result = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
     assert result["ok"] is True
-
-
 
 
 def test_turn_guard_blocks_cast_spell_out_of_turn():
@@ -763,8 +667,6 @@ def test_turn_guard_blocks_cast_spell_out_of_turn():
         result = tools.dispatch("cast_spell", {"caster": "Wisp", "spell_level": 1}, gs)
         assert result["ok"] is False
         assert "Wisp" in result["error"]
-
-
 
 
 def test_action_guard_blocks_second_attack():
@@ -783,8 +685,6 @@ def test_action_guard_blocks_second_attack():
     assert res2["ok"] is False
     assert "already acted" in res2["error"]
     assert "Aldric" in res2["error"]
-
-
 
 
 def test_second_attack_blocked_hp_unchanged():
@@ -810,8 +710,6 @@ def test_second_attack_blocked_hp_unchanged():
     assert gs.npcs["snik"].hp == hp_after_first   # blocked attack must not touch HP
 
 
-
-
 def test_action_guard_blocks_second_cast():
     rules.seed(0)
     gs = _make_combat_state()
@@ -834,8 +732,6 @@ def test_action_guard_blocks_second_cast():
     assert "Wisp" in res2["error"]
 
 
-
-
 def test_next_turn_resets_action_flag():
     rules.seed(0)
     gs = _make_combat_state()
@@ -853,8 +749,6 @@ def test_next_turn_resets_action_flag():
     assert res["ok"] is True
 
 
-
-
 def test_action_guard_inactive_outside_combat():
     gs = _make_combat_state()
     # No combat — action_used is never set; same combatant may act freely.
@@ -865,16 +759,12 @@ def test_action_guard_inactive_outside_combat():
     assert gs.action_used is False
 
 
-
-
 def test_start_combat_clears_action_flag():
     rules.seed(0)
     gs = _make_combat_state()
     gs.action_used = True  # simulate leftover state
     tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
     assert gs.action_used is False
-
-
 
 
 def test_next_turn_skips_downed_combatant():
@@ -905,8 +795,6 @@ def test_next_turn_skips_downed_combatant():
     assert adv2.get("skipped_downed") == ["wisp"]
 
 
-
-
 def test_next_turn_all_downed_returns_error():
     """next_turn must return ok=False when every combatant is past the point of acting.
     A dying PC (not dead) stops next_turn rather than triggering the all-downed error,
@@ -924,8 +812,6 @@ def test_next_turn_all_downed_returns_error():
     assert "end_combat" in res["error"]
 
 
-
-
 def test_end_combat_clears_state():
     rules.seed(0)
     gs = _make_combat_state()
@@ -935,8 +821,6 @@ def test_end_combat_clears_state():
     assert gs.combat_order == []
     assert gs.combat_index == 0
     assert gs.combat_round == 0
-
-
 
 
 def test_skill_check_uses_ability_modifier():
@@ -951,8 +835,6 @@ def test_skill_check_uses_ability_modifier():
     assert res["ability"] == "int"
 
 
-
-
 def test_skill_check_missing_ability_defaults_to_zero():
     c = Character(name="Hero", ability_modifiers={})
     rules.seed(15)
@@ -961,15 +843,11 @@ def test_skill_check_missing_ability_defaults_to_zero():
     assert res["total"] == res["roll"]
 
 
-
-
 def test_skill_check_case_insensitive():
     c = Character(name="Hero", ability_modifiers={"wis": 3})
     rules.seed(1)
     res = rules.skill_check(c, "WIS", dc=1)
     assert res["modifier"] == 3
-
-
 
 
 # --- saving throws (reactive twin of skill_check) ----------------------------
@@ -987,8 +865,6 @@ def test_saving_throw_uses_ability_modifier():
     assert res["success"] is True
 
 
-
-
 def test_saving_throw_proficient_adds_proficiency():
     # Proficient save adds proficiency_bonus; a plain check on the same ability never does.
     c = Character(name="Aldric", ability_modifiers={"wis": 1}, proficiency_bonus=2,
@@ -1004,8 +880,6 @@ def test_saving_throw_proficient_adds_proficiency():
     assert check["total"] == 11 and check["success"] is False
 
 
-
-
 def test_saving_throw_not_proficient_no_bonus():
     c = Character(name="Aldric", ability_modifiers={"con": 2}, proficiency_bonus=3,
                   save_proficiencies=["wis"])  # proficient in wis, NOT con
@@ -1016,16 +890,12 @@ def test_saving_throw_not_proficient_no_bonus():
     assert res["total"] == 9 and res["success"] is False
 
 
-
-
 def test_saving_throw_missing_ability_defaults_to_zero():
     c = Character(name="Hero", ability_modifiers={})
     rules.force_rolls([12])
     res = rules.saving_throw(c, "int", dc=10)
     assert res["modifier"] == 0
     assert res["total"] == 12
-
-
 
 
 # --- inspiration: a single DM-awarded reroll -------------------------------
@@ -1039,16 +909,12 @@ def test_award_inspiration_grants_one():
     assert c.inspiration_used is False
 
 
-
-
 def test_award_inspiration_refused_at_cap():
     c = Character(name="Aldric", inspiration=1)
     res = rules.award_inspiration(c)
     assert res["ok"] is False
     assert res["reason"] == "at_cap"
     assert c.inspiration == 1  # unchanged
-
-
 
 
 def test_award_inspiration_refused_after_use():
@@ -1058,8 +924,6 @@ def test_award_inspiration_refused_after_use():
     assert res["ok"] is False
     assert res["reason"] == "already_used"
     assert c.inspiration == 0
-
-
 
 
 def test_skill_check_inspiration_keeps_higher_and_spends():
@@ -1073,8 +937,6 @@ def test_skill_check_inspiration_keeps_higher_and_spends():
     assert c.inspiration_used is True  # lifetime-locked
 
 
-
-
 def test_saving_throw_inspiration_keeps_higher_and_spends():
     c = Character(name="Aldric", ability_modifiers={"con": 0}, inspiration=1)
     rules.force_rolls([18, 4])  # keep 18
@@ -1082,8 +944,6 @@ def test_saving_throw_inspiration_keeps_higher_and_spends():
     assert res["roll"] == 18
     assert res["inspiration_used"] is True
     assert c.inspiration == 0 and c.inspiration_used is True
-
-
 
 
 def test_use_inspiration_with_none_held_rolls_normally():
@@ -1094,8 +954,6 @@ def test_use_inspiration_with_none_held_rolls_normally():
     assert res["inspiration_used"] is False
     assert res["inspiration_reason"] == "no_inspiration"
     assert c.inspiration_used is False  # nothing was spent or locked
-
-
 
 
 def test_check_and_save_without_flag_unchanged():
@@ -1109,8 +967,6 @@ def test_check_and_save_without_flag_unchanged():
     assert sav["roll"] == 20 and "inspiration_used" not in sav
 
 
-
-
 def test_saving_throw_npc_has_no_proficiency():
     # NPC lacks proficiency_bonus / save_proficiencies — just d20 + ability mod.
     npc = NPC(name="Snik", ability_modifiers={"dex": 1})
@@ -1119,8 +975,6 @@ def test_saving_throw_npc_has_no_proficiency():
     assert res["proficient"] is False
     assert res["modifier"] == 1
     assert res["total"] == 15
-
-
 
 
 def test_saving_throw_dispatch_is_not_turn_guarded():
@@ -1143,610 +997,16 @@ def test_saving_throw_dispatch_is_not_turn_guarded():
     assert "not" in guarded["error"].lower() and "turn" in guarded["error"].lower()
 
 
-
-
 def test_saving_throw_dispatch_unknown_character():
     gs = _make_combat_state()
     res = tools.dispatch("saving_throw", {"character": "Nobody", "ability": "dex", "dc": 10}, gs)
     assert res["ok"] is False
 
 
-
-
 # --- hazards & traps (author-placed, engine-owned numbers) -------------------
-
-def _hazard_gs(hazards: dict) -> GameState:
-    gs = GameState(location="Hall", current_scene="hall")
-    gs.scenes = {"hall": {"location": "Hall", "exits": {}, "hazards": hazards}}
-    gs.party["kael"] = Character(name="Kael", max_hp=20, hp=20,
-                                 ability_modifiers={"dex": 3}, proficiency_bonus=2,
-                                 save_proficiencies=["dex"])
-    gs.party["wisp"] = Character(name="Wisp", max_hp=16, hp=16,
-                                 ability_modifiers={"dex": 0}, proficiency_bonus=2)
-    return gs
-
-
-
-
-def test_trigger_hazard_failed_save_takes_full_damage():
-    gs = _hazard_gs({"dart_trap": {"name": "dart trap", "ability": "dex", "dc": 13, "damage": "2d6"}})
-    rules.force_rolls([4, 4, 2])  # damage 2d6=8; Kael save d20=2 (+5=7) -> fail
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "dart_trap", "characters": ["Kael"]}, gs)
-    assert res["ok"] is True and res["dc"] == 13 and res["ability"] == "dex"
-    r = res["results"][0]
-    assert r["success"] is False and r["damage"] == 8
-    assert gs.party["kael"].hp == 12
-
-
-
-
-def test_trigger_hazard_successful_save_no_damage_by_default():
-    gs = _hazard_gs({"dart_trap": {"name": "dart trap", "ability": "dex", "dc": 13, "damage": "2d6"}})
-    rules.force_rolls([6, 6, 20])  # damage 12; Kael save nat 20 -> success; on_success defaults "none"
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "dart_trap", "characters": ["Kael"]}, gs)
-    assert res["results"][0]["success"] is True and res["results"][0]["damage"] == 0
-    assert gs.party["kael"].hp == 20
-
-
-
-
-def test_trigger_hazard_save_for_half():
-    gs = _hazard_gs({"gas": {"name": "gas", "ability": "dex", "dc": 25, "damage": "2d6", "on_success": "half"}})
-    rules.force_rolls([5, 5, 20])  # damage 10; Wisp dex+0 nat 20 = 20 < 25 -> FAIL -> full
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "gas", "characters": ["Wisp"]}, gs)
-    assert res["results"][0]["success"] is False and res["results"][0]["damage"] == 10
-    # Now a success → half of the same-size roll.
-    gs.party["wisp"].hp = 16
-    rules.force_rolls([6, 6, 20])  # damage 12; give Kael (dex+5) a save vs low... use dc small
-    gs2 = _hazard_gs({"gas": {"name": "gas", "ability": "dex", "dc": 5, "damage": "2d6", "on_success": "half"}})
-    rules.force_rolls([6, 6, 10])  # damage 12; Kael d20=10 (+5=15) >= 5 -> success -> half=6
-    res2 = tools.dispatch("trigger_hazard", {"hazard_id": "gas", "characters": ["Kael"]}, gs2)
-    assert res2["results"][0]["success"] is True and res2["results"][0]["damage"] == 6
-
-
-
-
-def test_trigger_hazard_area_one_roll_shared():
-    gs = _hazard_gs({"blast": {"name": "blast", "ability": "dex", "dc": 13, "damage": "2d6"}})
-    # damage rolled ONCE (8); then saves in target order: Kael fail, Wisp fail.
-    rules.force_rolls([4, 4, 2, 3])
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "blast"}, gs)  # omit characters -> all conscious party
-    dmgs = {r["character"]: r["damage"] for r in res["results"]}
-    assert dmgs == {"Kael": 8, "Wisp": 8}  # same single roll applied to both failers
-    assert res["damage_roll"] == 8
-
-
-
-
-def test_trigger_hazard_once_then_already_sprung():
-    gs = _hazard_gs({"dart_trap": {"name": "dart trap", "ability": "dex", "dc": 13, "damage": "1d6", "once": True}})
-    rules.force_rolls([3, 5])
-    first = tools.dispatch("trigger_hazard", {"hazard_id": "dart_trap", "characters": ["Kael"]}, gs)
-    assert first["ok"] is True
-    assert gs.sprung_hazards == ["hall:dart_trap"]
-    again = tools.dispatch("trigger_hazard", {"hazard_id": "dart_trap", "characters": ["Kael"]}, gs)
-    assert again["ok"] is False and again["reason"] == "already_sprung"
-
-
-
-
-def test_trigger_hazard_once_false_repeats():
-    gs = _hazard_gs({"lava": {"name": "lava", "ability": "dex", "dc": 13, "damage": "1d6", "once": False}})
-    rules.force_rolls([3, 5])
-    assert tools.dispatch("trigger_hazard", {"hazard_id": "lava", "characters": ["Kael"]}, gs)["ok"] is True
-    rules.force_rolls([3, 5])
-    assert tools.dispatch("trigger_hazard", {"hazard_id": "lava", "characters": ["Kael"]}, gs)["ok"] is True
-    assert gs.sprung_hazards == []  # non-one-shot hazards are not tracked
-
-
-
-
-def test_trigger_hazard_requires_flag_gate():
-    gs = _hazard_gs({"rune": {"name": "rune", "ability": "wis", "dc": 10, "damage": "1d6", "requires": "rune_armed"}})
-    locked = tools.dispatch("trigger_hazard", {"hazard_id": "rune", "characters": ["Kael"]}, gs)
-    assert locked["ok"] is False and locked["reason"] == "locked"
-    # Hidden from the snapshot until armed.
-    assert tools._available_hazards(gs.scenes["hall"], gs.quest_flags, set(), "hall") == []
-    gs.quest_flags["rune_armed"] = True
-    rules.force_rolls([3, 12])
-    assert tools.dispatch("trigger_hazard", {"hazard_id": "rune", "characters": ["Kael"]}, gs)["ok"] is True
-
-
-
-
-def test_trigger_hazard_undeclared_rejected():
-    gs = _hazard_gs({"dart_trap": {"name": "dart trap", "ability": "dex", "dc": 13, "damage": "1d6"}})
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "fireball_trap", "characters": ["Kael"]}, gs)
-    assert res["ok"] is False and res["reason"] == "not_declared"
-
-
-
-
-def test_trigger_hazard_can_down_a_pc():
-    gs = _hazard_gs({"spikes": {"name": "spikes", "ability": "dex", "dc": 30, "damage": "4d6"}})
-    rules.force_rolls([6, 6, 6, 6, 1])  # 24 damage; Wisp save fails
-    res = tools.dispatch("trigger_hazard", {"hazard_id": "spikes", "characters": ["Wisp"]}, gs)
-    assert res["results"][0]["downed"] is True
-    assert gs.party["wisp"].hp == 0 and "unconscious" in gs.party["wisp"].conditions
-
-
-
-
-def test_available_hazards_omits_sprung_and_gated():
-    scene = {"hazards": {
-        "a": {"name": "A", "ability": "dex", "dc": 10, "damage": "1d6"},
-        "b": {"name": "B", "ability": "dex", "dc": 10, "damage": "1d6", "requires": "armed_b"},
-    }}
-    avail = tools._available_hazards(scene, {}, set(), "hall")
-    assert [h["id"] for h in avail] == ["a"]  # b is gated/hidden
-    avail2 = tools._available_hazards(scene, {}, {"hall:a"}, "hall")
-    assert avail2 == []  # a is sprung
-
-
 
 
 # --- add_npc dispatch tests ---------------------------------------------------
-
-def _gs_with_manifest(manifest: dict, location: str = "Test") -> GameState:
-    """GameState whose current scene declares a reinforcements manifest.
-
-    add_npc may only spawn instance_ids present in this manifest, mirroring the
-    way move_scene gates on declared exits and take_item gates on the loot list.
-    """
-    gs = GameState(location=location)
-    gs.current_scene = "here"
-    gs.scenes = {"here": {"location": location, "reinforcements": manifest}}
-    return gs
-
-
-
-
-def test_add_npc_undeclared_rejected():
-    """Spawning an instance_id not in the scene's reinforcements manifest is refused —
-    the model cannot conjure a monster the author did not place."""
-    gs = _gs_with_manifest({"goblin_two": {"template": "goblin"}})
-    res = tools.dispatch("add_npc", {"instance_id": "dragon_one"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "not_declared"
-    assert "goblin_two" in res["error"]  # available ids surfaced
-    assert gs.npcs == {}
-
-
-
-
-def test_add_npc_no_manifest_rejects_everything():
-    """A scene with no reinforcements manifest can spawn nothing at all."""
-    gs = GameState(location="Test")  # no scenes, no manifest
-    res = tools.dispatch("add_npc", {"instance_id": "goblin_two"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "not_declared"
-    assert "none" in res["error"]
-    assert gs.npcs == {}
-
-
-
-
-def test_add_npc_bad_manifest_template_rejected():
-    """A manifest entry naming an unknown template is an authoring error → bad_manifest,
-    and no actor is created."""
-    gs = _gs_with_manifest({"wyrm": {"template": "dragon"}})
-    res = tools.dispatch("add_npc", {"instance_id": "wyrm"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "bad_manifest"
-    assert gs.npcs == {}
-
-
-
-
-def test_add_npc_empty_instance_id_rejected():
-    """An empty or whitespace-only instance_id is refused before the manifest check —
-    the roster can never get a blank-string key."""
-    gs = _gs_with_manifest({"goblin_two": {"template": "goblin"}})
-    res = tools.dispatch("add_npc", {"instance_id": ""}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "missing_instance_id"
-    assert gs.npcs == {}
-
-    res = tools.dispatch("add_npc", {"instance_id": "   "}, gs)
-    assert res["ok"] is False
-    assert gs.npcs == {}
-
-
-
-
-def test_add_npc_duplicate_spawn_rejected():
-    """A reinforcement spawns once — a second add of the same key is refused so it
-    cannot be farmed; the original NPC is untouched."""
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}})
-    tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_spawned"
-    assert gs.npcs["grix"].name == "Goblin"  # original untouched
-
-
-
-
-def test_add_npc_collision_with_party_key_rejected():
-    """A manifest id that collides with an existing party key is refused."""
-    gs = _gs_with_manifest({"aldric": {"template": "goblin"}})
-    gs.party["aldric"] = Character(name="Aldric")
-    res = tools.dispatch("add_npc", {"instance_id": "aldric"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_spawned"
-
-
-
-
-def test_add_npc_stats_and_overrides_from_manifest():
-    """Stats and name come from the manifest entry — the model supplies only the id."""
-    gs = _gs_with_manifest({"grix": {"template": "goblin", "name": "Grix"}})
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    assert res["ok"] is True
-    assert res["combat"] is False
-    npc = gs.npcs["grix"]
-    assert npc.name == "Grix"
-    assert npc.max_hp == 12
-    assert npc.hp == 12       # full HP on spawn
-    assert npc.ac == 13
-    assert "shortsword" in npc.inventory
-    assert "shortbow" in npc.inventory
-
-
-
-
-def test_add_npc_manifest_honors_disposition_and_alertness():
-    """Manifest entries expand exactly like scene NPCs, so authored disposition_dc /
-    alertness_dc overrides flow through to the spawned reinforcement."""
-    gs = _gs_with_manifest({"grix": {"template": "goblin", "disposition_dc": 14, "alertness_dc": 12}})
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    assert res["ok"] is True
-    assert gs.npcs["grix"].disposition_dc == 14
-    assert gs.npcs["grix"].alertness_dc == 12
-
-
-
-
-def test_add_npc_locked_until_trigger_flag_set():
-    """A reinforcement with a `requires` flag cannot be spawned until that flag is
-    set; once it is, the same call succeeds."""
-    gs = _gs_with_manifest({"wave_two": {"template": "orc", "requires": "alarm_raised"}})
-
-    res = tools.dispatch("add_npc", {"instance_id": "wave_two"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "locked"
-    assert res["required_flag"] == "alarm_raised"
-    assert gs.npcs == {}
-
-    gs.quest_flags["alarm_raised"] = True
-    res = tools.dispatch("add_npc", {"instance_id": "wave_two"}, gs)
-    assert res["ok"] is True
-    assert "wave_two" in gs.npcs
-    assert gs.npcs["wave_two"].max_hp == 15  # orc stats, requires stripped cleanly
-
-
-
-
-def test_available_reinforcements_hides_locked_ids():
-    """The surfaced id list omits triggered reinforcements until their flag is set,
-    and always includes ungated ones."""
-    scene = {
-        "reinforcements": {
-            "open_one": {"template": "goblin"},
-            "gated_one": {"template": "orc", "requires": "alarm_raised"},
-        }
-    }
-    assert tools._available_reinforcements(scene, {}) == ["open_one"]
-    assert tools._available_reinforcements(scene, {"alarm_raised": True}) == ["open_one", "gated_one"]
-
-
-
-
-def test_get_state_surfaces_only_gate_open_reinforcements():
-    """get_state exposes ungated reinforcement ids but hides locked ones until the
-    authored trigger fires."""
-    gs = _gs_with_manifest({
-        "open_one": {"template": "goblin"},
-        "gated_one": {"template": "orc", "requires": "alarm_raised"},
-    })
-    res = tools.dispatch("get_state", {}, gs)
-    assert res["state"]["reinforcements"] == ["open_one"]
-
-    gs.quest_flags["alarm_raised"] = True
-    res = tools.dispatch("get_state", {}, gs)
-    assert res["state"]["reinforcements"] == ["open_one", "gated_one"]
-
-
-
-
-def test_add_npc_not_in_combat_no_order_change():
-    gs = _gs_with_manifest({"ugor": {"template": "orc"}})
-    res = tools.dispatch("add_npc", {"instance_id": "ugor"}, gs)
-    assert res["ok"] is True
-    assert gs.combat_order == []
-    assert gs.combat_round == 0
-    assert "ugor" in gs.npcs
-
-
-
-
-def test_add_npc_serializes_through_save_load():
-    gs = _gs_with_manifest({"ugor": {"template": "orc"}})
-    tools.dispatch("add_npc", {"instance_id": "ugor"}, gs)
-    restored = GameState.from_dict(gs.to_dict())
-    assert "ugor" in restored.npcs
-    assert restored.npcs["ugor"].max_hp == 15       # orc stat block
-    assert restored.npcs["ugor"].hp == 15
-    assert "greataxe" in restored.npcs["ugor"].inventory
-
-
-
-
-def test_add_npc_in_combat_npc_enters_order_and_pointer_stable():
-    """Adding an NPC during combat must insert it into combat_order and leave
-    the active combatant (by key) unchanged."""
-    rules.seed(0)
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 0})
-    tools.dispatch("start_combat", {"combatants": ["aldric", "snik"]}, gs)
-    active_before = gs.combat_order[gs.combat_index]
-
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-
-    assert res["ok"] is True
-    assert res["combat"] is True
-    assert "grix" in gs.combat_order
-    assert len(gs.combat_order) == 3
-    assert gs.combat_order[gs.combat_index] == active_before  # pointer stable
-
-
-
-
-def test_add_npc_in_combat_initiative_stored():
-    """The new NPC's initiative total is stored in combat_initiatives."""
-    rules.seed(0)
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
-
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-
-    assert res["ok"] is True
-    assert "grix" in gs.combat_initiatives
-    assert gs.combat_initiatives["grix"] == res["initiative"]
-
-
-
-
-def test_add_npc_in_combat_order_is_sorted_by_initiative():
-    """After insertion the combat_order must be non-increasing by stored initiative."""
-    rules.seed(0)
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    gs.party["wisp"] = Character(name="Wisp", ability_modifiers={"dex": 0})
-    tools.dispatch("start_combat", {"combatants": ["aldric", "wisp"]}, gs)
-
-    tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-
-    order = gs.combat_order
-    for i in range(len(order) - 1):
-        assert gs.combat_initiatives.get(order[i], 0) >= gs.combat_initiatives.get(order[i + 1], 0)
-
-
-
-
-def test_add_npc_in_combat_before_active_shifts_pointer():
-    """If the NPC is inserted before the active slot, combat_index increments so
-    the same combatant remains active."""
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    gs.npcs["snik"] = NPC(name="Snik", ability_modifiers={"dex": 0})
-    # Manually craft known combat state: aldric first, snik second; pointer on snik.
-    gs.combat_order = ["aldric", "snik"]
-    gs.combat_index = 1          # pointer on snik
-    gs.combat_round = 1
-    # Set combat_initiatives["aldric"]=1 so any goblin roll beats it and slots first.
-    gs.combat_initiatives = {"aldric": 1, "snik": 0}
-
-    rules.seed(0)  # just need any roll > 1; verify pointer shifts
-    res = tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    assert res["ok"] is True
-    grix_pos = gs.combat_order.index("grix")
-    if grix_pos <= 1:   # inserted at or before old combat_index (1)
-        assert gs.combat_order[gs.combat_index] == "snik"   # pointer followed
-    else:               # inserted after → pointer unchanged at 1
-        assert gs.combat_index == 1
-
-
-
-
-def test_add_npc_in_combat_cleared_by_end_combat():
-    """end_combat must clear combat_initiatives so no stale entries remain."""
-    rules.seed(0)
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
-    tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    assert gs.combat_initiatives != {}
-
-    tools.dispatch("end_combat", {}, gs)
-    assert gs.combat_initiatives == {}
-
-
-
-
-def test_from_dict_expands_template_npc():
-    """NPC entries with a 'template' key are expanded via spawn_npc at load time."""
-    d = {
-        "location": "Test",
-        "npcs": {"snik": {"template": "goblin", "name": "Snik", "hostile": True}},
-    }
-    gs = GameState.from_dict(d)
-    npc = gs.npcs["snik"]
-    assert npc.name == "Snik"
-    assert npc.max_hp == 12
-    assert npc.hp == 12
-    assert npc.ac == 13
-    assert npc.hostile is True
-    assert "shortsword" in npc.inventory
-
-
-
-
-def test_scenario2_loads_correctly():
-    """two_scene_loot_quest_item.json (multi-scene format) populates state from current_scene."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    # current_scene is barrow_entrance → snik should be in the live roster
-    assert "snik" in gs.npcs
-    npc = gs.npcs["snik"]
-    assert npc.name == "Snik"
-    assert npc.max_hp == 12
-    assert npc.hp == 12
-    assert npc.ac == 13
-    assert "shortsword" in npc.inventory
-    # Party is top-level and must load too
-    assert "aldric" in gs.party
-    assert "wisp" in gs.party
-    # scenes dict is preserved for future transitions
-    assert "ember_chamber" in gs.scenes
-    assert gs.current_scene == "barrow_entrance"
-
-
-
-
-def test_multi_scene_load_location_and_scene_text():
-    """location and scene text are pulled from the active scene on fresh load."""
-    d = {
-        "current_scene": "ember_chamber",
-        "scenes": {
-            "ember_chamber": {
-                "location": "The Ember Chamber",
-                "scene": "Braziers burn with sourceless flame.",
-                "npcs": {},
-            }
-        },
-        "party": {},
-    }
-    gs = GameState.from_dict(d)
-    assert gs.location == "The Ember Chamber"
-    assert gs.scene == "Braziers burn with sourceless flame."
-
-
-
-
-def test_move_scene_replaces_npcs_and_updates_location():
-    """move_scene with a scene_key replaces the NPC roster and updates location/scene."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    assert "snik" in gs.npcs
-
-    res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
-
-    assert res["ok"] is True
-    assert res["scene_key"] == "ember_chamber"
-    assert gs.current_scene == "ember_chamber"
-    assert gs.location == "The Ashen Barrow — The Ember Chamber"
-    # Old NPC gone; new scene's NPCs present
-    assert "snik" not in gs.npcs
-    assert "grik" in gs.npcs
-    assert "narl" in gs.npcs
-
-
-
-
-def test_move_scene_npc_stats_and_overrides():
-    """move_scene expands template NPCs and applies per-entry overrides (e.g. max_hp)."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
-
-    grik = gs.npcs["grik"]
-    assert grik.name == "Grik"
-    assert grik.max_hp == 18   # overridden from goblin template's 12
-    assert grik.hp == 18       # starts at full overridden HP
-    assert grik.ac == 13       # template value unchanged
-
-    narl = gs.npcs["narl"]
-    assert narl.name == "Narl"
-    assert narl.max_hp == 12   # standard goblin
-
-
-
-
-def test_move_scene_party_untouched():
-    """Scene transitions must never modify the party."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    gs.party["aldric"].hp = 10   # simulate damage
-
-    tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
-
-    assert gs.party["aldric"].hp == 10   # unchanged
-    assert "aldric" in gs.party
-    assert "wisp" in gs.party
-
-
-
-
-def test_move_scene_unknown_key_rejected():
-    """move_scene with an unknown scene_key returns ok=False."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    original_location = gs.location
-
-    res = tools.dispatch("move_scene", {"scene_key": "nowhere"}, gs)
-
-    assert res["ok"] is False
-    assert "nowhere" in res["error"]
-    assert gs.location == original_location   # state unchanged
-
-
-
-
-def test_move_scene_missing_scene_key_rejected():
-    """move_scene without scene_key when scenes are defined returns ok=False."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-
-    res = tools.dispatch("move_scene", {"location": "Somewhere"}, gs)
-
-    assert res["ok"] is False
-
-
-
-
-def test_move_scene_free_form_without_scenes():
-    """move_scene still accepts location/scene strings when no scenes dict is defined."""
-    gs = GameState(location="Start")
-    res = tools.dispatch("move_scene", {"location": "The Forest", "scene": "Tall oaks."}, gs)
-    assert res["ok"] is True
-    assert gs.location == "The Forest"
-    assert gs.scene == "Tall oaks."
-
-
-
-
-def test_add_npc_combat_initiatives_round_trips_through_json():
-    """combat_initiatives is preserved across save/load."""
-    rules.seed(0)
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}}, location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", ability_modifiers={"dex": 0})
-    tools.dispatch("start_combat", {"combatants": ["aldric"]}, gs)
-    tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-
-    restored = GameState.from_dict(gs.to_dict())
-    assert restored.combat_initiatives == gs.combat_initiatives
-    assert "grix" in restored.combat_initiatives
-
-
 
 
 # --- start_combat / add_npc identifier resolution ---------------------------
@@ -1760,8 +1020,6 @@ def _make_named_state():
     return gs
 
 
-
-
 def test_start_combat_accepts_display_names():
     """start_combat(['Aldric','Wisp','Grik']) resolves to canonical lowercase keys."""
     rules.seed(42)
@@ -1769,8 +1027,6 @@ def test_start_combat_accepts_display_names():
     res = tools.dispatch("start_combat", {"combatants": ["Aldric", "Wisp", "Grik"]}, gs)
     assert res["ok"] is True
     assert set(res["combat_order"]) == {"aldric", "wisp", "grik"}
-
-
 
 
 def test_start_combat_display_names_and_keys_produce_same_order():
@@ -1789,16 +1045,12 @@ def test_start_combat_display_names_and_keys_produce_same_order():
     assert res1["combat_order"] == res2["combat_order"]
 
 
-
-
 def test_start_combat_rejects_unknown_identifier():
     """An identifier that matches neither a key nor a display name returns ok=False."""
     gs = _make_named_state()
     res = tools.dispatch("start_combat", {"combatants": ["aldric", "nobody"]}, gs)
     assert res["ok"] is False
     assert "nobody" in res["error"]
-
-
 
 
 def test_start_combat_mixed_case_keys_accepted():
@@ -1808,34 +1060,6 @@ def test_start_combat_mixed_case_keys_accepted():
     res = tools.dispatch("start_combat", {"combatants": ["ALDRIC", "wiSP"]}, gs)
     assert res["ok"] is True
     assert set(res["combat_order"]) == {"aldric", "wisp"}
-
-
-
-
-def test_add_npc_duplicate_check_is_case_insensitive():
-    """instance_id 'Grix' is rejected when 'grix' already exists as an NPC key.
-
-    The manifest declares both casings so the rejection is the duplicate guard,
-    not the manifest gate."""
-    gs = _gs_with_manifest({"grix": {"template": "goblin"}, "Grix": {"template": "orc"}})
-    tools.dispatch("add_npc", {"instance_id": "grix"}, gs)
-    res = tools.dispatch("add_npc", {"instance_id": "Grix"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_spawned"
-    assert gs.npcs["grix"].name == "Goblin"  # original untouched
-
-
-
-
-def test_add_npc_duplicate_check_rejects_party_key_case_insensitive():
-    """instance_id 'Aldric' is rejected when party key 'aldric' already exists."""
-    gs = _gs_with_manifest({"Aldric": {"template": "goblin"}})
-    gs.party["aldric"] = Character(name="Aldric")
-    res = tools.dispatch("add_npc", {"instance_id": "Aldric"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_spawned"
-
-
 
 
 # --- roll extremes: crit, fumble, auto-hit -----------------------------------
@@ -1864,8 +1088,6 @@ def test_weapon_crit_doubles_dice_not_modifier():
     assert 30 - dfn.hp == res["damage"]  # applied == rolled
 
 
-
-
 def test_weapon_nat1_auto_miss():
     """Nat 1 misses unconditionally, even against AC 1. Defender HP unchanged."""
     from unittest.mock import patch
@@ -1883,8 +1105,6 @@ def test_weapon_nat1_auto_miss():
     assert res["hit"] is False
     assert res["critical"] is False
     assert dfn.hp == 20  # untouched
-
-
 
 
 def test_spell_attack_crit_doubles_dice():
@@ -1912,8 +1132,6 @@ def test_spell_attack_crit_doubles_dice():
     assert res["slots_remaining"] == 0
 
 
-
-
 def test_spell_attack_nat1_auto_miss():
     """Nat 1 on guiding_bolt misses even against AC 1; slot consumed, no damage applied."""
     from unittest.mock import patch
@@ -1938,8 +1156,6 @@ def test_spell_attack_nat1_auto_miss():
     assert res["slots_remaining"] == 0  # slot consumed despite miss
 
 
-
-
 def test_auto_hit_ignores_ac():
     """magic_missile (auto_hit) hits AC 99 and applies damage — no to-hit roll needed."""
     from unittest.mock import patch
@@ -1956,8 +1172,6 @@ def test_auto_hit_ignores_ac():
     assert res["damage"] == 2 + 3 + 4 + 3  # 3d4+3 = 12
     assert 30 - target.hp == res["damage"]
     assert res["slots_remaining"] == 0
-
-
 
 
 # --- spell scaling -----------------------------------------------------------
@@ -1988,8 +1202,6 @@ def test_magic_missile_upcast_uses_higher_by_slot():
     assert hp_before - target.hp == res3["damage"]
 
 
-
-
 @pytest.mark.parametrize("level,expected_proficiency", [
     (1, 2), (4, 2), (5, 3), (8, 3), (9, 4), (13, 5), (17, 6),
 ])
@@ -2017,8 +1229,6 @@ def test_spell_attack_bonus_proficiency_by_level(level, expected_proficiency):
     assert res["to_hit_bonus"] != 99    # attack_bonus sentinel was not used
 
 
-
-
 # --- NPC default-weapon behavior ---------------------------------------------
 
 def test_npc_no_weapon_uses_equipped_weapon():
@@ -2033,8 +1243,6 @@ def test_npc_no_weapon_uses_equipped_weapon():
     assert res["damage_type"] == "piercing"
 
 
-
-
 def test_npc_bogus_weapon_ignored_uses_equipped():
     """NPC attack with weapon='scimitar' (absent from WEAPONS and from inventory):
     the model's guess is silently ignored; engine falls back to shortsword."""
@@ -2044,8 +1252,6 @@ def test_npc_bogus_weapon_ignored_uses_equipped():
     res = rules.attack(npc, target, weapon="scimitar")
     assert res["ok"] is True
     assert res["weapon"] == "shortsword"
-
-
 
 
 def test_pc_no_weapon_keeps_unarmed_fallback():
@@ -2060,8 +1266,6 @@ def test_pc_no_weapon_keeps_unarmed_fallback():
     assert res["to_hit_bonus"] == 5
     if res["hit"]:
         assert res["damage_detail"].startswith("1d6")
-
-
 
 
 # --- apply_dice: atomic roll-and-apply tool ----------------------------------
@@ -2087,8 +1291,6 @@ def test_apply_dice_damage_rolls_and_applies_same():
     assert res["downed"] is False
 
 
-
-
 def test_apply_dice_healing_clamps_at_max():
     """Healing is clamped at max_hp; the full rolled total is still reported."""
     from unittest.mock import patch
@@ -2102,8 +1304,6 @@ def test_apply_dice_healing_clamps_at_max():
     assert res["ok"] is True
     assert res["roll"] == 10            # full roll reported, not the 7-point delta
     assert gs.party["hero"].hp == 10   # clamped at max_hp, not 3+10=13
-
-
 
 
 def test_apply_dice_damage_overkill_floors_at_zero():
@@ -2121,8 +1321,6 @@ def test_apply_dice_damage_overkill_floors_at_zero():
     assert res["downed"] is True
 
 
-
-
 def test_apply_dice_bad_notation_rejected():
     """Invalid dice notation returns ok=False; target HP is unchanged."""
     gs = GameState(location="Test")
@@ -2132,15 +1330,11 @@ def test_apply_dice_bad_notation_rejected():
     assert gs.party["hero"].hp == 20
 
 
-
-
 def test_apply_dice_unknown_target_rejected():
     """Unknown target name returns ok=False with no state change."""
     gs = GameState(location="Test")
     res = tools.dispatch("apply_dice", {"target": "Nobody", "notation": "1d6"}, gs)
     assert res["ok"] is False
-
-
 
 
 def test_modify_hp_fixed_still_works():
@@ -2155,8 +1349,6 @@ def test_modify_hp_fixed_still_works():
     res = tools.dispatch("modify_hp", {"target": "Hero", "amount": 3}, gs)
     assert res["ok"] is True
     assert gs.party["hero"].hp == 18
-
-
 
 
 def test_modify_hp_rejects_excessive_amount():
@@ -2183,8 +1375,6 @@ def test_modify_hp_rejects_excessive_amount():
     assert gs.party["hero"].hp == 5
 
 
-
-
 def test_modify_hp_allows_amount_up_to_max_hp():
     """A flat amount whose magnitude equals max HP is the boundary and is allowed
     (e.g. an exactly-lethal hazard), so the bound rejects only what exceeds it."""
@@ -2194,8 +1384,6 @@ def test_modify_hp_allows_amount_up_to_max_hp():
     res = tools.dispatch("modify_hp", {"target": "Hero", "amount": -20}, gs)
     assert res["ok"] is True
     assert gs.party["hero"].hp == 0
-
-
 
 
 def test_roll_dice_applies_nothing():
@@ -2216,8 +1404,6 @@ def test_roll_dice_applies_nothing():
     assert gs.party["hero"].spell_slots == {1: 2}
     assert gs.party["hero"].conditions == ["prone"]
     assert gs.npcs["goblin"].hp == 12
-
-
 
 
 # --- offensive target auto-resolution ----------------------------------------
@@ -2242,8 +1428,6 @@ def test_spell_auto_targets_sole_enemy():
     assert gs.party["wisp"].spell_slots[1] == slots_before - 1   # slot consumed
     assert gs.npcs["snik"].hp < snik_hp_before                    # damage applied
     assert snik_hp_before - gs.npcs["snik"].hp == res["damage"]   # rolled == applied
-
-
 
 
 def test_spell_ambiguous_target_asks():
@@ -2277,8 +1461,6 @@ def test_spell_ambiguous_target_asks():
     assert gs.action_used is False                           # turn stays alive
 
 
-
-
 def test_spell_explicit_target_with_multiple_enemies():
     """Two living hostiles, explicit target Grik → Grik takes damage, Narl untouched."""
     rules.seed(7)
@@ -2300,8 +1482,6 @@ def test_spell_explicit_target_with_multiple_enemies():
     assert gs.npcs["grik"].hp < 30         # Grik takes damage
 
 
-
-
 def test_spell_no_valid_target():
     """All hostiles downed → ok=false reason no_target, slot NOT consumed."""
     gs = GameState(location="Test")
@@ -2318,8 +1498,6 @@ def test_spell_no_valid_target():
     assert res["ok"] is False
     assert res["reason"] == "no_target"
     assert gs.party["wisp"].spell_slots[1] == slots_before   # slot NOT consumed
-
-
 
 
 def test_spell_explicit_target_allows_ally():
@@ -2344,8 +1522,6 @@ def test_spell_explicit_target_allows_ally():
     assert gs.party["aldric"].hp < aldric_hp_before    # ally takes damage
 
 
-
-
 def test_attack_auto_targets_sole_enemy():
     """No defender named, one living hostile → auto-resolves, attack resolves, auto_target surfaced."""
     rules.seed(0)
@@ -2359,8 +1535,6 @@ def test_attack_auto_targets_sole_enemy():
     assert res["ok"] is True
     assert res["auto_target"] == "Snik"
     assert "hit" in res
-
-
 
 
 def test_attack_ambiguous_target_asks():
@@ -2388,156 +1562,10 @@ def test_attack_ambiguous_target_asks():
     assert gs.action_used is False          # turn stays alive
 
 
-
-
-def test_move_scene_concludes_empty_terminal_scene():
-    """3a hard gate: from a hostile-free terminal scene (empty exits), calling
-    move_scene to conclude grants victory — the engine, not the model, sets game_over."""
-    gs = GameState(location="Vault", current_scene="vault")
-    gs.scenes = {"vault": {"location": "Vault", "exits": {}}}  # terminal
-    gs.party["aldric"] = Character(name="Aldric")
-    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res["ok"] is True
-    assert res.get("adventure_complete") is True
-    assert res.get("outcome") == "victory"
-    assert gs.game_over is True and gs.game_outcome == "victory"
-
-
-
-
-def test_move_scene_conclude_refused_while_hostiles_present():
-    """The conclude path is hard-gated: it refuses while a living hostile remains, so
-    the model's soft leave/finish trigger can never end the run with foes standing."""
-    gs = GameState(location="Vault", current_scene="vault")
-    gs.scenes = {"vault": {"location": "Vault", "exits": {}}}  # terminal
-    gs.party["aldric"] = Character(name="Aldric")
-    gs.npcs["snik"] = NPC(name="Snik", hp=5, hostile=True)  # still up
-    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "hostiles_present"
-    assert gs.game_over is False
-    # A downed (or non-hostile) NPC does not block conclusion.
-    gs.npcs["snik"].hp = 0
-    res2 = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res2["ok"] is True and gs.game_over is True
-
-
-
-
 # --- game over: victory and defeat -------------------------------------------
-
-def test_move_scene_from_terminal_completes():
-    """Terminal scene + no active combat: move_scene triggers victory."""
-    gs = GameState(location="Final Chamber", current_scene="final_room")
-    gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is True
-    assert res.get("adventure_complete") is True
-    assert res.get("outcome") == "victory"
-    assert gs.game_over is True
-    assert gs.game_outcome == "victory"
-
-
-
-
-def test_move_scene_nonterminal_unchanged():
-    """Normal declared-exit transition: game_over stays False."""
-    gs = GameState(location="Start", current_scene="a")
-    gs.scenes = {
-        "a": {"location": "A", "exits": {"forward": "b"}},
-        "b": {"location": "B", "exits": {}},
-    }
-    res = tools.dispatch("move_scene", {"scene_key": "b"}, gs)
-    assert res["ok"] is True
-    assert gs.current_scene == "b"
-    assert gs.game_over is False
-
-
-
-
-def test_move_scene_terminal_in_combat_does_not_complete():
-    """Terminal scene but combat_round > 0: no victory, existing no-exits rejection."""
-    gs = GameState(location="Final Chamber", current_scene="final_room")
-    gs.scenes = {"final_room": {"location": "Final Chamber", "exits": {}}}
-    gs.combat_round = 1
-    gs.combat_order = ["aldric"]
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is False
-    assert gs.game_over is False
-
-
 
 
 # --- exits / scene topology tests -------------------------------------------
-
-def test_move_scene_follows_declared_exit():
-    """move_scene to a scene_key that is a declared exit of the current scene succeeds."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    assert gs.current_scene == "barrow_entrance"
-    res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
-    assert res["ok"] is True
-    assert gs.current_scene == "ember_chamber"
-
-
-
-
-def test_move_scene_rejects_non_exit():
-    """move_scene to a defined scene that is not in the current scene's exits is rejected."""
-    gs = GameState(location="Start", current_scene="a")
-    gs.scenes = {
-        "a": {"location": "A", "exits": {"to b": "b"}},
-        "b": {"location": "B", "exits": {}},
-        "c": {"location": "C", "exits": {}},
-    }
-    # 'c' is defined but not reachable from 'a'
-    res = tools.dispatch("move_scene", {"scene_key": "c"}, gs)
-    assert res["ok"] is False
-    assert "c" in res["error"]
-    assert gs.current_scene == "a"   # state unchanged
-
-
-
-
-def test_move_scene_terminal_has_no_exits():
-    """Terminal scene + active combat: move_scene is rejected and error mentions no exits."""
-    gs = GameState(location="Chamber", current_scene="ember_chamber")
-    gs.scenes = {
-        "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
-    }
-    gs.combat_round = 1
-    gs.combat_order = ["aldric"]
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is False
-    assert "no exits" in res["error"].lower()
-
-
-
-
-def test_state_snapshot_includes_exits():
-    """_state_snapshot includes the current scene's exits when exits are defined."""
-    import json as _json
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    gs = GameState(location="Barrow Entrance", current_scene="barrow_entrance")
-    gs.scenes = {
-        "barrow_entrance": {
-            "location": "Barrow Entrance",
-            "exits": {"the dark passage ahead": "ember_chamber"},
-        },
-        "ember_chamber": {"location": "The Ember Chamber", "exits": {}},
-    }
-    gs.party["aldric"] = Character(name="Aldric")
-
-    agent = DMAgent(gs, client=MagicMock())
-    snap = _json.loads(agent._state_snapshot())
-
-    assert "exits" in snap
-    assert snap["exits"] == {"the dark passage ahead": "ember_chamber"}
-
-
 
 
 # --- combat_starting barrier -------------------------------------------------
@@ -2560,8 +1588,6 @@ def test_start_combat_barrier_blocks_attack():
     assert res["reason"] == "combat_starting"
     assert gs.npcs["snik"].hp == hp_before   # no damage
     assert gs.action_used is False            # turn not consumed
-
-
 
 
 def test_start_combat_barrier_blocks_cast_spell():
@@ -2587,8 +1613,6 @@ def test_start_combat_barrier_blocks_cast_spell():
     assert gs.action_used is False
 
 
-
-
 def test_start_combat_resolves_no_actions():
     """start_combat rolls initiative and establishes order but must never change any
     combatant's HP and must never set action_used — it only initialises the round."""
@@ -2609,8 +1633,6 @@ def test_start_combat_resolves_no_actions():
         actor = gs.party.get(key) or gs.npcs.get(key)
         assert actor.hp == hp, f"{key} HP changed during start_combat"
     assert gs.action_used is False
-
-
 
 
 def test_action_denied_during_combat_start():
@@ -2647,170 +1669,7 @@ def test_action_denied_during_combat_start():
     assert gs.party["wisp"].spell_slots[1] == slots_before
 
 
-
-
 # --- gated exits and terminal endings -----------------------------------------
-
-def _make_gated_exits_state(flag: str | None = None) -> GameState:
-    """State with one ungated string exit and one gated dict exit."""
-    gs = GameState(
-        current_scene="hall",
-        scenes={
-            "hall": {
-                "location": "The Hall",
-                "scene": "Two doors.",
-                "exits": {
-                    "north door": "north_room",
-                    "iron door": {"to": "vault", "requires": "has_key", "denied": "The iron door is locked."},
-                },
-            },
-            "north_room": {"location": "North Room", "scene": "", "exits": {}},
-            "vault":      {"location": "The Vault",  "scene": "", "exits": {}},
-        },
-    )
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    if flag:
-        gs.quest_flags[flag] = True
-    return gs
-
-
-
-
-def _make_terminal_gated_state(flag: str | None = None) -> GameState:
-    """Terminal scene with exit_requires; no regular exits."""
-    gs = GameState(
-        current_scene="final_chamber",
-        scenes={
-            "final_chamber": {
-                "location": "Final Chamber",
-                "scene": "An iron door bars the exit.",
-                "exits": {},
-                "exit_requires": "iron_door_open",
-                "exit_denied": "The iron door is sealed.",
-            },
-        },
-    )
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    if flag:
-        gs.quest_flags[flag] = True
-    return gs
-
-
-
-
-def test_gated_exit_target_extraction_dict():
-    """_target() returns the 'to' value from a gated exit dict."""
-    from src.tools import _target
-    assert _target({"to": "vault", "requires": "has_key", "denied": "Locked."}) == "vault"
-
-
-
-
-def test_gated_exit_target_extraction_string():
-    """_target() passes a bare string through unchanged."""
-    from src.tools import _target
-    assert _target("north_room") == "north_room"
-
-
-
-
-def test_exits_for_model_strips_denied_keeps_requires():
-    """_exits_for_model removes 'denied'; string exits unchanged; 'requires' preserved."""
-    from src.tools import _exits_for_model
-    exits = {
-        "north door": "north_room",
-        "iron door": {"to": "vault", "requires": "has_key", "denied": "Locked."},
-    }
-    result = _exits_for_model(exits)
-    assert result["north door"] == "north_room"
-    assert result["iron door"] == {"to": "vault", "requires": "has_key"}
-    assert "denied" not in result["iron door"]
-
-
-
-
-def test_ungated_string_exit_backward_compat():
-    """Ungated string exits move as before after the gated-exit changes."""
-    gs = _make_gated_exits_state()
-    res = tools.dispatch("move_scene", {"scene_key": "north_room"}, gs)
-    assert res["ok"] is True
-    assert gs.current_scene == "north_room"
-
-
-
-
-def test_gated_exit_flag_absent_returns_locked():
-    """Gated exit without the flag: ok=False reason='locked', current_scene unchanged."""
-    gs = _make_gated_exits_state()  # no flag
-    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "locked"
-    assert res["required_flag"] == "has_key"
-    assert res["error"] == "The iron door is locked."
-    assert gs.current_scene == "hall"  # unchanged
-
-
-
-
-def test_gated_exit_flag_set_allows_move():
-    """Gated exit with the required flag set: move proceeds normally."""
-    gs = _make_gated_exits_state(flag="has_key")
-    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res["ok"] is True
-    assert gs.current_scene == "vault"
-
-
-
-
-def test_non_declared_exit_rejected_not_locked():
-    """A scene_key absent from all exits is rejected as undeclared, not as locked."""
-    gs = _make_gated_exits_state()
-    res = tools.dispatch("move_scene", {"scene_key": "secret_passage"}, gs)
-    assert res["ok"] is False
-    assert res.get("reason") != "locked"
-    assert gs.current_scene == "hall"
-
-
-
-
-def test_terminal_scene_no_exit_requires_fires_victory():
-    """Backward compat: terminal scene with no exit_requires grants victory on move attempt."""
-    gs = GameState(
-        current_scene="end",
-        scenes={"end": {"location": "End", "scene": "", "exits": {}}},
-    )
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is True
-    assert res.get("outcome") == "victory"
-    assert gs.game_over is True
-
-
-
-
-def test_terminal_scene_exit_requires_flag_absent_returns_locked():
-    """Terminal scene with exit_requires: flag absent -> locked, game_over stays False."""
-    gs = _make_terminal_gated_state()  # no flag
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "locked"
-    assert res["required_flag"] == "iron_door_open"
-    assert res["error"] == "The iron door is sealed."
-    assert gs.game_over is False
-
-
-
-
-def test_terminal_scene_exit_requires_flag_set_fires_victory():
-    """Terminal scene with exit_requires: flag set -> game_over True, outcome victory."""
-    gs = _make_terminal_gated_state(flag="iron_door_open")
-    res = tools.dispatch("move_scene", {"scene_key": "anywhere"}, gs)
-    assert res["ok"] is True
-    assert res.get("outcome") == "victory"
-    assert gs.game_over is True
-    assert gs.game_outcome == "victory"
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2838,8 +1697,6 @@ def test_resolve_npc_action_attacks_lowest_hp_pc():
     assert res["ok"] is True
 
 
-
-
 def test_resolve_npc_action_breaks_hp_tie_by_combat_order():
     """When two PCs share HP, the one earlier in combat_order is targeted."""
     gs = GameState()
@@ -2860,16 +1717,12 @@ def test_resolve_npc_action_breaks_hp_tie_by_combat_order():
     assert args["defender"] == "Aldric"
 
 
-
-
 def test_resolve_npc_action_returns_none_non_hostile():
     """Non-hostile NPC → None (stands aside)."""
     gs = GameState()
     gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
     gs.npcs["guard"] = NPC(name="Guard", hostile=False)
     assert tools.resolve_npc_action(gs.npcs["guard"], gs) is None
-
-
 
 
 def test_resolve_npc_action_returns_none_no_conscious_pc():
@@ -2880,8 +1733,6 @@ def test_resolve_npc_action_returns_none_no_conscious_pc():
     gs.combat_order = ["aldric", "snik"]
     gs.combat_round = 1
     assert tools.resolve_npc_action(gs.npcs["snik"], gs) is None
-
-
 
 
 def test_resolve_npc_action_returns_none_with_spells():
@@ -2895,732 +1746,20 @@ def test_resolve_npc_action_returns_none_with_spells():
     assert tools.resolve_npc_action(gs.npcs["mage"], gs) is None
 
 
-
-
 # ---------------------------------------------------------------------------
 # influence_npc
 # ---------------------------------------------------------------------------
 
-def _influence_state(*, combat: bool = False):
-    """Minimal GameState for influence_npc tests: one PC (cha +2) and one swayable NPC."""
-    gs = GameState()
-    gs.party["aldric"] = Character(
-        name="Aldric", max_hp=20, hp=20,
-        ability_modifiers={"cha": 2},
-    )
-    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True, disposition_dc=12)
-    if combat:
-        gs.combat_order = ["aldric", "snik"]
-        gs.combat_index = 0
-        gs.combat_round = 1
-        gs.action_used = False
-    return gs
-
-
-
-
-def test_influence_npc_success():
-    """cha +2, DC 12, force roll 15 -> total 17 >= 12: success, npc turns non-hostile."""
-    gs = _influence_state()
-    rules.force_rolls([15])
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is True
-    assert res["success"] is True
-    assert res["now_hostile"] is False
-    assert gs.npcs["snik"].hostile is False
-    assert gs.npcs["snik"].social_attempted is True
-
-
-
-
-def test_influence_npc_failure():
-    """cha +2, DC 12, force roll 3 -> total 5 < 12: failure, npc stays hostile."""
-    gs = _influence_state()
-    rules.force_rolls([3])
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "intimidate"}, gs)
-    assert res["ok"] is True
-    assert res["success"] is False
-    assert res["now_hostile"] is True
-    assert gs.npcs["snik"].hostile is True
-    assert gs.npcs["snik"].social_attempted is True
-
-
-
-
-def test_influence_npc_one_attempt_only():
-    """A second influence_npc on the same NPC -> ok=False 'already_attempted', no roll made.
-    Uses a failed first attempt so the NPC stays hostile (reaching already_attempted, not not_hostile).
-    combat_starting is cleared between the two calls to simulate take_turn's barrier reset."""
-    gs = _influence_state()
-    rules.force_rolls([3])  # fail: total 5 < DC 12, NPC stays hostile
-    tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert gs.npcs["snik"].social_attempted is True
-    gs.combat_starting = False  # simulate take_turn clearing the barrier before the next turn
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_attempted"
-
-
-
-
-def test_influence_npc_immovable():
-    """NPC with disposition_dc=None cannot be influenced."""
-    gs = GameState()
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"cha": 2})
-    gs.npcs["brute"] = NPC(name="Brute", hostile=True)  # disposition_dc defaults to None
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Brute", "approach": "persuade"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "immovable"
-
-
-
-
-def test_influence_npc_not_hostile():
-    """Already non-hostile NPC -> ok=False 'not_hostile'."""
-    gs = GameState()
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"cha": 2})
-    gs.npcs["snik"] = NPC(name="Snik", hostile=False, disposition_dc=10)
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "not_hostile"
-
-
-
-
-def test_influence_npc_downed_target():
-    """Downed NPC -> ok=False (target_down)."""
-    gs = GameState()
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"cha": 2})
-    gs.npcs["snik"] = NPC(name="Snik", hp=0, hostile=True, disposition_dc=10)
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is False
-
-
-
-
-def test_influence_npc_provocation():
-    """Attacking a non-hostile NPC flips it hostile."""
-    gs = GameState()
-    gs.party["aldric"] = Character(
-        name="Aldric", max_hp=20, hp=20, attack_bonus=4, inventory=["mace"],
-        ability_modifiers={"str": 3},
-    )
-    gs.npcs["snik"] = NPC(name="Snik", hp=20, max_hp=20, ac=1, hostile=False)
-    rules.force_rolls([15, 4])  # to-hit 15 (hit), damage 4
-    res = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik", "weapon": "mace"}, gs)
-    assert res["ok"] is True
-    assert res["hit"] is True
-    assert res.get("provoked") is True
-    assert gs.npcs["snik"].hostile is True
-
-
-
-
-def test_influence_npc_ends_combat():
-    """Successful influence on the last hostile NPC -> _maybe_end_combat ends the fight."""
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    gs = _influence_state(combat=True)
-    rules.force_rolls([15])
-    tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert gs.npcs["snik"].hostile is False
-
-    agent = DMAgent(gs, client=MagicMock())
-    ended = agent._maybe_end_combat()
-    assert ended is True
-    assert gs.combat_round == 0
-
-
-
-
-def test_influence_npc_action_economy_in_combat():
-    """In combat, influence_npc sets action_used; a follow-up attack on the same turn is refused."""
-    gs = _influence_state(combat=True)
-    rules.force_rolls([3])  # failed attempt; turn stays with Aldric but action is spent
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "intimidate"}, gs)
-    assert res["ok"] is True
-    assert gs.action_used is True
-
-    follow_up = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik", "weapon": "mace"}, gs)
-    assert follow_up["ok"] is False
-    assert "already acted" in follow_up["error"]
-
-
-
-
-def test_influence_npc_out_of_combat_no_turn_guard():
-    """Out of combat, influence_npc works freely without a turn guard."""
-    gs = _influence_state()  # no combat
-    rules.force_rolls([15])
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is True
-    assert gs.action_used is False
-
-
-
 
 # --- failed parley auto-starts combat ----------------------------------------
-
-def test_failed_parley_out_of_combat_starts_combat():
-    """Out of combat, failed influence_npc auto-initiates combat and returns combat info."""
-    gs = _influence_state()  # no combat
-    rules.force_rolls([3])   # cha +2, DC 12: total 5 — fail
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is True
-    assert res["success"] is False
-    assert res["combat_started"] is True
-    assert gs.combat_round == 1
-    assert gs.combat_order != []
-    assert "aldric" in gs.combat_order
-    assert "snik" in gs.combat_order
-    assert res["combat_order"] == gs.combat_order
-    assert res["active"] == gs.combat_order[0]
-    assert res["active_name"] is not None
-    assert res["round"] == 1
-
-
-
-
-def test_successful_parley_does_not_start_combat():
-    """Successful influence_npc must NOT auto-start combat."""
-    gs = _influence_state()
-    rules.force_rolls([15])   # total 17 >= 12 — success
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is True
-    assert res["success"] is True
-    assert "combat_started" not in res
-    assert gs.combat_round == 0
-
-
-
-
-def test_failed_parley_in_combat_does_not_restart():
-    """In combat, a failed parley costs the action but does not touch combat state."""
-    gs = _influence_state(combat=True)
-    round_before = gs.combat_round
-    order_before = list(gs.combat_order)
-    rules.force_rolls([3])
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "intimidate"}, gs)
-    assert res["ok"] is True
-    assert res["success"] is False
-    assert "combat_started" not in res
-    assert gs.combat_round == round_before
-    assert gs.combat_order == order_before
-
-
-
-
-def test_failed_parley_combat_includes_all_conscious_fighters():
-    """All conscious party members and all hostile living NPCs enter the auto-started combat."""
-    gs = GameState(location="Test")
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20, ability_modifiers={"cha": 0, "dex": 0})
-    gs.party["wisp"]   = Character(name="Wisp",   max_hp=20, hp=20, ability_modifiers={"cha": 0, "dex": 0})
-    gs.party["dead"]   = Character(name="Dead",   max_hp=20, hp=0,  ability_modifiers={})   # downed — excluded
-    gs.npcs["snik"] = NPC(name="Snik",  max_hp=10, hp=10, hostile=True,  disposition_dc=10)
-    gs.npcs["narl"] = NPC(name="Narl",  max_hp=10, hp=10, hostile=True)   # no disposition_dc
-    gs.npcs["ally"] = NPC(name="Ally",  max_hp=10, hp=10, hostile=False)  # non-hostile — excluded
-    rules.force_rolls([1])   # total 1 < DC 10 — fail
-    res = tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert res["ok"] is True
-    assert res["combat_started"] is True
-    order = gs.combat_order
-    assert "aldric" in order
-    assert "wisp"   in order
-    assert "snik"   in order
-    assert "narl"   in order
-    assert "dead"   not in order    # downed PC excluded
-    assert "ally"   not in order    # non-hostile NPC excluded
-
-
-
-
-def test_failed_parley_combat_starting_blocks_attack():
-    """After failed parley auto-starts combat, combat_starting=True blocks an attack
-    in the same _execute hop (same safety barrier as explicit start_combat)."""
-    gs = _influence_state()
-    gs.npcs["snik"].hp = gs.npcs["snik"].max_hp = 20  # enough HP to survive
-    rules.force_rolls([3])   # fail → auto-combat
-    tools.dispatch("influence_npc", {"character": "Aldric", "npc": "Snik", "approach": "persuade"}, gs)
-    assert gs.combat_starting is True  # barrier set
-
-    # Attack in the same hop must be refused with reason "combat_starting"
-    atk = tools.dispatch("attack", {"attacker": "Aldric", "defender": "Snik"}, gs)
-    assert atk["ok"] is False
-    assert atk["reason"] == "combat_starting"
-
-
 
 
 # ---------------------------------------------------------------------------
 # attempt_ambush — stealth surprise system
 # ---------------------------------------------------------------------------
 
-def _ambush_state(*, combat_round: int = 0, two_members: bool = True):
-    """Minimal state for ambush tests: party with two members (dex +2, +0) and
-    two hostile NPCs with alertness_dc=12 each."""
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(
-        name="Rogue", max_hp=20, hp=20,
-        ability_modifiers={"dex": 2},
-    )
-    if two_members:
-        gs.party["fighter"] = Character(
-            name="Fighter", max_hp=20, hp=20,
-            ability_modifiers={"dex": 0},
-        )
-    gs.npcs["guard1"] = NPC(name="Guard1", hostile=True, alertness_dc=12)
-    gs.npcs["guard2"] = NPC(name="Guard2", hostile=True, alertness_dc=12)
-    if combat_round > 0:
-        gs.combat_order = ["rogue", "guard1"]
-        gs.combat_index = 0
-        gs.combat_round = combat_round
-    return gs
-
-
-
-
-def test_attempt_ambush_success():
-    """Both party members beat bar 12 → success=True, pending_ambush=True, ambush_attempted=True."""
-    gs = _ambush_state()
-    rules.force_rolls([15, 14])  # Rogue: 15+2=17>=12; Fighter: 14+0=14>=12
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is True
-    assert res["success"] is True
-    assert res["bar"] == 12
-    assert gs.pending_ambush is True
-    assert gs.ambush_attempted is True
-    assert len(res["rolls"]) == 2
-    assert all(r["success"] for r in res["rolls"])
-
-
-
-
-def test_attempt_ambush_failure():
-    """One party member misses bar → success=False, pending_ambush stays False."""
-    gs = _ambush_state()
-    rules.force_rolls([15, 3])  # Rogue: 17>=12 ok; Fighter: 3+0=3 < 12 fail
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is True
-    assert res["success"] is False
-    assert gs.pending_ambush is False
-    assert gs.ambush_attempted is True
-
-
-
-
-def test_attempt_ambush_bar_is_max_alertness():
-    """With DCs 12 and 15, bar=15; roll that beats 12 but not 15 → fail."""
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ability_modifiers={"dex": 2})
-    gs.party["fighter"] = Character(name="Fighter", max_hp=20, hp=20, ability_modifiers={"dex": 0})
-    gs.npcs["guard1"] = NPC(name="Guard1", hostile=True, alertness_dc=12)
-    gs.npcs["guard2"] = NPC(name="Guard2", hostile=True, alertness_dc=15)
-    # force rolls: Rogue 13+2=15>=15 ok; Fighter 13+0=13 < 15 fail → success=False
-    rules.force_rolls([13, 13])
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is True
-    assert res["bar"] == 15
-    assert res["success"] is False
-
-
-
-
-def test_attempt_ambush_cannot_ambush_when_any_always_alert():
-    """Any hostile with alertness_dc=None → ok=False 'cannot_ambush', no rolls made,
-    and the engine auto-starts combat (the alert foe spotted the party)."""
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ability_modifiers={"dex": 2})
-    gs.npcs["guard"] = NPC(name="Guard", hostile=True, alertness_dc=12)
-    gs.npcs["sentinel"] = NPC(name="Sentinel", hostile=True, alertness_dc=None)
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "cannot_ambush"
-    # No surprise was possible, so combat starts as a fair fight.
-    assert res["combat_started"] is True
-    assert gs.combat_round == 1
-    assert gs.pending_ambush is False  # never set — nobody is surprised
-    assert all(not n.surprised for n in gs.npcs.values())
-    assert gs.ambush_attempted is True  # consumed: the attempt tipped the party's hand
-
-
-
-
-def test_attempt_ambush_no_target():
-    """No living hostiles → ok=False 'no_target'."""
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20)
-    gs.npcs["guard"] = NPC(name="Guard", hostile=True, alertness_dc=12, hp=0)  # downed
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "no_target"
-
-
-
-
-def test_attempt_ambush_in_combat_rejected():
-    """combat_round > 0 → ok=False 'in_combat'."""
-    gs = _ambush_state(combat_round=1)
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "in_combat"
-
-
-
-
-def test_attempt_ambush_one_shot_per_scene():
-    """Second attempt_ambush in same scene → ok=False 'already_attempted'."""
-    gs = _ambush_state()
-    rules.force_rolls([5, 5])  # fail first attempt
-    tools.dispatch("attempt_ambush", {}, gs)
-    assert gs.ambush_attempted is True
-    res = tools.dispatch("attempt_ambush", {}, gs)
-    assert res["ok"] is False
-    assert res["reason"] == "already_attempted"
-
-
-
-
-def test_start_combat_consumes_pending_ambush():
-    """pending_ambush=True → after start_combat each hostile NPC has surprised=True,
-    PCs do not, and pending_ambush is cleared."""
-    gs = _ambush_state()
-    gs.pending_ambush = True
-    rules.seed(0)
-    res = tools.dispatch("start_combat", {"combatants": ["rogue", "fighter", "guard1", "guard2"]}, gs)
-    assert res["ok"] is True
-    assert gs.pending_ambush is False
-    assert gs.npcs["guard1"].surprised is True
-    assert gs.npcs["guard2"].surprised is True
-    assert gs.party["rogue"].surprised is False if hasattr(gs.party["rogue"], "surprised") else True
-    assert "surprised" in res
-    assert set(res["surprised"]) == {"Guard1", "Guard2"}
-
-
-
-
-def test_start_combat_no_pending_ambush_no_surprise():
-    """No pending_ambush → NPCs are not surprised after start_combat."""
-    gs = _ambush_state()
-    rules.seed(0)
-    tools.dispatch("start_combat", {"combatants": ["rogue", "guard1"]}, gs)
-    assert gs.npcs["guard1"].surprised is False
-
-
-
-
-def test_next_turn_skips_surprised_npc_round1_clears_flag():
-    """Round 1: next_turn skips a surprised NPC and clears its flag."""
-    gs = GameState(location="Arena")
-    gs.party["rogue"] = Character(name="Rogue", ability_modifiers={"dex": 100})
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, ability_modifiers={"dex": -100})
-    gs.npcs["guard"].surprised = True
-    rules.seed(0)
-    tools.dispatch("start_combat", {"combatants": ["rogue", "guard"]}, gs)
-    gs.pending_ambush = False  # already consumed; don't set surprised twice
-    # Reset guard surprised to True manually since start_combat would clear pending_ambush
-    gs.npcs["guard"].surprised = True
-
-    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
-    # Advance from rogue (index 0) to guard (index 1, surprised) — should skip to rogue round 2
-    adv = tools.dispatch("next_turn", {}, gs)
-    assert adv["ok"] is True
-    assert adv["active"] == "rogue"
-    assert adv["round"] == 2
-    assert gs.npcs["guard"].surprised is False  # flag cleared
-    assert "guard" in adv.get("skipped_surprised", [])  # surprised, not down
-    assert "skipped_downed" not in adv  # a healthy surprised NPC must not be reported as down
-
-
-
-
-def test_next_turn_surprised_npc_acts_in_round2():
-    """After the surprise round, the NPC's flag is gone and it is no longer skipped."""
-    gs = GameState(location="Arena")
-    gs.party["rogue"] = Character(name="Rogue", ability_modifiers={"dex": 100})
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, ability_modifiers={"dex": -100})
-    rules.seed(0)
-    tools.dispatch("start_combat", {"combatants": ["rogue", "guard"]}, gs)
-    gs.npcs["guard"].surprised = True  # manually flag for this test
-
-    gs.combat_starting = False  # simulate take_turn clearing the barrier before next_turn
-    # Round 1 skip: advance → skip guard → back to rogue, round 2
-    adv1 = tools.dispatch("next_turn", {}, gs)
-    assert adv1["round"] == 2
-    assert gs.npcs["guard"].surprised is False
-
-    # Round 2: advance from rogue → guard; guard is NOT skipped now
-    adv2 = tools.dispatch("next_turn", {}, gs)
-    assert adv2["ok"] is True
-    assert adv2["active"] == "guard"
-    assert adv2["round"] == 2
-    assert "skipped_downed" not in adv2
-
-
-
-
-def test_surprised_hostile_counts_for_maybe_end_combat():
-    """A surprised (alive, hostile) NPC prevents _maybe_end_combat from ending the fight."""
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    gs = GameState(location="Arena")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ability_modifiers={"dex": 100})
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True, ability_modifiers={"dex": -100})
-    rules.seed(0)
-    tools.dispatch("start_combat", {"combatants": ["rogue", "guard"]}, gs)
-    gs.npcs["guard"].surprised = True  # manually flag
-
-    agent = DMAgent(gs, client=MagicMock())
-    ended = agent._maybe_end_combat()
-    assert ended is False
-    assert gs.combat_round == 1  # combat continues
-
-
-
-
-def test_surprised_hostile_is_valid_offensive_target():
-    """A surprised NPC is returned as an auto-target candidate."""
-    gs = GameState(location="Arena")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ability_modifiers={"dex": 100},
-                                  inventory=["dagger"], proficiency_bonus=2)
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True, ac=1, ability_modifiers={"dex": -100})
-    rules.seed(0)
-    tools.dispatch("start_combat", {"combatants": ["rogue", "guard"]}, gs)
-    gs.combat_starting = False
-    gs.npcs["guard"].surprised = True
-
-    target, err, auto = tools._resolve_offensive_target("", gs, exclude_name="Rogue")
-    assert err is None
-    assert target is not None
-    assert target.name == "Guard"
-
-
-
-
-def test_move_scene_resets_ambush_flags():
-    """Successful scene change resets pending_ambush and ambush_attempted to False."""
-    import os
-    path = os.path.join(os.path.dirname(__file__), "..", "data", "two_scene_loot_quest_item.json")
-    gs = GameState.load(path)
-    gs.pending_ambush = True
-    gs.ambush_attempted = True
-    res = tools.dispatch("move_scene", {"scene_key": "ember_chamber"}, gs)
-    assert res["ok"] is True
-    assert gs.pending_ambush is False
-    assert gs.ambush_attempted is False
-
-
-
-
-def test_move_scene_free_form_resets_ambush_flags():
-    """Free-form move_scene also resets both flags."""
-    gs = GameState(location="Start")
-    gs.pending_ambush = True
-    gs.ambush_attempted = True
-    res = tools.dispatch("move_scene", {"location": "New Room"}, gs)
-    assert res["ok"] is True
-    assert gs.pending_ambush is False
-    assert gs.ambush_attempted is False
-
-
-
-
-def test_end_combat_clears_surprised_on_surviving_npc():
-    """end_combat sets surprised=False on all NPCs, even survivors."""
-    gs = GameState(location="Arena")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20)
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True)
-    gs.npcs["guard"].surprised = True
-    gs.combat_order = ["rogue", "guard"]
-    gs.combat_index = 0
-    gs.combat_round = 1
-    tools.dispatch("end_combat", {}, gs)
-    assert gs.npcs["guard"].surprised is False
-
-
-
-
-def test_ambush_npc_defaults_on_old_save():
-    """Old saves without alertness_dc/surprised load fine (defaults kick in)."""
-    d = {
-        "location": "Test",
-        "npcs": {"snik": {"name": "Snik", "hp": 10, "max_hp": 10, "hostile": True}},
-    }
-    gs = GameState.from_dict(d)
-    assert gs.npcs["snik"].alertness_dc is None
-    assert gs.npcs["snik"].surprised is False
-
-
-
 
 # --- companions / following ----------------------------------------------------
-
-def test_recruit_npc_marks_companion():
-    """A non-hostile, present NPC becomes a companion."""
-    gs = GameState(location="Camp")
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False)
-    res = tools.dispatch("recruit_npc", {"npc": "Brak"}, gs)
-    assert res["ok"] is True and res["companion"] is True
-    assert gs.npcs["brak"].companion is True
-
-
-
-
-def test_recruit_npc_rejected_while_hostile():
-    """Can't recruit a still-hostile NPC — must de-escalate first."""
-    gs = GameState(location="Camp")
-    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
-    res = tools.dispatch("recruit_npc", {"npc": "Snik"}, gs)
-    assert res["ok"] is False and res["reason"] == "hostile"
-    assert gs.npcs["snik"].companion is False
-
-
-
-
-def test_recruit_npc_rejected_in_combat():
-    """Recruiting happens between fights, not mid-combat."""
-    gs = GameState(location="Camp", combat_round=1)
-    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False)
-    res = tools.dispatch("recruit_npc", {"npc": "Brak"}, gs)
-    assert res["ok"] is False and res["reason"] == "in_combat"
-
-
-
-
-def test_companion_follows_across_scene():
-    """A companion travels with the party through move_scene into the next scene."""
-    gs = GameState(
-        current_scene="hall",
-        scenes={
-            "hall": {"location": "Hall", "scene": "s", "npcs": {}, "exits": {"north": "vault"}},
-            "vault": {"location": "Vault", "scene": "s", "npcs": {"guard": {"name": "Guard", "hp": 8, "max_hp": 8, "hostile": True}}},
-        },
-    )
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True)
-
-    res = tools.dispatch("move_scene", {"scene_key": "vault"}, gs)
-    assert res["ok"] is True
-    assert "Brak" in res.get("companions", [])
-    names = {n.name for n in gs.npcs.values()}
-    assert "Brak" in names      # companion came along
-    assert "Guard" in names     # plus the new scene's own NPC
-
-
-
-
-def test_companion_attacks_hostile_on_its_turn():
-    """resolve_npc_action makes a companion attack the lowest-HP living hostile."""
-    gs = GameState(location="Arena")
-    gs.party["aldric"] = Character(name="Aldric", max_hp=20, hp=20)
-    gs.npcs["brak"] = NPC(name="Brak", max_hp=12, hp=12, hostile=False, companion=True,
-                          attack_bonus=8, inventory=["shortsword"])
-    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
-    # Companion is the active combatant.
-    gs.combat_order = ["brak", "snik", "aldric"]
-    gs.combat_index = 0
-    gs.combat_round = 1
-    gs.action_used = False
-
-    rules.seed(0)
-    resolution = tools.resolve_npc_action(gs.npcs["brak"], gs)
-    assert resolution is not None
-    args, result = resolution
-    assert args["attacker"] == "Brak"
-    assert args["defender"] == "Snik"   # attacked the hostile, not the party
-    assert result["ok"] is True
-
-
-
-
-def test_plain_non_hostile_npc_still_stands_aside():
-    """A non-hostile NPC that is NOT a companion takes no action (regression)."""
-    gs = GameState(location="Arena")
-    gs.npcs["bystander"] = NPC(name="Bystander", max_hp=8, hp=8, hostile=False)
-    gs.npcs["snik"] = NPC(name="Snik", max_hp=10, hp=10, hostile=True)
-    assert tools.resolve_npc_action(gs.npcs["bystander"], gs) is None
-
-
-
-
-def test_state_snapshot_shows_surprised_not_alertness_dc():
-    """_state_snapshot surfaces surprised=True but never alertness_dc."""
-    import json as _json
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20)
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True,
-                           alertness_dc=14, surprised=True)
-
-    agent = DMAgent(gs, client=MagicMock())
-    snap = _json.loads(agent._state_snapshot())
-
-    guard_entry = snap["npcs"]["Guard"]
-    assert guard_entry.get("surprised") is True
-    assert "alertness_dc" not in guard_entry
-
-
-
-
-def test_state_snapshot_omits_surprised_when_false():
-    """_state_snapshot does not include 'surprised' when it is False."""
-    import json as _json
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    gs = GameState(location="Corridor")
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20)
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True, surprised=False)
-
-    agent = DMAgent(gs, client=MagicMock())
-    snap = _json.loads(agent._state_snapshot())
-
-    assert "surprised" not in snap["npcs"]["Guard"]
-
-
-
-
-def test_leading_npc_surprised_skipped_in_take_turn():
-    """When start_combat places a surprised NPC first, take_turn must skip its action
-    in round 1 and halt at the first conscious PC without calling NPC attack tools."""
-    from unittest.mock import MagicMock
-    from src.dm_agent import DMAgent
-
-    rules.seed(0)
-    gs = GameState(location="Arena")
-    # Force NPC first via extreme dex
-    gs.npcs["guard"] = NPC(name="Guard", max_hp=12, hp=12, hostile=True,
-                           ability_modifiers={"dex": 100}, alertness_dc=10)
-    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20,
-                                  ability_modifiers={"dex": -100})
-
-    # Manually start combat with guard first, mark it surprised
-    tools.dispatch("start_combat", {"combatants": ["guard", "rogue"]}, gs)
-    assert gs.combat_order[0] == "guard"
-    gs.npcs["guard"].surprised = True
-
-    # Fake client: no tool calls — start_combat was already called
-    fake_text = MagicMock(); fake_text.type = "text"; fake_text.text = "Ready."
-    fake_resp = MagicMock(); fake_resp.stop_reason = "end_turn"; fake_resp.content = [fake_text]
-    fake_client = MagicMock(); fake_client.messages.create.return_value = fake_resp
-
-    agent = DMAgent(gs, client=fake_client)
-    narration = agent.take_turn("We sneak up and attack")
-
-    # Engine must skip the surprised guard and prompt the rogue
-    assert gs.npcs["guard"].surprised is False   # flag cleared
-    assert "Rogue, " in narration or "Rogue," in narration  # closing prompt names rogue
-
-    # No attack tool fired for guard (it was surprised)
-    attack_calls = [c for c in agent.tool_trace if c["name"] == "attack" and
-                    (c["input"].get("attacker") or "").lower() == "guard"]
-    assert attack_calls == [], f"Surprised guard must not attack in round 1; got {attack_calls}"
-
-
 
 
 # --- SRD_RULES / lookup_rule coverage ---------------------------------------
@@ -3641,8 +1780,6 @@ def test_srd_covers_core_mechanics():
     assert not missing, f"SRD_RULES is missing core entries: {sorted(missing)}"
     for key in expected:
         assert rules.lookup_rule(key)["ok"] is True, f"lookup_rule({key!r}) should resolve"
-
-
 
 
 def test_lookup_rule_unknown_topic():
