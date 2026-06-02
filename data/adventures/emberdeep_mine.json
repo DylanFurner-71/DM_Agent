@@ -1,0 +1,141 @@
+{
+  "current_scene": "mine_mouth",
+  "scenes": {
+    "mine_mouth": {
+      "location": "Emberdeep Mine — The Mouth",
+      "scene": "Heat breathes up out of the mountain. The old dwarven mine of Emberdeep was lost to a kobold horde a season ago, and now an orange glow pulses somewhere far below — the warband, the rumors say, serves a young red dragon nesting in the flooded forge at the mine's heart. A dying prospector slumps against a cart, pressing a flask of strong draught into your hands and rasping a warning: 'The lower gallery's drowned. There's a sluice — drain it, or take the cave-in drift, and pray.' A single timber-shored adit leads down into the dark.",
+      "npcs": {},
+      "loot": ["healing_potion"],
+      "exits": {
+        "the timber-shored adit leading down into the dark": "kobold_warren"
+      }
+    },
+    "kobold_warren": {
+      "location": "Emberdeep Mine — The Kobold Warren",
+      "scene": "A cavern strung with bone-charms and salvaged lanterns. Two kobold sentries skitter atop a rickety scaffold of mine-props, not yet certain what moved in the dark below them. A great rusted sluice-wheel juts from the wall — heave it and the flooded lower gallery would drain. Otherwise the only other way down is a half-collapsed drift, black and groaning. Loose planks sag underfoot everywhere.",
+      "npcs": {
+        "skit": { "template": "kobold", "name": "Skit", "hostile": true, "alertness_dc": 7 },
+        "grik": { "template": "kobold", "name": "Grik", "hostile": true, "alertness_dc": 7 }
+      },
+      "loot": [],
+      "exits": {
+        "the drained passage into the flooded gallery": {
+          "to": "flooded_gallery",
+          "requires": "sluice_drained",
+          "denied": "Black water still fills the passage to the chest — there is no wading it until the sluice is heaved open and the gallery drains."
+        },
+        "the half-collapsed drift, black and groaning": "collapsed_drift"
+      },
+      "hazards": {
+        "scaffold": {
+          "name": "collapsing scaffold",
+          "ability": "dex",
+          "dc": 13,
+          "damage": "2d6",
+          "damage_type": "bludgeoning",
+          "on_success": "half",
+          "once": true
+        }
+      }
+    },
+    "flooded_gallery": {
+      "location": "Emberdeep Mine — The Drained Gallery",
+      "scene": "The sluice has done its work: the gallery is a shin-deep slick of mud and dead fish, the air thick and sour. A cracked methane pocket hisses from a fissure in the ceiling — one stray flame or hard knock could touch it off. Half-sunk in the silt, a Pearl of Power glints in a drowned dwarf's strongbox. The forge-glow throbs through an archway ahead.",
+      "npcs": {},
+      "loot": ["pearl_of_power"],
+      "exits": {
+        "the glowing archway toward the forge heart": "forge_heart"
+      },
+      "hazards": {
+        "gas_pocket": {
+          "name": "ignited gas pocket",
+          "ability": "con",
+          "dc": 14,
+          "damage": "3d6",
+          "damage_type": "fire",
+          "on_success": "half",
+          "once": true
+        }
+      }
+    },
+    "collapsed_drift": {
+      "location": "Emberdeep Mine — The Collapsed Drift",
+      "scene": "A throat of broken stone, barely shoulder-wide, that shudders with every step. A pair of kobolds have made a killing-ground of it, perched where the ceiling sags lowest, ready to bring the roof down on intruders. It is the short road to the forge, and the cruel one.",
+      "npcs": {
+        "vekx": { "template": "kobold", "name": "Vekx", "hostile": true },
+        "snarl": { "template": "kobold", "name": "Snarl", "hostile": true }
+      },
+      "loot": [],
+      "exits": {
+        "the shuddering crawl toward the forge heart": "forge_heart"
+      },
+      "hazards": {
+        "cave_in": {
+          "name": "falling rock",
+          "ability": "dex",
+          "dc": 15,
+          "damage": "4d6",
+          "damage_type": "bludgeoning",
+          "on_success": "half",
+          "once": true
+        }
+      }
+    },
+    "forge_heart": {
+      "location": "Emberdeep Mine — The Forge Heart",
+      "scene": "The mountain's old forge-cavern, walls running with molten light. Coiled atop a glittering scree of dwarven gold and ash sleeps — no longer — Cinderfang, a young red dragon, smoke curling from its nostrils as one great amber eye cracks open. There is nowhere left to go but through it. Behind the dragon, half-melted into the hoard, lies the lost Emberdeep Crown.",
+      "npcs": {
+        "cinderfang": { "template": "young_red_dragon", "name": "Cinderfang", "hostile": true, "max_hp": 110, "disposition_dc": null }
+      },
+      "loot": ["emberdeep_crown", "greater_healing"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "brom": {
+      "name": "Brom",
+      "level": 4,
+      "max_hp": 38,
+      "hp": 38,
+      "ac": 18,
+      "attack_bonus": 6,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 3, "dex": 0, "con": 3, "int": 0, "wis": 1, "cha": 0},
+      "inventory": ["warhammer", "handaxe", "shield", "torch"],
+      "conditions": [],
+      "save_proficiencies": ["str", "con"]
+    },
+    "tilda": {
+      "name": "Tilda",
+      "level": 4,
+      "max_hp": 28,
+      "hp": 28,
+      "ac": 15,
+      "attack_bonus": 6,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 0, "dex": 4, "con": 1, "int": 1, "wis": 2, "cha": 0},
+      "inventory": ["shortsword", "shortbow", "thieves tools"],
+      "conditions": [],
+      "save_proficiencies": ["dex", "int"]
+    },
+    "sage": {
+      "name": "Sage",
+      "level": 4,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 13,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 4, "2": 3},
+      "ability_modifiers": {"str": -1, "dex": 2, "con": 1, "int": 4, "wis": 1, "cha": 0},
+      "inventory": ["quarterstaff", "spellbook"],
+      "conditions": [],
+      "spellcasting_ability": "int",
+      "spells": ["ray_of_frost", "ice_knife", "chromatic_orb", "shatter"],
+      "save_proficiencies": ["int", "wis"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}

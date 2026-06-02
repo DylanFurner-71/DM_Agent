@@ -1,0 +1,100 @@
+{
+  "current_scene": "masque_landing",
+  "scenes": {
+    "masque_landing": {
+      "location": "Vael Manor — The Grand Landing",
+      "scene": "Candlelight, string music, and a sea of feathered masks. Tonight crime-lord Dorian Vael throws his autumn masquerade, and somewhere in his private study sits the Ashford Ledger — proof that would hang him, and the reason you talked your way through the gate. A liveried doorman, Crispin, guards the way into the ballroom proper; he is bored, bribable, and waiting to hear tonight's passphrase. A narrow servants' stair drops away unwatched toward the kitchens. (Crispin will wave through anyone who gives the night's word — but he will not, of course, tell you what it is.)",
+      "npcs": {
+        "crispin": { "template": "guard", "name": "Crispin", "hostile": false, "disposition_dc": 12, "alertness_dc": 14 }
+      },
+      "loot": [],
+      "exits": {
+        "the masked doors into the ballroom": {
+          "to": "ballroom",
+          "requires_answer": "nightingale",
+          "denied": "Crispin's gloved hand settles on the door. 'The word, friend, or the stair's that way.' He nods toward the servants' steps — he will not budge without tonight's passphrase."
+        },
+        "the unwatched servants' stair down to the kitchens": "kitchens"
+      }
+    },
+    "ballroom": {
+      "location": "Vael Manor — The Ballroom",
+      "scene": "A glittering crush of dancers beneath a hundred candles. Vael's personal bodyguard, a scarred giant of a man named Bront, watches the room from beside the study's gilded doors — not yet hostile, but reading every face that drifts too close. A flute of wine and a careless word could turn him, or a clever one could draw him off his post. On a side table, a guest has abandoned a Vael house-token beside a half-empty glass.",
+      "npcs": {
+        "bront": { "template": "thug", "name": "Bront", "hostile": false, "disposition_dc": 15, "alertness_dc": 13 }
+      },
+      "loot": ["vael_house_token"],
+      "exits": {
+        "the gilded doors into Vael's private study": "study"
+      }
+    },
+    "kitchens": {
+      "location": "Vael Manor — The Kitchens",
+      "scene": "Steam, clatter, and the reek of roasting fowl. Two of Vael's roughnecks lounge by the dumbwaiter, half-drunk and arguing over dice, their backs to the larder you slipped in through — they have no idea anyone is here. The dumbwaiter shaft climbs straight up to the study above; a back stair offers the longer, quieter way.",
+      "npcs": {
+        "dober": { "template": "bandit", "name": "Dober", "hostile": true, "alertness_dc": 8, "disposition_dc": 13 },
+        "fitch": { "template": "bandit", "name": "Fitch", "hostile": true, "alertness_dc": 8, "disposition_dc": 13 }
+      },
+      "loot": [],
+      "exits": {
+        "the dumbwaiter shaft up to the study": "study"
+      }
+    },
+    "study": {
+      "location": "Vael Manor — The Private Study",
+      "scene": "A warm, book-lined sanctum that smells of cigar smoke and old money. Dorian Vael himself stands at the hearth, masque pushed up onto his brow, a duelist's rapier already loose in his hand — he heard you coming. The Ashford Ledger sits in plain sight on the desk between you. He is a businessman before he is a killer; there may yet be a price, or a bluff, that ends this without blood.",
+      "npcs": {
+        "vael": { "template": "bandit_captain", "name": "Dorian Vael", "hostile": true, "disposition_dc": 16 }
+      },
+      "loot": ["ashford_ledger"],
+      "exits": {}
+    }
+  },
+  "party": {
+    "wren": {
+      "name": "Wren",
+      "level": 3,
+      "max_hp": 24,
+      "hp": 24,
+      "ac": 14,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 0, "dex": 3, "con": 1, "int": 1, "wis": 1, "cha": 4},
+      "inventory": ["rapier", "dagger", "thieves tools", "masquerade mask"],
+      "conditions": [],
+      "save_proficiencies": ["dex", "cha"]
+    },
+    "marlow": {
+      "name": "Marlow",
+      "level": 3,
+      "max_hp": 26,
+      "hp": 26,
+      "ac": 15,
+      "attack_bonus": 5,
+      "proficiency_bonus": 2,
+      "ability_modifiers": {"str": 2, "dex": 3, "con": 2, "int": 0, "wis": 2, "cha": 1},
+      "inventory": ["shortsword", "hand crossbow", "thieves tools"],
+      "conditions": [],
+      "save_proficiencies": ["dex", "wis"]
+    },
+    "isolde": {
+      "name": "Isolde",
+      "level": 3,
+      "max_hp": 20,
+      "hp": 20,
+      "ac": 12,
+      "attack_bonus": 4,
+      "proficiency_bonus": 2,
+      "spell_slots": {"1": 4, "2": 2},
+      "ability_modifiers": {"str": -1, "dex": 1, "con": 1, "int": 2, "wis": 1, "cha": 3},
+      "inventory": ["dagger", "lute"],
+      "conditions": [],
+      "spellcasting_ability": "cha",
+      "spells": ["vicious_mockery", "shatter"],
+      "save_proficiencies": ["dex", "cha"]
+    }
+  },
+  "quest_flags": {},
+  "turn": 0,
+  "log": []
+}
