@@ -7,7 +7,10 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src import tools
-from src.dm_agent import DMAgent, _extract_narration, _sanitize_narration
+from src.dm_agent import (
+    DMAgent, _extract_narration, _sanitize_narration, _screen_narration_text,
+    _DUMP_SENTINELS,
+)
 from src.game_state import Character, GameState, NPC
 
 
@@ -391,6 +394,71 @@ def test_narration_stream_gate_suppresses_leading_dump():
 
     assert out == ""                 # leak screen suppressed the stored text
     assert "".join(chunks) == ""     # the dump never reached the sink
+
+
+# ---------------------------------------------------------------------------
+# Leak screens vs. the REAL snapshot shape — ties _DUMP_SENTINELS to reality
+# (the other screen tests use a simplified compact dump; these use the actual
+# json.dumps(indent=2) [Current state] block the agent injects each turn, so a
+# snapshot key rename that drifts the denylist is caught here).
+# ---------------------------------------------------------------------------
+
+def _realistic_snapshot() -> str:
+    """The actual [Current state] JSON the agent injects each turn — multi-line,
+    indented, brace-first — for a representative state including a redacted password."""
+    gs = GameState(location="The Vault", current_scene="vault")
+    gs.scenes = {"vault": {"location": "The Vault", "exits": {}, "loot": ["relic"]}}
+    gs.party["wisp"] = Character(name="Wisp", hp=8, max_hp=16, spell_slots={1: 1})
+    gs.npcs["grik"] = NPC(name="Grik", hp=10, max_hp=10, hostile=True)
+    gs.quest_flags = {"iron_door_password": "ashfall"}
+    return DMAgent(gs, client=object())._state_snapshot()
+
+
+def test_real_snapshot_omits_secret_and_matches_a_sentinel():
+    """Canary: (1) the password is redacted out of the snapshot (the real first-line
+    defense — it never reaches context), and (2) some _DUMP_SENTINEL still matches a
+    line of the actual snapshot, so a verbatim regurgitation stays detectable. Renaming
+    a surfaced top-level key (e.g. 'party') without updating _DUMP_SENTINELS breaks
+    detection and fails this test."""
+    snap = _realistic_snapshot()
+    assert "ashfall" not in snap
+    assert any(line.lstrip().startswith(s) for line in snap.splitlines() for s in _DUMP_SENTINELS)
+
+
+def test_sanitize_trims_real_headed_snapshot_dump():
+    snap = _realistic_snapshot()
+    leak = f"[Current state]\n{snap}\n\nThe relic gleams in the torchlight."
+    assert _sanitize_narration(leak) == "The relic gleams in the torchlight."
+
+
+def test_sanitize_trims_real_brace_first_snapshot_dump():
+    """Even with the [Current state] header dropped, the indented brace-first snapshot
+    is still caught (via the 'party:' sentinel on a later line)."""
+    snap = _realistic_snapshot()
+    leak = f"{snap}\n\nThe relic gleams in the torchlight."
+    assert _sanitize_narration(leak) == "The relic gleams in the torchlight."
+
+
+def test_screen_suppresses_real_headed_snapshot_dump():
+    snap = _realistic_snapshot()
+    assert _extract_narration(_make_text_blocks(f"[Current state]\n{snap}")) == ""
+    assert _screen_narration_text(f"[Current state]\n{snap}") == ""
+
+
+def test_stream_gate_suppresses_real_snapshot_dump():
+    """Streaming path: the real-snapshot dump is held and the screen suppresses it —
+    nothing reaches the live sink or the stored value."""
+    snap = _realistic_snapshot()
+    dump = f"[Current state]\n{snap}"
+    client = MagicMock()
+    client.messages.stream.return_value = _FakeStream([dump], dump)
+    agent = DMAgent(_make_state(), client=client)
+    chunks: list[str] = []
+    agent.on_narration_delta = chunks.append
+    agent.messages = [{"role": "user", "content": "narrate"}]
+    out = agent._narration_call(max_tokens=256, phase="narrating_epilogue")
+    assert out == ""
+    assert "".join(chunks) == ""
 
 
 # ---------------------------------------------------------------------------
