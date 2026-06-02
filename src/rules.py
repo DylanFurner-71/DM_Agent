@@ -374,9 +374,9 @@ WEAPONS: dict[str, dict] = {
     "spear":          {"dice": "1d6",  "type": "piercing"},
     # --- simple ranged ---
     "dart":           {"dice": "1d4",  "type": "piercing",     "finesse": True},
-    "light crossbow": {"dice": "1d8",  "type": "piercing"},
-    "shortbow":       {"dice": "1d6",  "type": "piercing"},
-    "sling":          {"dice": "1d4",  "type": "bludgeoning"},
+    "light crossbow": {"dice": "1d8",  "type": "piercing",    "ranged": True},
+    "shortbow":       {"dice": "1d6",  "type": "piercing",    "ranged": True},
+    "sling":          {"dice": "1d4",  "type": "bludgeoning", "ranged": True},
     # --- martial melee ---
     "battleaxe":      {"dice": "1d8",  "type": "slashing"},
     "flail":          {"dice": "1d8",  "type": "bludgeoning"},
@@ -397,22 +397,22 @@ WEAPONS: dict[str, dict] = {
     "warhammer":      {"dice": "1d8",  "type": "bludgeoning"},
     "whip":           {"dice": "1d4",  "type": "slashing",     "finesse": True},
     # --- martial ranged ---
-    "hand crossbow":  {"dice": "1d6",  "type": "piercing"},
-    "heavy crossbow": {"dice": "1d10", "type": "piercing"},
-    "longbow":        {"dice": "1d8",  "type": "piercing"},
+    "hand crossbow":  {"dice": "1d6",  "type": "piercing",    "ranged": True},
+    "heavy crossbow": {"dice": "1d10", "type": "piercing",    "ranged": True},
+    "longbow":        {"dice": "1d8",  "type": "piercing",    "ranged": True},
 }
 
 
-def _weapon_modifier(character, finesse: bool) -> tuple[str, int]:
-    """Return (ability_name, modifier) to add to damage rolls.
+def _weapon_modifier(character, finesse: bool, ranged: bool = False) -> tuple[str, int]:
+    """Return (ability_name, modifier) to add to to-hit and damage rolls.
 
-    Finesse weapons use whichever of Str or Dex is higher; all others use Str.
-    Missing modifiers default to 0.
+    Finesse and ranged weapons use whichever of Str or Dex is higher; all other
+    (melee) weapons use Str. Missing modifiers default to 0.
     """
     mods = getattr(character, "ability_modifiers", {})
     str_mod = mods.get("str", 0)
     dex_mod = mods.get("dex", 0)
-    if finesse and dex_mod > str_mod:
+    if (finesse or ranged) and dex_mod > str_mod:
         return "dex", dex_mod
     return "str", str_mod
 
@@ -474,7 +474,7 @@ def attack(attacker, defender, weapon: str | None = None,
                 "error": f"{attacker.name} has no {weapon}; available: {avail_str}",
             }
 
-        _, ability_mod = _weapon_modifier(attacker, entry.get("finesse", False))
+        _, ability_mod = _weapon_modifier(attacker, entry.get("finesse", False), entry.get("ranged", False))
         if is_npc:
             # NPC attack_bonus already encodes proficiency; derive damage mod only.
             to_hit_bonus = attacker.attack_bonus

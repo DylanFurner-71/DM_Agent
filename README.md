@@ -78,9 +78,9 @@ The boundary comes in two strengths:
 
 **Combat.** Turn-based, multi-actor combat with rolled initiative and a strict
 turn guard — you can only act on your turn, and the engine owns the pointer.
-Weapons resolve from inventory, roll to-hit against AC using the attacker's
-`attack_bonus`, and add an ability modifier to **damage** (finesse weapons pick the
-better of STR/DEX). A natural 20 crits, doubling into the damage and death-save paths. HP is clamped at zero; damage and healing are atomic
+Weapons resolve from inventory, roll to-hit against AC, and add an ability modifier to
+to-hit and **damage** — STR for melee, the better of STR/DEX for **finesse and ranged**
+weapons. A natural 20 crits, doubling into the damage and death-save paths. HP is clamped at zero; damage and healing are atomic
 through the tool that *rolls and applies together*, so fiction-only dice can't be
 laundered into real HP changes. `start_combat` / `end_combat` / `next_turn` are
 engine-driven, combat auto-ends when one side is down, and unnamed targets trigger

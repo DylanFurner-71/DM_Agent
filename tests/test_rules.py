@@ -139,6 +139,45 @@ def test_finesse_weapon_uses_str_when_str_higher():
         assert "1d4+4" in res["damage_detail"]
 
 
+def test_ranged_weapon_uses_dex_when_higher():
+    """A ranged weapon (shortbow) uses Dex for both to-hit and damage when Dex > Str —
+    a dedicated archer is no longer penalized into the Str modifier."""
+    rules.seed(0)
+    atk = Character(name="Archer", attack_bonus=0, inventory=["shortbow"],
+                    ability_modifiers={"str": 0, "dex": 4}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=30, max_hp=30)
+    res = rules.attack(atk, dfn, weapon="shortbow")
+    assert res["to_hit_bonus"] == 6          # dex(4) + proficiency(2), not str(0)
+    if res["hit"]:
+        assert "1d6+4" in res["damage_detail"]
+
+
+def test_ranged_weapon_uses_str_when_str_higher():
+    """Ranged uses the *better* of Str/Dex (matching finesse), so a Str-heavy archer
+    falls back to Str — consistent with the SRD_RULES 'whichever is better' lore."""
+    rules.seed(0)
+    atk = Character(name="Brute", attack_bonus=0, inventory=["longbow"],
+                    ability_modifiers={"str": 5, "dex": 1}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=30, max_hp=30)
+    res = rules.attack(atk, dfn, weapon="longbow")
+    assert res["to_hit_bonus"] == 7          # str(5) + proficiency(2)
+    if res["hit"]:
+        assert "1d8+5" in res["damage_detail"]
+
+
+def test_melee_nonfinesse_weapon_still_uses_str():
+    """Regression guard: a plain melee weapon (warhammer) keeps using Str even when
+    Dex is higher — the ranged flag must not leak into melee resolution."""
+    rules.seed(0)
+    atk = Character(name="Fighter", attack_bonus=0, inventory=["warhammer"],
+                    ability_modifiers={"str": 1, "dex": 5}, proficiency_bonus=2)
+    dfn = NPC(name="D", ac=1, hp=30, max_hp=30)
+    res = rules.attack(atk, dfn, weapon="warhammer")
+    assert res["to_hit_bonus"] == 3          # str(1) + proficiency(2), not dex(5)
+    if res["hit"]:
+        assert "1d8+1" in res["damage_detail"]
+
+
 def test_no_weapon_arg_uses_attack_bonus_fallback():
     """No weapon argument → falls back to attack_bonus + 1d6 (NPC / unarmed path)."""
     rules.seed(0)
