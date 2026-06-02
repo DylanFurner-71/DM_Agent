@@ -243,6 +243,17 @@ def test_save_proficiencies_preserved(tmp_path):
     assert loaded.party["wisp"].save_proficiencies == []
 
 
+def test_gold_round_trips_and_defaults(tmp_path):
+    """Character.gold survives save+load; an older save with no gold key defaults to 0."""
+    gs = GameState(party={
+        "rich": Character(name="Rich", gold=42),
+        "broke": Character(name="Broke"),  # no gold → default 0
+    })
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.party["rich"].gold == 42
+    assert loaded.party["broke"].gold == 0
+
+
 def test_skill_proficiencies_and_expertise_round_trip(tmp_path):
     """skill_proficiencies / expertise survive save+load; older saves default to []."""
     gs = GameState(party={

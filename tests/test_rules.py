@@ -986,6 +986,43 @@ def test_award_inspiration_refused_after_use():
     assert c.inspiration == 0
 
 
+# --- gold ledger (per-character purse) ---------------------------------------
+
+def test_add_gold_credits_balance():
+    c = Character(name="Aldric", gold=10)
+    res = rules.add_gold(c, 25)
+    assert res["ok"] is True and res["gold"] == 35
+    assert c.gold == 35
+
+
+def test_add_gold_refuses_negative():
+    c = Character(name="Aldric", gold=10)
+    res = rules.add_gold(c, -5)
+    assert res["ok"] is False and res["reason"] == "invalid_amount"
+    assert c.gold == 10  # unchanged
+
+
+def test_spend_gold_deducts_balance():
+    c = Character(name="Aldric", gold=30)
+    res = rules.spend_gold(c, 25)
+    assert res["ok"] is True and res["gold"] == 5
+    assert c.gold == 5
+
+
+def test_spend_gold_to_exactly_zero_ok():
+    c = Character(name="Aldric", gold=15)
+    res = rules.spend_gold(c, 15)
+    assert res["ok"] is True and res["gold"] == 0
+
+
+def test_spend_gold_refuses_overspend_without_deducting():
+    c = Character(name="Aldric", gold=5)
+    res = rules.spend_gold(c, 10)
+    assert res["ok"] is False and res["reason"] == "insufficient_gold"
+    assert res["gold"] == 5
+    assert c.gold == 5  # nothing was deducted
+
+
 def test_skill_check_inspiration_keeps_higher_and_spends():
     c = Character(name="Aldric", ability_modifiers={"dex": 0}, inspiration=1)
     rules.force_rolls([3, 17])  # 2d20 with advantage → keep 17

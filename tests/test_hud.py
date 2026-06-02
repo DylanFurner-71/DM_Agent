@@ -80,6 +80,15 @@ def test_hud_shows_party_hp_and_slots():
     assert "Round" not in hud          # not in combat → no combat line
 
 
+def test_hud_shows_gold_when_held():
+    gs = _two_pc_state()
+    gs.party["aldric"].gold = 42
+    hud = format_hud(gs)
+    assert "42 gp" in hud
+    # a PC with no gold shows no gp figure
+    assert "0 gp" not in hud
+
+
 def test_hud_shows_conditions_tag():
     gs = _two_pc_state()
     gs.party["aldric"].conditions = ["prone"]

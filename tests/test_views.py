@@ -81,6 +81,17 @@ def test_print_state_plain_core_fields(capsys):
     assert ESC not in out
 
 
+def test_print_state_shows_gold_when_held(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Vault")
+    gs.party["a"] = Character(name="Aldric", max_hp=24, hp=24, gold=42)
+    gs.party["b"] = Character(name="Wisp", max_hp=16, hp=16)  # no gold
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "42 gp" in out          # holder shows the purse
+    assert "Wisp" in out and "0 gp" not in out  # broke PC shows no gp figure
+
+
 # --- /state: death-save status ----------------------------------------------
 
 def test_print_state_shows_death_save_progress(capsys):

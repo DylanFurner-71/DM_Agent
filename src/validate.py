@@ -41,7 +41,7 @@ _TOP_LEVEL_KEYS = set(GameState().to_dict())
 # Known fields whose VALUES the dataclasses don't type-check: a wrong type loads fine
 # via Character(**v)/NPC(**v) and only crashes mid-session, so the validator does.
 _CHARACTER_INT_FIELDS = ("level", "max_hp", "hp", "ac", "attack_bonus", "proficiency_bonus",
-                         "death_save_successes", "death_save_failures", "inspiration")
+                         "death_save_successes", "death_save_failures", "inspiration", "gold")
 _CHARACTER_LIST_FIELDS = ("inventory", "conditions", "spells", "save_proficiencies",
                           "skill_proficiencies", "expertise")
 _NPC_INT_FIELDS = ("max_hp", "hp", "ac", "attack_bonus")
@@ -265,6 +265,8 @@ def _check_party(rep: Report, party) -> None:
                 rep.error(where, f"{f} must be a list, got {type(member[f]).__name__}")
         _check_ability_modifiers(rep, where, member.get("ability_modifiers"))
         _check_hp_ac_sanity(rep, where, member.get("hp"), member.get("max_hp"), member.get("ac"))
+        if _is_int(member.get("gold")) and member["gold"] < 0:
+            rep.warn(where, f"gold is {member['gold']} — negative starting gold")
         for slots_field in ("spell_slots", "max_spell_slots"):
             slots = member.get(slots_field, {})
             if not isinstance(slots, dict):

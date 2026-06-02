@@ -574,6 +574,42 @@ TOOLS = [
             "required": ["character"],
         },
     },
+    {
+        "name": "add_gold",
+        "description": (
+            "Credit gold pieces to a party member's purse — loot, a reward, a sale. Gold is "
+            "engine-owned and tracked only through this tool and spend_gold; never narrate a "
+            "balance into existence or track it yourself. amount is a positive integer. "
+            "Only party members carry gold (ok=false 'not_a_pc' for an NPC)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member gaining gold"},
+                "amount": {"type": "integer", "description": "Gold pieces to add (positive)"},
+            },
+            "required": ["character", "amount"],
+        },
+    },
+    {
+        "name": "spend_gold",
+        "description": (
+            "Deduct gold pieces from a party member's purse — a purchase, a bribe, a toll. The "
+            "engine owns the balance and REFUSES an overspend: ok=false reason "
+            "'insufficient_gold' (with their current gold) if they can't cover it, and nothing "
+            "is deducted — narrate that they can't afford it rather than spending coin they "
+            "lack. amount is a positive integer. Only party members carry gold (ok=false "
+            "'not_a_pc' for an NPC)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member spending gold"},
+                "amount": {"type": "integer", "description": "Gold pieces to spend (positive)"},
+            },
+            "required": ["character", "amount"],
+        },
+    },
 ]
 
 
@@ -1328,6 +1364,27 @@ def dispatch(name: str, args: dict, state) -> dict:
         res = rules.award_inspiration(character)
         if res["ok"]:
             state.record(f"{character.name} awarded inspiration")
+        return res
+
+    if name in ("add_gold", "spend_gold"):
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        # Gold is a PC-only purse; NPCs have no gold field.
+        if not hasattr(character, "death_save_failures"):
+            return {"ok": False, "reason": "not_a_pc",
+                    "error": f"{character.name} is not a party member; only PCs carry gold."}
+        amount = int(args["amount"])
+        if name == "add_gold":
+            res = rules.add_gold(character, amount)
+            if res["ok"]:
+                state.record(f"{character.name} gains {amount} gp (→ {res['gold']})")
+        else:
+            res = rules.spend_gold(character, amount)
+            if res["ok"]:
+                state.record(f"{character.name} spends {amount} gp (→ {res['gold']})")
+            else:
+                state.record(f"{character.name} cannot spend {amount} gp ({res['reason']})")
         return res
 
     if name == "trigger_hazard":

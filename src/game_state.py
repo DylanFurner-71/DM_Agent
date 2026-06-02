@@ -71,6 +71,9 @@ class Character:
     # inspiration_used locks it so it can never be re-awarded.
     inspiration: int = 0
     inspiration_used: bool = False
+    # Gold pieces this character carries (a per-PC purse). Engine-owned: changed only
+    # through rules.add_gold / rules.spend_gold, and spend refuses an overspend.
+    gold: int = 0
 
     @property
     def is_down(self) -> bool:

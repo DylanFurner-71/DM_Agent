@@ -129,6 +129,13 @@ Consumables apply through
 a party ally** — pouring a healing potion into a downed ally revives them and resets
 their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
 
+**Gold.** A per-character coin purse (`Character.gold`), tracked as another engine-owned
+resource. `add_gold` credits loot and rewards; `spend_gold` debits purchases and bribes —
+and like the spell-slot economy it **refuses an overspend** (`insufficient_gold`, with
+nothing deducted), so the model narrates "you can't afford it" rather than conjuring coin
+the character doesn't have. Each PC's balance round-trips through save/load and surfaces in
+`/state` and the HUD. The foundation the roadmap's **merchants** build on.
+
 **Checks & saves.** `skill_check` resolves a *proactive* `d20 + ability modifier` vs
 a DC (perception, persuasion, athletics, stealth…) and, in combat, is the acting
 character's turn-guarded action. Naming a 5e **skill** (e.g. `stealth`, `persuasion`)
@@ -302,7 +309,6 @@ Future work, ranked roughly least → most difficult to implement.
 
 *Mechanics:*
 
-- **Gold ledger:** a tracked party currency so loot and rewards carry a real number. Add a `gold` total (on `GameState` or per-`Character`) plus `add_gold`/`spend_gold` tools — a `tools.TOOLS` schema, a `dispatch` branch, and a `rules` helper that refuses overspend — surfaced in `/state` and the HUD. The foundation **Merchants** build on.
 - **Merchants (buy/sell):** shopkeeper NPCs with a stock and price list, plus `buy_item`/`sell_item` tools that move entries between the merchant and a PC's `inventory` and debit/credit the **gold ledger** (its prerequisite). Reuses the loot / `take_item` plumbing.
 - **Temporary HP:** a separate hit-point buffer (from `false life`, `heroism`, a paladin's lay-on-hands variants, etc.) that absorbs damage **before** real HP, is **not** restored by healing, doesn't stack (take the higher of old/new), and is cleared on a long rest. Add a `temp_hp` field on `Character`/`NPC`, drain it first in `apply_damage`, and have `heal` ignore it. Pairs with the **utility & healing spells** work.
 - **Enemy-initiated stealth:** the mirror of `attempt_ambush` — let a scene or NPC roll stealth against the party's passive Perception to open with a surprise round *against* the PCs. Reuses the surprise plumbing already in `start_combat` (the `surprised` flag and round-1 skip).
@@ -355,19 +361,19 @@ data/
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
-tests/                 # ~657 tests total, all no-API
-  test_rules.py        # 142 — enforcement core: dice, attack, spells, combat/turn guards
-  test_tools.py        #  71 — dispatch, guards, target/redaction, get_state
+tests/                 # ~671 tests total, all no-API
+  test_rules.py        # 147 — enforcement core: dice, attack, spells, combat/turn guards
+  test_tools.py        #  74 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
-  test_views.py        #  43 — rich/plain rendering: /state, /cost, /export
+  test_views.py        #  44 — rich/plain rendering: /state, /cost, /export
   test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
-  test_hud.py          #  38 — status HUD: bars, spells, inventory, color
-  test_validate.py     #  52 — scenario linter checks
+  test_hud.py          #  39 — status HUD: bars, spells, inventory, color
+  test_validate.py     #  54 — scenario linter checks
   test_scenes.py       #  27 — scene loading, move_scene, gated exits, terminal conclusion
   test_ambush.py       #  26 — attempt_ambush, surprise, companions
   test_save.py         #  23 — /save + /export helpers
   test_reinforcements.py #22 — add_npc reinforcements + available_reinforcements
-  test_persistence.py  #  21 — JSON save/load round-trip
+  test_persistence.py  #  22 — JSON save/load round-trip
   test_items.py        #  20 — take_item / use_item / consumables
   test_social.py       #  15 — influence_npc + parley-to-combat
   test_answer_gate.py  #  15 — answer-gated exits + password redaction
@@ -388,7 +394,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
-python3 -m pytest -q                       # ~657 enforcement tests, no API needed
+python3 -m pytest -q                       # ~671 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -436,7 +442,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 657 tests across `tests/`, all running with **no API**. They drive the
+Roughly 671 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and

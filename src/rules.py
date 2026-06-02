@@ -128,6 +128,51 @@ def award_inspiration(character, cap: int = 1) -> dict:
     return {"ok": True, "character": character.name, "inspiration": 1}
 
 
+def add_gold(character, amount: int) -> dict:
+    """Credit gold to a character's purse. Engine-owned; never raises.
+
+    Refuses a negative amount (use spend_gold to deduct); otherwise adds and returns
+    the new balance.
+    """
+    if amount < 0:
+        return {
+            "ok": False,
+            "reason": "invalid_amount",
+            "character": character.name,
+            "error": "Amount must be non-negative; use spend_gold to deduct.",
+        }
+    character.gold = getattr(character, "gold", 0) + amount
+    return {"ok": True, "character": character.name, "amount": amount, "gold": character.gold}
+
+
+def spend_gold(character, amount: int) -> dict:
+    """Debit gold from a character's purse, refusing an overspend.
+
+    Mirrors the spell-slot economy: a negative amount or one larger than the balance is
+    refused (ok=False) WITHOUT changing gold, so the model must narrate "can't afford it"
+    rather than spend coin the character doesn't have.
+    """
+    current = getattr(character, "gold", 0)
+    if amount < 0:
+        return {
+            "ok": False,
+            "reason": "invalid_amount",
+            "character": character.name,
+            "gold": current,
+            "error": "Amount must be non-negative; use add_gold to credit.",
+        }
+    if amount > current:
+        return {
+            "ok": False,
+            "reason": "insufficient_gold",
+            "character": character.name,
+            "gold": current,
+            "error": f"{character.name} has only {current} gp, cannot spend {amount}.",
+        }
+    character.gold = current - amount
+    return {"ok": True, "character": character.name, "amount": amount, "gold": character.gold}
+
+
 def _mark_dead(target) -> None:
     """Transition a PC to dead and keep condition tags consistent.
 

@@ -368,6 +368,18 @@ def test_unknown_top_level_key_is_warning():
     assert "unknown top-level key 'scens'" in _warns(data)
 
 
+def test_non_integer_gold_is_error():
+    data = _valid()
+    data["party"]["hero"]["gold"] = "lots"
+    assert "gold must be an integer" in _errs(data)
+
+
+def test_negative_gold_is_warning():
+    data = _valid()
+    data["party"]["hero"]["gold"] = -5
+    assert "negative starting gold" in _warns(data)
+
+
 # --- sanity checks: impossible HP/AC and ambiguous actor names -----------------
 
 def test_hp_exceeds_max_hp_is_warning():

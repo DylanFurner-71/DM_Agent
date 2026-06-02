@@ -317,7 +317,8 @@ def _print_state_plain(state: GameState) -> None:
         # Casters carry their slots in the spell block below; non-casters (no known
         # spells) keep the header's slots segment as their only slot readout.
         slots_seg = "" if c.spells else f" | slots {_pc_slots(c)}"
-        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg} | {_pc_status(c)}")
+        gold_seg = f" | {c.gold} gp" if getattr(c, "gold", 0) else ""
+        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg}{gold_seg} | {_pc_status(c)}")
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
@@ -364,10 +365,11 @@ def _print_state_rich(state: GameState) -> None:
         # header's slots segment as their only slot readout.
         hpcol = _hp_color(c.hp, c.max_hp)
         slots_seg = "" if c.spells else f" | slots [hot_pink]{escape(_pc_slots(c))}[/hot_pink]"
+        gold_seg = f" | [gold1]{c.gold} gp[/gold1]" if getattr(c, "gold", 0) else ""
         con.print(
             f"  [bold cyan]{escape(c.name)}[/bold cyan]: "
             f"HP [{hpcol}]{c.hp}/{c.max_hp}[/{hpcol}] | AC [steel_blue1]{c.ac}[/steel_blue1]"
-            f"{slots_seg} | {escape(_pc_status(c))}"
+            f"{slots_seg}{gold_seg} | {escape(_pc_status(c))}"
         )
         def _fmt_item(item: str) -> str:
             if item.lower() in CONSUMABLES:
@@ -489,6 +491,8 @@ def format_hud(state: GameState, width: int = 60) -> str:
         slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
         if slots:
             seg += f"  {slots}"
+        if getattr(c, "gold", 0):
+            seg += f"  {c.gold} gp"
         # Status (death-save lifecycle + conditions), shown only when not plain "ok" —
         # shared with /state so HUD and full readout agree (and a stable PC reads
         # 'stable', not 'dying').
@@ -557,6 +561,8 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
         slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
         if slots:
             seg += f"  [hot_pink]{escape(slots)}[/hot_pink]"
+        if getattr(c, "gold", 0):
+            seg += f"  [gold1]{c.gold} gp[/gold1]"
         status = _pc_status(c)
         if status != "ok":
             statuscol = "red" if (c.dead or c.hp <= 0) else "yellow"

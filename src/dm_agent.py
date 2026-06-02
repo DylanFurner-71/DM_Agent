@@ -202,6 +202,11 @@ narrate its given outcome — do not change it.
 - Loot is author-placed. You may only grant items via `take_item`, and only items in the \
 current scene's loot list — never invent treasure. Reveal loot through exploration (a search, \
 opening a chest, a successful check), not by announcing the list.
+- GOLD — when a character gains or spends coin (loot, a reward, a purchase, a bribe), record \
+it with `add_gold` / `spend_gold`, naming the character; the engine owns each PC's balance, so \
+never invent or track a total yourself. `spend_gold` REFUSES an overspend (ok=false \
+'insufficient_gold') without deducting — narrate that they can't afford it rather than spending \
+coin they lack.
 - REVEALS — never gate authored content behind a check you invent. Loot present in the state and \
 facts written into a scene are found by the player's interaction — searching, reading, examining — \
 NOT by a skill_check or roll_dice you make up. Do not roll to decide whether the party finds placed \
@@ -548,6 +553,8 @@ class DMAgent:
                 entry["spell_slots"] = c.spell_slots
             if getattr(c, "inspiration", 0):
                 entry["inspiration"] = c.inspiration
+            if getattr(c, "gold", 0):
+                entry["gold"] = c.gold
             if c.conditions:
                 entry["conditions"] = c.conditions
             if c.inventory:

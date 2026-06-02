@@ -973,6 +973,31 @@ def test_dispatch_attack_passes_advantage_and_tags_log():
     assert any("(advantage)" in e for e in gs.log)
 
 
+def test_dispatch_add_and_spend_gold_update_balance_and_log():
+    gs = _make_state()  # party Hero
+    add = tools.dispatch("add_gold", {"character": "Hero", "amount": 30}, gs)
+    assert add["ok"] is True and gs.party["Hero"].gold == 30
+    spend = tools.dispatch("spend_gold", {"character": "Hero", "amount": 25}, gs)
+    assert spend["ok"] is True and gs.party["Hero"].gold == 5
+    assert any("gains 30 gp" in e for e in gs.log)
+    assert any("spends 25 gp" in e for e in gs.log)
+
+
+def test_dispatch_spend_gold_refuses_overspend():
+    gs = _make_state()
+    gs.party["Hero"].gold = 5
+    res = tools.dispatch("spend_gold", {"character": "Hero", "amount": 10}, gs)
+    assert res["ok"] is False and res["reason"] == "insufficient_gold"
+    assert gs.party["Hero"].gold == 5  # unchanged
+
+
+def test_dispatch_gold_on_npc_is_not_a_pc():
+    gs = _make_state()
+    gs.npcs["snik"] = NPC(name="Snik", hostile=True)
+    res = tools.dispatch("add_gold", {"character": "Snik", "amount": 10}, gs)
+    assert res["ok"] is False and res["reason"] == "not_a_pc"
+
+
 def test_dispatch_skill_check_passes_skill_and_tags_log():
     from src import rules
     gs = _make_state()
