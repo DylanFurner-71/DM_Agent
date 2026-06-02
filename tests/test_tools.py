@@ -34,6 +34,21 @@ def test_get_state_does_not_mutate_live_flags():
     assert state.quest_flags["secret"] == "password123"
 
 
+def test_get_state_hides_hidden_npc_dcs():
+    """get_state must not hand the model the hidden challenge DCs — the stealth DC
+    (alertness_dc) the README redacts, nor its social twin disposition_dc. Other NPC
+    fields (hp, hostile, ac) still surface. The live state keeps both (used by the engine)."""
+    state = GameState(location="X")
+    state.npcs["guard"] = NPC(name="Guard", hostile=True, disposition_dc=14, alertness_dc=12)
+    entry = tools.dispatch("get_state", {}, state)["state"]["npcs"]["guard"]
+    assert "disposition_dc" not in entry
+    assert "alertness_dc" not in entry
+    assert entry["hostile"] is True and "hp" in entry and "ac" in entry
+    # live state is untouched — the engine still owns the numbers
+    assert state.npcs["guard"].disposition_dc == 14
+    assert state.npcs["guard"].alertness_dc == 12
+
+
 def test_set_quest_flag_rejects_string_on_password_key():
     state = _make_state()
     res = tools.dispatch("set_quest_flag", {"flag": "iron_door_password", "value": "ashfall"}, state)

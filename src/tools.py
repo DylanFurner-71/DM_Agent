@@ -105,6 +105,24 @@ def _normalize_answer(s: str) -> str:
 def _redact_quest_flags(flags: dict) -> dict:
     return {k: "<redacted>" if isinstance(v, str) else v for k, v in flags.items()}
 
+
+# NPC fields the model must never see. alertness_dc is the hidden stealth DC the
+# README redacts from "everything the model sees"; disposition_dc is its social twin —
+# the one-shot persuasion gate. The model is meant to learn an NPC's reachability by
+# *attempting* (influence_npc -> 'immovable'; attempt_ambush -> 'cannot_ambush'/bar),
+# never by reading the number. The per-turn _state_snapshot already omits both; this
+# closes the same leak on the get_state channel (which dumps state.to_dict()).
+_HIDDEN_NPC_FIELDS = ("disposition_dc", "alertness_dc")
+
+
+def _npcs_for_model(npcs: dict) -> dict:
+    """Strip the hidden challenge DCs (_HIDDEN_NPC_FIELDS) from an NPC dict map."""
+    return {
+        key: ({k: v for k, v in entry.items() if k not in _HIDDEN_NPC_FIELDS}
+              if isinstance(entry, dict) else entry)
+        for key, entry in npcs.items()
+    }
+
 TOOLS = [
     {
         "name": "roll_dice",
@@ -1042,6 +1060,8 @@ def dispatch(name: str, args: dict, state) -> dict:
         for _hist in ("transcript", "narrative", "log"):
             d.pop(_hist, None)
         d["quest_flags"] = _redact_quest_flags(d.get("quest_flags", {}))
+        if d.get("npcs"):
+            d["npcs"] = _npcs_for_model(d["npcs"])  # hide disposition_dc / alertness_dc
         if state.scenes:
             del d["scenes"]   # omit verbose definitions from model context
             current_scene_data = (

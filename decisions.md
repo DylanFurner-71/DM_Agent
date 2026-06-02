@@ -265,6 +265,34 @@ and ungated terminals are unchanged.
   an author-convention problem, not addressable in code without a flag metadata schema.
 - **Classification:** Hard boundary (enforced in code), not soft boundary.
 
+## ADR: get_state hides the hidden NPC challenge DCs
+
+**Status:** Accepted
+
+**Context:** The per-turn injected snapshot (`dm_agent._state_snapshot`) deliberately omits an
+NPC's `alertness_dc` (surfacing only `surprised`) and never carries `disposition_dc` — the
+README promises "hidden stealth DCs" are redacted from "everything the model sees." But the
+`get_state` tool returned `state.to_dict()` with light redaction (quest flags, exits, history)
+and **left the NPC dicts raw**, so a model that explicitly called `get_state` received both
+`alertness_dc` and `disposition_dc` in full. The auto-snapshot was airtight; the on-demand
+channel was not — the same leak class the quest-flag ADR above closed for passwords.
+
+**Decision:** `get_state` runs its NPC map through `_npcs_for_model`, dropping
+`_HIDDEN_NPC_FIELDS` (`disposition_dc`, `alertness_dc`) before the result reaches the model.
+`alertness_dc` is the stealth DC the README names; `disposition_dc` is its one-shot social
+twin. The model is meant to learn an NPC's reachability by *attempting* — `influence_npc`
+returns `immovable` for a `None` disposition, `attempt_ambush` returns `cannot_ambush` or the
+`bar` — never by reading the number off the snapshot. The live `state.npcs` objects keep both
+(the engine owns and rolls against them); only the model-facing copy is stripped.
+
+**Consequences:** `get_state` now matches `_state_snapshot`'s NPC view for the two secret DCs,
+so the README's redaction claim holds on both channels. Other NPC fields (`hp`, `hostile`,
+`ac`, `attack_bonus`, `inventory`, `social_attempted`, `surprised`, `companion`) still surface
+— they are not secrets (AC/atk are revealed through combat and shown in `/state`). Hard
+boundary, enforced in code (`test_get_state_hides_hidden_npc_dcs`). Saves are unaffected:
+`to_dict`/`from_dict` still round-trip both DCs (the redaction is applied only in the
+`get_state` dispatch, not in serialization).
+
 
 ## ADR: add_npc spawns only author-declared reinforcements, behind a trigger
 
