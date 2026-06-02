@@ -89,6 +89,23 @@ def test_empty_title_or_blurb_is_error():
     assert "missing required 'title'" in _errs(d)
 
 
+def test_every_scenario_key_is_required():
+    """Every key in _SCENARIO_KEYS is enforced — so expanding the set automatically
+    adds a hard requirement (this test guards future additions)."""
+    from src import validate
+    for key in validate._SCENARIO_KEYS:
+        d = _valid()
+        del d[key]
+        assert f"missing required {key!r}" in _errs(d), f"{key!r} in _SCENARIO_KEYS is not enforced"
+
+
+def test_scenario_keys_are_known_top_level_keys():
+    """A required key must also be an allowed key, or it would contradict the
+    unknown-top-level-key check."""
+    from src import validate
+    assert validate._SCENARIO_KEYS <= validate._TOP_LEVEL_KEYS
+
+
 def test_all_shipped_scenarios_validate():
     """Every scenario shipped under data/ (incl. data/demos/) must pass cleanly."""
     import glob

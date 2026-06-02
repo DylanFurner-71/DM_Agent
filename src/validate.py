@@ -46,6 +46,11 @@ _SCENE_KEYS = {"location", "scene", "npcs", "loot", "exits", "hazards",
 # are author metadata read only by the start menu — the loader ignores them — so add
 # them explicitly here.
 _TOP_LEVEL_KEYS = set(GameState().to_dict()) | {"title", "blurb"}
+# The subset of top-level keys a scene-based (menu-facing) scenario MUST declare —
+# required non-empty string metadata, validated as errors. Kept as a named set so the
+# requirement is data-driven and easy to expand later; must stay a subset of
+# _TOP_LEVEL_KEYS. (Free-form scenarios have no menu presence and are exempt.)
+_SCENARIO_KEYS = {"title", "blurb"}
 # Known fields whose VALUES the dataclasses don't type-check: a wrong type loads fine
 # via Character(**v)/NPC(**v) and only crashes mid-session, so the validator does.
 _CHARACTER_INT_FIELDS = ("level", "max_hp", "hp", "ac", "attack_bonus", "proficiency_bonus",
@@ -431,10 +436,10 @@ def validate_scenario(data: dict) -> Report:
         rep.error("scenes", "'scenes' must be a non-empty object")
         return rep
 
-    # A scene-based scenario is a menu-facing adventure, so it must carry the
-    # start-menu metadata. (Free-form scenarios returned above are exempt — they have
-    # no menu presence.)
-    for field in ("title", "blurb"):
+    # A scene-based scenario is a menu-facing adventure, so it must carry the required
+    # start-menu metadata (_SCENARIO_KEYS). (Free-form scenarios returned above are
+    # exempt — they have no menu presence.)
+    for field in sorted(_SCENARIO_KEYS):
         val = data.get(field)
         if not isinstance(val, str) or not val.strip():
             rep.error("root", f"missing required {field!r} — every scene-based scenario "
