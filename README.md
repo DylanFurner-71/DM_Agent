@@ -179,38 +179,68 @@ also has **input history** — `readline` (stdlib) gives arrow-key recall and li
 editing, persisted across sessions to `saves/.input_history` (best-effort; a quiet
 no-op where `readline` is unavailable, e.g. stock Windows).
 
-**Performance.** The static system-prompt-plus-tools prefix is cached across calls,
-and every API call is instrumented per phase. Profiling showed the run is
-**decode-bound** (~30 tok/s, with caching fully engaged and *not* the bottleneck),
-which sets the direction for the latency work below. The model-facing context is
-also kept lean: `get_state` returns live numbers (HP, slots, flags, scene) but
-**not** the unbounded session history (`transcript`/`narrative`/`log`), which the
-model never acts on — re-injecting it once cost ~3.4k tokens in profiling and rode
-through every later hop of that turn.
+**Performance.** Profiling showed the run is **decode-bound** (~30 tok/s, with
+caching fully engaged and *not* the bottleneck) and that wall time is dominated by a
+~3.3s fixed cost *per API call* — so **calls-per-turn**, not output size, is the lever
+the optimizations below pull. Every API call is instrumented per phase (`/cost` and
+the stats sidecar break out prompt-cache reads vs. writes).
+
+*Caching & lean context.* The static system-prompt-plus-tools prefix is cached across
+every call (`cache_control` on both the system block and the tools array). Context is
+rebuilt fresh each turn — a redacted state snapshot plus the last `NARRATION_WINDOW`
+narration pairs — so per-turn cost stays flat instead of growing with session length,
+and stale `tool_use`/`tool_result` blocks are never carried forward (their effects
+already live in the engine state). The snapshot is kept lean: it injects live numbers
+(HP, slots, flags, scene) but **not** the unbounded session history
+(`transcript`/`narrative`/`log`), which the model never acts on — re-injecting it once
+cost ~3.4k tokens in profiling and rode through every later hop of that turn.
+
+*Fewer calls per turn.* Narration is folded into the tool loop rather than spent on a
+separate call (DECISIONS.md §5): out of combat the loop's terminating turn *is* the
+narration. In combat the player's action is resolved tool-only and a single
+`_narrate_turn` covers it plus every NPC beat in order (DECISIONS.md §2). Three further
+call-count cuts live in the loop:
+
+- **Combat fast-path.** Once the active PC's action is spent, the tool loop breaks
+  immediately rather than paying for a terminal model turn whose prose would be
+  scrubbed anyway — saving one call on every combat player turn.
+- **Engine-resolved NPC turns.** A plain hostile or companion attack is resolved
+  entirely in Python (`resolve_npc_action`) with **no API call**; a synthetic
+  `[Engine: …]` context line is injected so the unified narration still has the exact
+  hit/miss/damage facts.
+- **Batched NPC fallbacks.** NPC turns the engine *can't* resolve deterministically are
+  queued and flushed in a single `_execute` call, not one call per NPC.
+
+*Bounded output.* Each narration phase requests a right-sized `max_tokens` budget
+(400 for the post-combat close, 300 for the epilogue, `min(256 × beats, 1024)` for the
+unified turn), so the decode-bound generation never runs longer than the prose needs.
 
 ## Roadmap
 
 ### In progress / specced
 
-**Latency.** *(Mostly done — see DECISIONS.md §5–6.)* The wasted terminating
-  generation is no longer thrown away: out of combat it *is* the narration, and in
-  combat one call narrates the player action plus all NPC beats. Narration also
-  **streams** to the terminal as it generates (behind a leak gate), so the player
-  reads from the first token. `get_state` was also trimmed of unbounded session
-  history (see Performance, above). A profiling harness (`profile_api.py`) measures
-  the before/after. The remaining levers are captured in the table below.
+**Latency.** *(Mostly done — see DECISIONS.md §5–6 and the Performance section
+  above.)* The wasted terminating generation is no longer thrown away: out of combat
+  it *is* the narration, and in combat one call narrates the player action plus all NPC
+  beats. On top of that the loop now skips the spent-action terminal turn in combat,
+  resolves plain NPC attacks in-engine with no API call, batches un-resolvable NPC
+  turns into one call, and right-sizes each narration `max_tokens`. Narration also
+  **streams** to the terminal as it generates (behind a leak gate), so the player reads
+  from the first token. `get_state` was trimmed of unbounded session history. A
+  profiling harness (`profile_api.py`) measures the before/after. The remaining levers
+  are captured in the table below.
 
-**Remaining latency levers** — none addressed yet; recorded here so they aren't lost.
-Profiling a full run showed a ~3.3s fixed cost *per API call* (so calls-per-turn is
-the lever, not output size), with wall time splitting roughly **40% tool-selection /
-52% narration**. Ranked by payoff vs. risk:
+**Remaining latency levers** — recorded here so they aren't lost. Profiling a full run
+showed a ~3.3s fixed cost *per API call* (so calls-per-turn is the lever, not output
+size), with wall time splitting roughly **40% tool-selection / 52% narration**. Ranked
+by payoff vs. risk:
 
 | Lever | Payoff | Risk |
 |---|---|---|
 | **Two-model split** — run the mechanical tool-selection ("thinking") calls on a faster, cheaper model (e.g. Haiku), keep the quality model for narration. Needs a second model constant in `dm_agent.py` and routing the tool-use `client` calls to it. | High — ~40% of wall time is mechanical tool-selection | Medium — the cheaper model must still pick the right tool/args, or enforcement narration breaks |
 | **Merge conclude-action + epilogue** into one narration call | Low — one fewer call, on the final turn only | Low — the epilogue paragraph is shaped differently |
 | **Lean harder on parallel `tool_use`** to cut hops on multi-tool turns (e.g. two `take_item`s + a `move_scene` resolved in one response instead of three) | Low–medium | Low code, but prompt-level and unreliable |
-| **Cap narration `max_tokens` / prompt for brevity** | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
+| **Prompt narration for more brevity** (the `max_tokens` budgets are already right-sized per phase; this is the prose-quality dial) | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
 
 ## Need to implement
 
@@ -260,7 +290,7 @@ data/
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json, five_scene_branching.json)
 tests/
-  test_rules.py        # ~300 enforcement tests — no API needed
+  test_rules.py        # ~500 enforcement tests — no API needed
   test_answer_gate.py  # answer-gated-exit behaviour + redaction, no API needed
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
 ```
@@ -272,7 +302,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python -m pytest -q                       # ~300 enforcement tests, no API needed
+python -m pytest -q                       # ~500 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -315,7 +345,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 300 tests across `tests/`, all running with **no API**. They drive the
+Roughly 500 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
