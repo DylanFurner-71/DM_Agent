@@ -9,7 +9,7 @@ scene. Tuned to be winnable but not gentle.
 Drive one from the terminal:
 
 ```bash
-python -m src.main data/adventures/emberdeep_mine.json
+python3 -m src.main data/adventures/emberdeep_mine.json
 ```
 
 In any session, the CLI commands let you watch the engine work: `/help`,
@@ -37,33 +37,33 @@ The game autosaves to `saves/autosave.json` after every turn.
 **Emberdeep Mine**
 
 ```bash
-python -m src.main data/adventures/emberdeep_mine.json
-python -m src.validate data/adventures/emberdeep_mine.json
+python3 -m src.main data/adventures/emberdeep_mine.json
+python3 -m src.validate data/adventures/emberdeep_mine.json
 ```
 
 **The Velvet Mask**
 
 ```bash
-python -m src.main data/adventures/the_velvet_mask.json
-python -m src.validate data/adventures/the_velvet_mask.json
+python3 -m src.main data/adventures/the_velvet_mask.json
+python3 -m src.validate data/adventures/the_velvet_mask.json
 ```
 
 **Tomb of the Sunken King**
 
 ```bash
-python -m src.main data/adventures/tomb_of_the_sunken_king.json
-python -m src.validate data/adventures/tomb_of_the_sunken_king.json
+python3 -m src.main data/adventures/tomb_of_the_sunken_king.json
+python3 -m src.validate data/adventures/tomb_of_the_sunken_king.json
 ```
 
 **Stormhold Keep**
 
 ```bash
-python -m src.main data/adventures/stormhold_keep.json
-python -m src.validate data/adventures/stormhold_keep.json
+python3 -m src.main data/adventures/stormhold_keep.json
+python3 -m src.validate data/adventures/stormhold_keep.json
 ```
 
 Validate all of them at once:
 
 ```bash
-python -m src.validate data/adventures/*.json
+python3 -m src.validate data/adventures/*.json
 ```

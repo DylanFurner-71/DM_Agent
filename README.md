@@ -161,7 +161,7 @@ qualifies as a flag (see DECISIONS.md, "quest_flags hold narrative facts only").
 combat, flags), mid-session resume, sensible defaults for older saves, and
 template-based NPC spawning from the scenario file.
 
-**Scenario validator.** `python -m src.validate <scenario.json>` lints an authored
+**Scenario validator.** `python3 -m src.validate <scenario.json>` lints an authored
 scenario before play, catching content bugs that would otherwise only surface
 mid-session: exits that point at nonexistent scenes, NPC/reinforcement `template`s
 not in `MONSTERS`, hazard `damage` that isn't valid dice or an unknown save ability,
@@ -305,7 +305,7 @@ src/
   dm_agent.py          # tool-use loop with folded narration, caching, instrumentation
   main.py              # terminal REPL controller: command dispatch, save/launch + autosave
   views.py             # presentation layer: HUD, /state, /recap, /roll, tool/stats traces
-  validate.py          # scenario linter: python -m src.validate <scenario.json>
+  validate.py          # scenario linter: python3 -m src.validate <scenario.json>
 data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
@@ -343,10 +343,10 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python -m pytest -q                       # ~614 enforcement tests, no API needed
-python -m src.main                        # play
-python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
-python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
+python3 -m pytest -q                       # ~614 enforcement tests, no API needed
+python3 -m src.main                        # play
+python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
+python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
 ```
 
 > The virtual environment keeps this project's dependencies (`rich`, `anthropic`, …)
@@ -400,8 +400,8 @@ walkthroughs) against the live model, stops when the game ends, and saves the
 final state:
 
 ```bash
-python smoke_test.py            # → saves/demo_combat.json, demo_death_saves.json, …
-python smoke_test.py _1         # suffix each save → saves/demo_combat_1.json, … (run again as _2, _3)
+python3 smoke_test.py            # → saves/demo_combat.json, demo_death_saves.json, …
+python3 smoke_test.py _1         # suffix each save → saves/demo_combat_1.json, … (run again as _2, _3)
 ```
 
 It prints a per-demo pass/`no-end` line and exits non-zero if any demo throws —

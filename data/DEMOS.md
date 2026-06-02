@@ -5,7 +5,7 @@ Focused scenarios, one per feature-cluster from the README's **Features
 trigger and watch. Drive them from the terminal:
 
 ```bash
-python -m src.main data/demos/demo_combat.json
+python3 -m src.main data/demos/demo_combat.json
 ```
 
 In every session you can use the CLI commands to observe what the engine did:
@@ -44,7 +44,7 @@ compact status header shown before each prompt), `/recap` (story so far),
 ## demo_combat.json — Combat
 
 ```bash
-python -m src.main data/demos/demo_combat.json
+python3 -m src.main data/demos/demo_combat.json
 ```
 
 **Party:** Aldric (cleric, mace), Kael (rogue, finesse shortsword + shortbow),
@@ -74,7 +74,7 @@ when the last foe falls in a terminal scene.
 ## demo_death_saves.json — Death, downed state & endgame
 
 ```bash
-python -m src.main data/demos/demo_death_saves.json
+python3 -m src.main data/demos/demo_death_saves.json
 ```
 
 **Party:** Aldric (sturdy, carries a healing potion), Wisp (fragile — **5 max HP**).
@@ -102,7 +102,7 @@ downed ally by **administering an item** — which resets their death-save count
 ## demo_social_companions.json — Social & companions
 
 ```bash
-python -m src.main data/demos/demo_social_companions.json
+python3 -m src.main data/demos/demo_social_companions.json
 ```
 
 **Party:** Aldric, Wisp (high CHA, the face). **Scene 1 (parley_ledge):** Snik, a
@@ -134,7 +134,7 @@ the companion **following across scenes**, and fighting hostiles on the party's 
 ## demo_stealth.json — Stealth & ambush
 
 ```bash
-python -m src.main data/demos/demo_stealth.json
+python3 -m src.main data/demos/demo_stealth.json
 ```
 
 **Party:** Kael (DEX +3) and Wisp (DEX +2) — both stealthy. **Scene 1
@@ -162,7 +162,7 @@ straight into a fair fight).
 ## demo_gates_loot.json — Exploration: scenes, gates & loot (+ quest flags)
 
 ```bash
-python -m src.main data/demos/demo_gates_loot.json
+python3 -m src.main data/demos/demo_gates_loot.json
 ```
 
 **Party:** Aldric, Wisp. No combat — pure exploration. **Scene 1 (antechamber):** a
@@ -196,7 +196,7 @@ can't invent exits), and the victory epilogue.
 ## demo_spells_items.json — Spells & items
 
 ```bash
-python -m src.main data/demos/demo_spells_items.json
+python3 -m src.main data/demos/demo_spells_items.json
 ```
 
 **Party:** Aldric (cleric — `guiding_bolt`, `sacred_flame` cantrip, a healing
@@ -228,7 +228,7 @@ free cantrips, the **Pearl-of-Power cap** (refused when slots are already full, 
 ## demo_skill_checks.json — Checks (proactive `skill_check`)
 
 ```bash
-python -m src.main data/demos/demo_skill_checks.json
+python3 -m src.main data/demos/demo_skill_checks.json
 ```
 
 **Party:** Bram (STR +4, the muscle), Senna (WIS +3 / DEX +3, the eyes), Orin
@@ -281,7 +281,7 @@ acting character's turn-guarded action** (the reactive `saving_throw` twin lives
 ## demo_saving_throws.json — Saving throws & hazards/traps
 
 ```bash
-python -m src.main data/demos/demo_saving_throws.json
+python3 -m src.main data/demos/demo_saving_throws.json
 ```
 
 **Party:** Aldric (proficient in WIS/CHA saves, carries a healing potion), Kael
@@ -323,7 +323,7 @@ trap more easily); and the contrast with a **bare `saving_throw`** for the fear-
 ## demo_reinforcements.json — Reinforcements (`add_npc`)
 
 ```bash
-python -m src.main data/demos/demo_reinforcements.json
+python3 -m src.main data/demos/demo_reinforcements.json
 ```
 
 **Party:** Aldric, Kael, Wisp. **Scene (alarm_post):** Grik (goblin) beside a brass
@@ -354,7 +354,7 @@ turn), and one-spawn-per-id.
 ## demo_flat_effects.json — Flat effects & flavor rolls (`modify_hp`, `roll_dice`)
 
 ```bash
-python -m src.main data/demos/demo_flat_effects.json
+python3 -m src.main data/demos/demo_flat_effects.json
 ```
 
 **Party:** Aldric (a cleric, starting **wounded at 18/24** so a heal is visible) and
@@ -393,7 +393,7 @@ count) — the roll the engine forbids from feeding HP.
 ## stormhold_keep.json — Branching geography
 
 ```bash
-python -m src.main data/adventures/stormhold_keep.json
+python3 -m src.main data/adventures/stormhold_keep.json
 ```
 
 **Party:** Aldric, Kael, Wisp. A five-scene crawl through Stormhold Keep whose map
@@ -441,7 +441,7 @@ The save/resume round-trip works from any of the above:
 2. `/quit`.
 3. Resume exactly where you left off — same HP, slots, scene, combat state, flags:
    ```bash
-   python -m src.main saves/my_run.json
+   python3 -m src.main saves/my_run.json
    ```
 
 The game also offers to save at the end of a run (after a victory or defeat
@@ -449,7 +449,7 @@ epilogue), so you can keep the completed transcript and trace.
 
 **Autosave & `/undo` (any scenario).** Every turn is autosaved to
 `saves/autosave.json`, so a crash or accidental `/quit` loses nothing — resume with
-`python -m src.main saves/autosave.json`. And at any prompt, `/undo` rewinds the
+`python3 -m src.main saves/autosave.json`. And at any prompt, `/undo` rewinds the
 last turn (state, narration, and trace all roll back); type it twice to step back
 two turns. Try it in any demo: take an action, `/state` to see the change, `/undo`,
 then `/state` again to watch it revert.
