@@ -260,8 +260,8 @@ also has **input history** — `readline` (stdlib) gives arrow-key recall and li
 editing, persisted across sessions to `saves/.input_history` (best-effort; a quiet
 no-op where `readline` is unavailable, e.g. stock Windows).
 
-**Performance.** Profiling showed the run is **decode-bound** (~30 tok/s, with
-caching fully engaged and *not* the bottleneck) and that wall time is dominated by a
+**Performance & Latency.** Profiling showed the run is **decode-bound** (~30 tok/s, with
+caching fully engaged and *not* the bottleneck) and that wall time iwas dominated by a
 ~3.3s fixed cost *per API call* — so **calls-per-turn**, not output size, is the lever
 the optimizations below pull. Every API call is instrumented per phase (`/cost` and
 the stats sidecar break out prompt-cache reads vs. writes).
@@ -300,7 +300,7 @@ unified turn), so the decode-bound generation never runs longer than the prose n
 
 ### In progress / specced
 
-**Latency.** *(Mostly done — see DECISIONS.md §5–6 and the Performance section
+**Performance & Latency.** *(Mostly done — see DECISIONS.md §5–6 and the Performance section
   above.)* The wasted terminating generation is no longer thrown away: out of combat
   it *is* the narration, and in combat one call narrates the player action plus all NPC
   beats. On top of that the loop now skips the spent-action terminal turn in combat,
@@ -317,9 +317,10 @@ unified turn), so the decode-bound generation never runs longer than the prose n
   the per-call stats sidecar surfaced by `/cost`.) The remaining levers are captured in
   the table below.
 
-**Remaining latency levers** — recorded here so they aren't lost. Profiling a full run
-showed a ~3.3s fixed cost *per API call* (so calls-per-turn is the lever, not output
-size), with wall time splitting roughly **40% tool-selection / 52% narration**. Ranked
+**Remaining latency levers** — An early profile of a full run
+showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **40% tool-selection / 52% narration**. 
+
+Remaining items Ranked
 by payoff vs. risk:
 
 | Lever | Payoff | Risk |
@@ -329,8 +330,7 @@ by payoff vs. risk:
 
 ## Need to implement
 
-*(Nothing queued — the CLI & quality-of-life items here, input history, `--seed`, and
-API retry/backoff, are all implemented. New near-term work lands here.)*
+*(Nothing queued) - wrapping up in preparation for demo.
 
 ## Potential implementations
 
@@ -389,27 +389,29 @@ data/
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
-tests/                 # ~686 tests total, all no-API
-  test_rules.py        # 153 — enforcement core: dice, attack, spells, combat/turn guards
+tests/                 # 727 tests total, all no-API
+  test_rules.py        # 156 — enforcement core: dice, attack, spells, combat/turn guards
   test_tools.py        #  79 — dispatch, guards, target/redaction, get_state
+  test_validate.py     #  63 — scenario linter checks
+  test_agent.py        #  51 — agent loop: context, narration routing, closing prompts
+  test_views.py        #  50 — rich/plain rendering: /state, /cost, /export
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
-  test_views.py        #  45 — rich/plain rendering: /state, /cost, /export
-  test_agent.py        #  41 — agent loop: context, narration routing, closing prompts
   test_hud.py          #  39 — status HUD: bars, spells, inventory, color
-  test_validate.py     #  56 — scenario linter checks
-  test_scenes.py       #  27 — scene loading, move_scene, gated exits, terminal conclusion
+  test_scenes.py       #  28 — scene loading, move_scene, gated exits, terminal conclusion
   test_ambush.py       #  26 — attempt_ambush, surprise, companions
   test_save.py         #  23 — /save + /export helpers
-  test_reinforcements.py #22 — add_npc reinforcements + available_reinforcements
   test_persistence.py  #  23 — JSON save/load round-trip
+  test_reinforcements.py #22 — add_npc reinforcements + available_reinforcements
   test_items.py        #  20 — take_item / use_item / consumables
   test_social.py       #  15 — influence_npc + parley-to-combat
   test_answer_gate.py  #  15 — answer-gated exits + password redaction
   test_narrative.py    #  13 — narration recording / transcript
   test_hazards.py      #  10 — trigger_hazard traps + available_hazards
   test_retry.py        #  10 — API retry/backoff
+  test_cli.py          #  10 — CLI args, --seed, launch/resume
   test_undo.py         #   9 — /undo per-turn rewind
-  test_cli.py          #   9 — CLI args, --seed, launch/resume
+  test_start_menu.py   #   9 — start menu: arrow-key adventure picker
+  test_two_model_split.py #  6 — two-model split: tool-selection routing + cost
   test_input_history.py#   6 — readline input history
   _helpers.py          #   –  shared test fixtures (no tests)
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
@@ -422,7 +424,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
-python3 -m pytest -q                       # ~686 enforcement tests, no API needed
+python3 -m pytest -q                       # 727 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -471,7 +473,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 686 tests across `tests/`, all running with **no API**. They drive the
+Roughly 727 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
@@ -499,5 +501,4 @@ comparison.
 
 ## Mechanics note
 
-Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0). Expand `rules.SRD_RULES`
-and the combat math as you go.
+Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0). 
