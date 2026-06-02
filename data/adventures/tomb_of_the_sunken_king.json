@@ -1,4 +1,6 @@
 {
+  "title": "Tomb of the Sunken King",
+  "blurb": "Descend into a flooded, cursed crypt for the crown of Khaluun — past his still-walking court.",
   "current_scene": "antechamber",
   "scenes": {
     "antechamber": {

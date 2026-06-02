@@ -36,8 +36,10 @@ _EXIT_KEYS = {"to", "requires", "requires_answer", "denied"}
 _HAZARD_KEYS = {"name", "ability", "dc", "damage", "damage_type", "on_success",
                 "once", "requires", "hidden"}
 # Top-level scenario keys the loader/saver knows. Derived from GameState.to_dict so it
-# tracks the real schema (savegame fields included) and can't drift.
-_TOP_LEVEL_KEYS = set(GameState().to_dict())
+# tracks the real schema (savegame fields included) and can't drift. `title`/`blurb`
+# are author metadata read only by the start menu — the loader ignores them — so add
+# them explicitly here.
+_TOP_LEVEL_KEYS = set(GameState().to_dict()) | {"title", "blurb"}
 # Known fields whose VALUES the dataclasses don't type-check: a wrong type loads fine
 # via Character(**v)/NPC(**v) and only crashes mid-session, so the validator does.
 _CHARACTER_INT_FIELDS = ("level", "max_hp", "hp", "ac", "attack_bonus", "proficiency_bonus",
@@ -422,6 +424,9 @@ def validate_scenario(data: dict) -> Report:
     if not isinstance(scenes, dict) or not scenes:
         rep.error("scenes", "'scenes' must be a non-empty object")
         return rep
+
+    if not data.get("title"):
+        rep.warn("root", "no 'title' — the start menu will fall back to the filename")
 
     scene_keys = set(scenes)
     current = data.get("current_scene")

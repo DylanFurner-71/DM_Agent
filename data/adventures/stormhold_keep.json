@@ -1,4 +1,6 @@
 {
+  "title": "Stormhold Keep",
+  "blurb": "Storm the rain-lashed castle to oust Captain Vexis and the raider warband holed up in its throne sanctum.",
   "current_scene": "storm_gate",
   "scenes": {
     "storm_gate": {

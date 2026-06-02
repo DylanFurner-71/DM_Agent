@@ -1,4 +1,6 @@
 {
+  "title": "Emberdeep Mine",
+  "blurb": "A lost dwarven mine, a kobold warband, and the young red dragon nesting in its flooded forge.",
   "current_scene": "mine_mouth",
   "scenes": {
     "mine_mouth": {
