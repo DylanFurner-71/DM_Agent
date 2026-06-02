@@ -3,9 +3,21 @@
   "scenes": {
     "warded_vault": {
       "location": "The Warded Vault",
-      "scene": "A round stone vault, long sealed, holds three curiosities and a prize. Set into the floor is a ring of old warding runes — a flat, impartial glyph that bites anyone who lays a hand on it for exactly 6 points of vitality: no saving throw, no dice, the toll is always the same. Beside it a cracked basin cups a thread of glowing water — a restorative font that knits exactly 8 hit points into the first wounded soul to drink, then goes dark. Against the far wall a burst strongbox spills loose coin across the flagstones — a fortune, though how much only a count will tell. At the center, on a plain plinth, rests the silver reliquary you came to claim. Nothing here stirs or threatens; the room is yours to work.",
+      "scene": "A round stone vault, long sealed, holds three curiosities and a prize. Set into the floor is a ring of old warding runes, their angular glyphs faintly aglow — the kind of ward that lashes out at any who lay a hand on it. Beside it a cracked basin cups a thread of glowing water — a restorative font that knits exactly 8 hit points into the first wounded soul to drink, then goes dark. Against the far wall a burst strongbox spills loose coin across the flagstones — a fortune, though how much only a count will tell. At the center, on a plain plinth, rests the silver reliquary you came to claim. Nothing here stirs or threatens; the room is yours to work.",
       "npcs": {},
       "loot": ["silver_reliquary"],
+      "hazards": {
+        "warding_glyph": {
+          "name": "warding glyph",
+          "ability": "dex",
+          "dc": 13,
+          "damage": "2d6",
+          "damage_type": "force",
+          "on_success": "half",
+          "once": false,
+          "hidden": false
+        }
+      },
       "exits": {}
     }
   },

@@ -352,7 +352,7 @@ turn), and one-spawn-per-id.
 
 ---
 
-## demo_flat_effects.json — Flat effects & flavor rolls (`modify_hp`, `roll_dice`)
+## demo_flat_effects.json — Out-of-combat HP channels (`roll_dice`, `trigger_hazard`, `modify_hp`)
 
 ```bash
 python3 -m src.main data/demos/demo_flat_effects.json
@@ -360,33 +360,37 @@ python3 -m src.main data/demos/demo_flat_effects.json
 
 **Party:** Aldric (a cleric, starting **wounded at 18/24** so a heal is visible) and
 Wisp (16/16). **Scene (warded_vault):** a single, peaceful terminal room with three
-curiosities — a warding glyph that deals a *flat, exact* toll, a restorative font that
+curiosities — an author-placed **warding glyph** (a magic trap), a restorative font that
 heals a *flat, exact* amount, and a burst strongbox of loose coin to be *counted* —
 plus the silver reliquary to claim before leaving.
 
-**Shows:** the two tools no other demo exercises. `modify_hp` for a **flat, known**
-HP change — the engine applies an exact amount the fiction states, *not* a dice roll
-(that would be `apply_dice`) and *not* an author-placed trap (that would be
-`trigger_hazard`, which needs a `hazards` manifest — there is none here). And
-`roll_dice` for **fiction-only** randomness that touches no tracked state (the coin
-count) — the roll the engine forbids from feeding HP.
+**Shows:** the three ways HP changes *outside combat* — and when each applies. `roll_dice`
+for **fiction-only** randomness that touches no tracked state (the coin count) — the roll
+the engine forbids from feeding HP. `trigger_hazard` for an **author-placed trap** whose
+numbers are **engine-owned**: the warding glyph is declared in the scene's `hazards`
+manifest (DEX save, `2d6` force, half on a save), so the model only *triggers* it — it
+never supplies or skips the damage. And `modify_hp` for a genuinely **ad-hoc, fiction-stated
+flat** amount with no manifest (the font heal) — the residual case for an exact number the
+author didn't table as a trap.
 
-> Watch `/trace`: the ward and font fire a single `modify_hp` each (exact ±amount);
-> the coin count fires `roll_dice` and **no** `modify_hp`. `/state` shows HP move by
-> precisely the stated number, and the font heal **clamping at max HP**.
+> Watch `/trace`: the glyph fires a `trigger_hazard` (the engine rolls the save and the
+> `2d6`); the font fires a single `modify_hp +8`; the coin count fires `roll_dice` and
+> **no** HP change. `/state` shows the font heal **clamping at max HP**. The trap's DC and
+> damage are author-owned — they never appear in the snapshot, only the hazard's id/name.
 
 **Play it:**
 1. `Wisp counts the spilled coins` → a **`roll_dice`** flavor roll (e.g. `3d6`×10 gp):
    the DM narrates the haul, and **nothing changes** in `/state` — fiction-only.
-2. `Aldric lays his hand on the warding runes` → **`modify_hp` −6** on Aldric
-   (`/state`: 18 → 12, exactly 6, no roll). The flat toll the scene names.
-3. `Aldric drinks from the restorative font` → **`modify_hp` +8** healing (12 → 20).
-   Then `Aldric drinks again` — the font has gone dark, so the DM narrates no effect;
-   or have a full-HP PC drink to watch the heal **clamp at max** rather than overfill.
+2. `Aldric lays his hand on the warding runes` → **`trigger_hazard`** on the
+   `warding_glyph`: the engine rolls Aldric's DEX save (DC 13) and applies `2d6` force —
+   full on a fail, half on a save. The numbers are the author's, not the model's.
+3. `Aldric drinks from the restorative font` → **`modify_hp` +8** healing. Then `Aldric
+   drinks again` — the font has gone dark, so the DM narrates no effect; or have a full-HP
+   PC drink to watch the heal **clamp at max** rather than overfill.
 4. `take the silver reliquary` (`take_item`), then `we have what we came for — let's
    leave` → the engine concludes the terminal scene and fires the **victory epilogue**.
 
-> The bound is real too: `modify_hp` refuses a magnitude larger than the target's max
+> The `modify_hp` bound is real too: it refuses a magnitude larger than the target's max
 > HP (reason `amount_out_of_range`) — a flat effect can't exceed a full bar in one hit.
 
 ---

@@ -106,6 +106,21 @@ is clean.
 
 ## 🟡 Soft-rule deviation — `demo_flat_effects_3` skipped a trap consequence
 
+**Status:** ✅ FIXED — the root cause was that the warding rune's damage lived only in
+*scene prose* ("exactly 6 points… no save, no dice"), leaving the model to both decide
+to apply it and supply the number; in run `_3` it rolled an INT `skill_check` and
+applied nothing. Re-authored the rune as an SRD-style **save+dice trap** in the scene's
+`hazards` manifest (DEX save DC 13, `2d6` force, half on a save) in
+`data/demos/demo_flat_effects.json`, so the model now *triggers* it via `trigger_hazard`
+and the engine owns the save/DC/damage (which never reach the model — only the hazard
+id/name appear in the snapshot). This is the same author-placed hardening the hazards
+ADR applied to prose-DC traps, and the structured snapshot signal + protocol is what made
+`demo_saving_throws` trigger reliably. No engine change (the `hazards` manifest already
+implements the SRD save+dice model). The restorative **font** stays on `modify_hp` as the
+demo's legitimate ad-hoc-flat showcase; `data/DEMOS.md` and the smoke script comment
+updated to match. Verified: scenario validates clean, `trigger_hazard` resolves
+engine-owned with save-for-half, full no-API suite green.
+
 **Severity:** low — not engine-enforceable by design; a model-consistency gap.
 
 At turn 2 ("Aldric lays his hand on the warding runes"), the model rolled an INT
