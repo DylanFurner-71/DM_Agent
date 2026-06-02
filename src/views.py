@@ -363,7 +363,7 @@ def _print_state_rich(state: GameState) -> None:
         # Casters carry their slots in the spell block below; non-casters keep the
         # header's slots segment as their only slot readout.
         hpcol = _hp_color(c.hp, c.max_hp)
-        slots_seg = "" if c.spells else f" | slots [magenta]{escape(_pc_slots(c))}[/magenta]"
+        slots_seg = "" if c.spells else f" | slots [hot_pink]{escape(_pc_slots(c))}[/hot_pink]"
         con.print(
             f"  [bold cyan]{escape(c.name)}[/bold cyan]: "
             f"HP [{hpcol}]{c.hp}/{c.max_hp}[/{hpcol}] | AC [steel_blue1]{c.ac}[/steel_blue1]"
@@ -371,7 +371,7 @@ def _print_state_rich(state: GameState) -> None:
         )
         def _fmt_item(item: str) -> str:
             if item.lower() in CONSUMABLES:
-                return f"[light_pink3]{escape(item)} (consumable)[/light_pink3]"
+                return f"[orange1]{escape(item)} (consumable)[/orange1]"
             return f"[grey70]{escape(item)}[/grey70]"
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "[grey70]—[/grey70]"
         con.print(f"    Inventory: {inv}")
@@ -381,10 +381,10 @@ def _print_state_rich(state: GameState) -> None:
             width = max(len(label) for label, _, _ in rows)
             con.print(f"    Spells{escape(ability)}")
             for label, names, tapped in rows:
-                labelcol = "dim magenta" if tapped else "magenta"
+                labelcol = "dim hot_pink" if tapped else "hot_pink"
                 padded = f"{label:<{width}}"
                 con.print(f"      [{labelcol}]{escape(padded)}[/{labelcol}]  "
-                          f"[dim magenta]{escape(names)}[/dim magenta]")
+                          f"[dim hot_pink]{escape(names)}[/dim hot_pink]")
     for n in state.npcs.values():
         kind, disposition = _npc_descriptor(n)
         color = "cyan" if kind == "ally" else ("red" if n.hostile else "green")
@@ -554,7 +554,7 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
                f"  AC [steel_blue1]{c.ac}[/steel_blue1]")
         slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
         if slots:
-            seg += f"  [magenta]{escape(slots)}[/magenta]"
+            seg += f"  [hot_pink]{escape(slots)}[/hot_pink]"
         status = _pc_status(c)
         if status != "ok":
             statuscol = "red" if (c.dead or c.hp <= 0) else "yellow"
@@ -564,12 +564,12 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
         for inv_line in _hud_inventory_lines(c):
             lbl, _, val = inv_line.partition(": ")
             if val:
-                valcol = "light_pink3" if lbl == "Consumables" else "grey70"
+                valcol = "orange1" if lbl == "Consumables" else "grey70"
                 p(f"{indent}[dim]{escape(lbl)}:[/dim] [{valcol}]{escape(val)}[/{valcol}]")
             else:
                 p(f"{indent}{escape(inv_line)}")
         for label, names in _known_spell_groups(c):
-            p(f"{indent}[dim]{escape(label)}[/dim] [dim magenta]{escape(names)}[/dim magenta]")
+            p(f"{indent}[dim]{escape(label)}[/dim] [dim hot_pink]{escape(names)}[/dim hot_pink]")
     if state.combat_round > 0 and state.combat_order:
         all_actors = {**state.party, **state.npcs}
         active_key = state.combat_order[state.combat_index]
