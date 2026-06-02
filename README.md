@@ -307,9 +307,15 @@ unified turn), so the decode-bound generation never runs longer than the prose n
   resolves plain NPC attacks in-engine with no API call, batches un-resolvable NPC
   turns into one call, and right-sizes each narration `max_tokens`. Narration also
   **streams** to the terminal as it generates (behind a leak gate), so the player reads
-  from the first token. `get_state` was trimmed of unbounded session history. (Profiling
-  was driven off the per-call stats sidecar surfaced by `/cost`.) The remaining levers
-  are captured in the table below.
+  from the first token. `get_state` was trimmed of unbounded session history. The
+  **two-model split is now live**: the mechanical tool-selection ("thinking") calls run
+  on a fast model (`FAST_MODEL`, Haiku) while narration stays on the quality `MODEL` —
+  only the combat / NPC-fallback tool loops are routed away (their prose is scrubbed), so
+  the engine still enforces every number and the quality model still writes every line.
+  A full run measured a ~29% cut in the tool-selection wall with zero enforcement
+  regressions; `/cost` prices the mixed-model session per call. (Profiling was driven off
+  the per-call stats sidecar surfaced by `/cost`.) The remaining levers are captured in
+  the table below.
 
 **Remaining latency levers** — recorded here so they aren't lost. Profiling a full run
 showed a ~3.3s fixed cost *per API call* (so calls-per-turn is the lever, not output
@@ -318,7 +324,6 @@ by payoff vs. risk:
 
 | Lever | Payoff | Risk |
 |---|---|---|
-| **Two-model split** — run the mechanical tool-selection ("thinking") calls on a faster, cheaper model (e.g. Haiku), keep the quality model for narration. Needs a second model constant in `dm_agent.py` and routing the tool-use `client` calls to it. | High — ~40% of wall time is mechanical tool-selection | Medium — the cheaper model must still pick the right tool/args, or enforcement narration breaks |
 | **Lean harder on parallel `tool_use`** to cut hops on multi-tool turns (e.g. two `take_item`s + a `move_scene` resolved in one response instead of three) | Low–medium | Low code, but prompt-level and unreliable |
 | **Prompt narration for more brevity** (the `max_tokens` budgets are already right-sized per phase; this is the prose-quality dial) | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
 
@@ -427,9 +432,10 @@ python3 -m src.main --seed 42              # fix the dice RNG for reproducible r
 > out of your global/system Python. Activate it (`source .venv/bin/activate`) in each
 > new shell before running; `deactivate` when you're done.
 
-> Confirm the current model string in `src/dm_agent.py` (`MODEL`) against
-> https://docs.claude.com/en/docs/about-claude/models — it's the only place the
-> model is named.
+> Confirm the current model strings in `src/dm_agent.py` (`MODEL` for narration,
+> `FAST_MODEL` for tool-selection) against
+> https://docs.claude.com/en/docs/about-claude/models — those two constants are the
+> only place a model is named.
 
 ## Demos
 

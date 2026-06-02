@@ -39,13 +39,13 @@ The core loop lives in `dm_agent.py::DMAgent.take_turn`:
 - `game_state.py` — `Character`, `NPC`, `GameState` dataclasses; JSON save/load
 - `rules.py` — dice (`roll`), `attack`, `cast_spell`, `apply_damage`, `heal`, `lookup_rule`; seedable `_rng` (deterministic tests and the `--seed` flag)
 - `tools.py` — `TOOLS` list (Anthropic tool schemas) + `dispatch()` that routes tool names to `rules` functions against live state
-- `dm_agent.py` — the agentic loop; `MODEL` constant is the only place the model name appears
+- `dm_agent.py` — the agentic loop; the `MODEL` and `FAST_MODEL` constants are the only place a model name appears
 - `main.py` — terminal REPL: command dispatch, save/launch, per-turn autosave
 - `views.py` — presentation layer: HUD, `/state`, `/recap`, `/roll`, `/cost`, `/export`, tool/stats traces (rich + plain)
 
 ## Model configuration
 
-The model string is set once in `dm_agent.py` at the top-level `MODEL` constant. Update it there when upgrading Claude versions — nowhere else needs changing. Current: `claude-sonnet-4-6`.
+Two model strings are set in `dm_agent.py` at the top level: `MODEL`, the quality model that writes all narration (current: `claude-sonnet-4-6`), and `FAST_MODEL`, the faster/cheaper model that runs the mechanical tool-selection ("thinking") calls in the combat / NPC-fallback loops (current: `claude-haiku-4-5-20251001`). This is the two-model split — narration stays on `MODEL` while the scrubbed-prose tool loops route to `FAST_MODEL`; pass `fast_model=None` to `DMAgent` to disable it (everything then runs on `MODEL`). Update both here when upgrading Claude versions — nowhere else names a model.
 
 ## Extending
 

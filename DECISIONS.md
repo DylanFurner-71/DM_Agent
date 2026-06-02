@@ -12,7 +12,11 @@ un-cheatable, and it's also what makes it optimizable: narration and transcript
 history can be trimmed or regrouped without affecting correctness, because nothing
 that matters mechanically depends on them.
 
+**Structure.** The entries below are grouped: *Architectural decisions* — choices between alternatives with system-wide significance — followed by a short *Enforcement invariants & fix notes* section for entries written in ADR form that are really durable invariants or regression fixes (no architectural fork was weighed). The latter live here, beside their tests, rather than in the user-facing README.
+
 ---
+
+# Architectural decisions
 
 ## 1. Out-of-turn declared actions — discard and acknowledge
 
@@ -297,7 +301,6 @@ boundary, enforced in code (`test_get_state_hides_hidden_npc_dcs`). Saves are un
 `to_dict`/`from_dict` still round-trip both DCs (the redaction is applied only in the
 `get_state` dispatch, not in serialization).
 
-
 ## ADR: add_npc spawns only author-declared reinforcements, behind a trigger
 
 **Status:** Accepted
@@ -448,8 +451,8 @@ screen-then-stream model.
 **Scope — what's unaffected.** Pure presentation/transport. No tool, enforcement,
 redaction, or storage change; `take_turn` still returns the full assembled narration
 for history and logging, and the terminal simply stops re-printing it (the sink already
-showed it). The mechanical tool-selection-on-a-faster-model idea (README roadmap)
-remains open and independent.
+showed it). The mechanical tool-selection-on-a-faster-model idea is independent and has
+since been implemented — see *ADR: Two-model split*.
 
 **Reversibility.** Leaving `on_narration_delta` unset reverts to fully buffered
 narration with no other change. Localized to `dm_agent.py` (`_narration_call`,
@@ -631,71 +634,6 @@ which avoids having to store and undo a committed roll. Economy chosen: one rero
 the entire session (lifetime lock), the strictest faithful reading of "once-per-session." The hard
 parts (cap, lifetime lock, advantage roll, decrement) are unit-tested; only *when to award* is soft.
 
-
-## ADR: A leveled spell cannot be cast below its tabled base level
-
-**Status:** Accepted
-
-**Context:** `cast_spell` treats *any* cast at `spell_level == 0` as a free cantrip
-(`slots_remaining: "n/a"`, no slot charged) — it never checked that the *named* spell is actually a
-cantrip. Separately, `cast_damaging_spell` resolved damage with
-`by_slot.get(spell_level, by_slot[max(by_slot)])`, falling back to the **strongest** tabled version
-when the level wasn't found. Together these opened a slot-economy bypass: a caster out of slots could
-cast a leveled spell — e.g. `magic_missile` (base level 1) — by declaring `spell_level: 0`. The
-engine charged no slot *and* auto-picked the highest upcast (`by_slot[3]`, `5d4+5`). A live 5-scene
-trace caught exactly this on turn 27: a Wisp at `L1 (0/3)`, holding only an `L2 (1/1)` slot, fired
-Magic Missile for free at the L3 damage column; the persisted save confirmed the L2 slot was never
-touched. This is the same invariant `test_spell_slots_run_out` exists to protect (the engine owns the
-slot economy; the model cannot narrate around a refusal), reached through a side door.
-
-**Decision:** `cast_damaging_spell` looks up the spell's tabled entry **before** consuming anything
-and refuses a cast whose `spell_level` is below the spell's base `level`
-(`ok=false, reason "…is a level-N spell and cannot be cast with a level-M slot", below_min_level=True`).
-The check sits between the knowledge check (a) and slot consumption (b), so no slot — of any level —
-is spent on a refused cast. With under-leveling blocked, the `by_slot[max(...)]` fallback is now only
-reachable by *over*-leveling (upcasting above the tabled max), where capping at the strongest tabled
-column is the intended behavior. Cantrips (base level 0) are unaffected: `0 < 0` is false, so they
-keep the free path.
-
-**Consequences:** The model must now actually spend the right slot — to finish a foe with Magic
-Missile when out of L1 slots, it must upcast into the held L2 slot (`spell_level: 2` → `4d4+4`), or
-narrate the fizzle. Hard boundary, enforced in code
-(`test_cast_leveled_spell_below_base_level_refused`, `test_cast_leveled_spell_upcast_above_base_still_allowed`).
-Untabled spells (no `SPELLS` entry) are not level-checked — the engine can't know their base level —
-so they retain the prior slot-consumed-and-narrated behavior. Related, same trace: `heal` now reports
-`healed` as the HP *actually* restored after the max-HP cap (`target.hp - hp_before`) rather than the
-raw roll, so a capped potion no longer hands the model an inflated number to narrate.
-
-## ADR: Strip model-written turn prompts that duplicate the engine's
-
-**Status:** Accepted
-
-**Context:** The engine owns the per-turn combat prompt (`DMAgent._closing_prompt` in
-`src/dm_agent.py`), appended deterministically as a trailer after each turn's narration. But
-the model frequently *also* ended its prose with one — e.g. `**Brom, what do you do?**`. A
-logged run (`saves/ember_deep_run_1.json`) showed this in **29 of 48** beats. Two harms: the
-player saw a duplicate (the model's bolded prompt immediately followed by the engine's
-trailer), and the contaminated narration was persisted to `narration_history` /
-`state.narrative`, which feed the bounded per-turn window (Decision 3) — so the model read
-its own prompts back as in-context examples and imitated them, a self-reinforcing leak.
-
-**Decision.** `_strip_turn_prompt(text, names)` removes a trailing prompt addressed to a
-known actor **by name followed by a comma** (`**Tilda, you're up — what do you do?**`),
-wired into all three narration-assembly sites in `take_turn`. It is name-anchored so a
-*deliberate* party-wide exploration prompt from the combat-over close ("… What do you do?",
-which names no one) and a rhetorical line ("Will Brom survive?", no comma) are preserved.
-
-**Consequences.** Cleans the stored/returned narration and breaks the feedback loop — the
-high-value effect, since the model stops being trained on its own prompts. This sits in the
-same leak-screen family as Decisions 5 & 6. **Accepted residual (mirrors Decision 6):** the
-streaming combat paths have already emitted live by the time the strip runs, so the same-turn
-on-screen duplicate is only mitigated *indirectly* (the loop stops teaching the pattern); a
-fully synchronous fix would require handling it in `_NarrationGate`. Known limitation: em-dash
-(`Sage — … — what do you do?`) and leading-name (`**X, you're up!** …`) shapes are left
-untouched to avoid eating legitimate prose. Hard boundary on the helper itself, unit-tested
-(`tests/test_agent.py::test_strip_turn_prompt_*`); engine numbers are untouched. Commit
-`dfed0c1`.
-
 ## ADR: Cut two avoidable API hops per turn (latency)
 
 **Status:** Accepted
@@ -748,3 +686,175 @@ when to trade. The author owns the catalogue and its prices (declared in the sce
 and reinforcements (`add_npc`). v1 scope: flat infinite stock, fixed prices (no dynamic
 pricing or haggle mechanic), single-unit transactions. Commits `a4658ad` (ledger), `b8922c1`
 (merchants).
+
+## ADR: Two-model split — tool-selection on a fast model (latency)
+
+**Status:** Accepted
+
+**Context:** After the call-count cuts (Decisions 2/3/5/6 + *Cut two avoidable API hops*), a
+profiled run (`saves/ember_deep_run_1_stats_trace.json`, 48 turns) sat at **2.02 API
+calls/turn** — so the remaining lever is per-call speed, not call count. Tool-selection
+("thinking") was **~35% of wall** (121.5s) doing mechanical, low-output (~83 tok) work — a
+fast/cheap model's job — while narration (65%) is decode-bound and quality-sensitive. This is
+the README roadmap's rank-#1 "two-model split."
+
+**Decision.** Two model constants in `src/dm_agent.py`: `MODEL` (quality, narration) and
+`FAST_MODEL` (Haiku, tool-selection). `_execute` picks the model **once per call** by its
+`capture_narration` flag: `capture_narration=False` (the combat player-action and batched
+NPC-fallback loops, whose terminating text is scrubbed) runs on `FAST_MODEL`; the folded
+out-of-combat loop (`capture_narration=True`, whose terminating turn *is* the narration —
+Decision 5) and every `_narration_call` stay on `MODEL`. This is the key constraint: the fold
+means out-of-combat thinking can't move to the fast model without re-introducing a separate
+narration call, so only the scrubbed-prose loops are routed. Each `api_stats` entry is tagged
+with the model that served it; `views.estimate_cost_mixed` prices a mixed-model session
+per-call. `DMAgent(fast_model=None)` disables the split (everything on `MODEL`).
+
+**Why it's safe.** Zero prose-quality risk: the routed calls never produce player-facing text
+(it's scrubbed; narration is a later `MODEL` call). The hard boundaries are untouched — the
+engine still refuses illegal actions and `MODEL` still writes every line, including
+enforced-failure prose, so a wrong fast-model arg-pick surfaces as an `ok=false` the quality
+model narrates, never as a wrong number or a leak.
+
+**Consequences.** Validated on `saves/ember_deep_run_2_stats_trace.json`: routing exactly as
+designed (40 combat thinking calls on Haiku at **1.54s** vs the 2.53s Sonnet baseline; 9
+out-of-combat thinking calls and all 47 narration calls on Sonnet), **thinking-bucket wall
+−29%**, and **zero** bad tool picks (the only two `ok=false` were legitimate enforcement),
+outcome victory. $ saving is modest (thinking input is cache-read-dominated, output tiny) —
+this is a latency lever. **Reversibility:** `fast_model=None` reverts instantly. Commit
+`b297f08`.
+
+## Ranking of ADR significance
+
+Ordered most → least significant. The criterion is how foundational the decision is to the
+project's central thesis — *every game number is owned and enforced by code; the model only
+narrates* — and how much of the system depends on it. Enforcement boundaries and core loop
+architecture rank above feature mechanics, which rank above localized optimizations and
+narrow correctness rules.
+
+1. **Target agency is soft-enforced** — the clearest articulation of the hard-vs-soft
+   boundary doctrine that defines the whole project; the template every other "soft boundary,
+   documented as such" decision follows.
+2. **#3 Bound the per-turn model context** — the architectural keystone: a fresh, bounded
+   context each turn (not append-only) keeps per-turn cost flat and makes the loop tractable;
+   nearly every later decision assumes it.
+3. **quest_flags hold narrative facts only** — guards the one general-purpose state-write the
+   model has, with a hard reserved-key denylist so flags can't become a backdoor to
+   mechanical state.
+4. **#5 Fold narration into the tool loop** — restructured how every turn produces prose and
+   promoted the leak screens from belt-and-suspenders to the *primary* defense.
+5. **#2 Batch NPC turn narration into a single model call** — established the one-call
+   per-turn-exchange shape that #5 and the combat loop build on.
+6. **String-valued quest flags are redacted from model-facing channels** — keeps passwords
+   and other secrets out of model context; load-bearing for the entire answer-gate mechanic.
+7. **get_state hides the hidden NPC challenge DCs** — keeps stealth/social DCs out of the
+   model's hands so reachability is learned by *attempting*, not reading a number.
+8. **Loot is author-placed and obvious-on-look** — the model cannot fabricate treasure; first
+   pillar of the "author owns content, model only triggers" family.
+9. **add_npc spawns only author-declared reinforcements, behind a trigger** — the model cannot
+   conjure monsters; the encounter roster is author-owned.
+10. **Hazards & traps are author-placed; the engine owns the numbers** — traps' save/DC/damage
+    never leave the engine; the author-placed twin of `saving_throw`.
+11. **Flag-gated transitions and endings** — the engine owns passage through the map and when
+    a gated ending opens; the model can't fabricate a route.
+12. **Cross-scene resource economy — tight provisioning + loot, no rest** — the design frame
+    that makes resources (slots, HP, items) actually matter across a run.
+13. **Concluding an empty terminal scene (soft trigger, hard gate)** — who decides the run is
+    over: a soft model trigger backed by a hard engine gate.
+14. **Companions: recruiting a cross-scene ally** — a whole cross-scene ally subsystem that
+    fights engine-resolved on the party's side.
+15. **Gold ledger and merchants (buy/sell)** — the economy layer; engine-owned prices and
+    purse, mirroring the loot/reinforcement authority model.
+16. **Inspiration is an engine-owned reroll budget; the award is a safe soft boundary** — a
+    capped reroll resource; the canonical "safe soft boundary" (the judgment is soft, the
+    budget and dice are hard).
+17. **Underspecified social intent — ask, never default the actor/approach** — the
+    clarify-don't-guess policy generalized from `ambiguous_target`.
+18. **#6 Stream narration to the terminal, behind a leak gate** — perceived-latency win plus
+    the streaming leak gate that keeps the screens honest under live output.
+19. **Cut two avoidable API hops per turn (latency)** — removed a redundant `get_state` and a
+    wasted terminal combat hop; a measured call-count win.
+20. **Two-model split — tool-selection on a fast model (latency)** — routes mechanical
+    tool-selection to a fast model, a per-call latency win with no enforcement risk.
+21. **#4 NPC weapons are engine-selected, not model-named** — keeps weapon dice/numbers
+    engine-owned for NPC attacks.
+22. **#1 Out-of-turn declared actions — discard and acknowledge** — a turn-integrity rule for
+    a player declaring an action when it isn't their turn.
+
+The two entries under *Enforcement invariants & fix notes* below — the leveled-spell base-level rule and the turn-prompt strip — are intentionally excluded from this ranking; they are durable invariants / regression fixes, not decisions between architectural alternatives.
+
+# Enforcement invariants & fix notes
+
+## Invariant: A leveled spell cannot be cast below its tabled base level
+
+**Status:** Accepted
+
+**Context:** `cast_spell` treats *any* cast at `spell_level == 0` as a free cantrip
+(`slots_remaining: "n/a"`, no slot charged) — it never checked that the *named* spell is actually a
+cantrip. Separately, `cast_damaging_spell` resolved damage with
+`by_slot.get(spell_level, by_slot[max(by_slot)])`, falling back to the **strongest** tabled version
+when the level wasn't found. Together these opened a slot-economy bypass: a caster out of slots could
+cast a leveled spell — e.g. `magic_missile` (base level 1) — by declaring `spell_level: 0`. The
+engine charged no slot *and* auto-picked the highest upcast (`by_slot[3]`, `5d4+5`). A live 5-scene
+trace caught exactly this on turn 27: a Wisp at `L1 (0/3)`, holding only an `L2 (1/1)` slot, fired
+Magic Missile for free at the L3 damage column; the persisted save confirmed the L2 slot was never
+touched. This is the same invariant `test_spell_slots_run_out` exists to protect (the engine owns the
+slot economy; the model cannot narrate around a refusal), reached through a side door.
+
+**Decision:** `cast_damaging_spell` looks up the spell's tabled entry **before** consuming anything
+and refuses a cast whose `spell_level` is below the spell's base `level`
+(`ok=false, reason "…is a level-N spell and cannot be cast with a level-M slot", below_min_level=True`).
+The check sits between the knowledge check (a) and slot consumption (b), so no slot — of any level —
+is spent on a refused cast. With under-leveling blocked, the `by_slot[max(...)]` fallback is now only
+reachable by *over*-leveling (upcasting above the tabled max), where capping at the strongest tabled
+column is the intended behavior. Cantrips (base level 0) are unaffected: `0 < 0` is false, so they
+keep the free path.
+
+**Consequences:** The model must now actually spend the right slot — to finish a foe with Magic
+Missile when out of L1 slots, it must upcast into the held L2 slot (`spell_level: 2` → `4d4+4`), or
+narrate the fizzle. Hard boundary, enforced in code
+(`test_cast_leveled_spell_below_base_level_refused`, `test_cast_leveled_spell_upcast_above_base_still_allowed`).
+Untabled spells (no `SPELLS` entry) are not level-checked — the engine can't know their base level —
+so they retain the prior slot-consumed-and-narrated behavior. Related, same trace: `heal` now reports
+`healed` as the HP *actually* restored after the max-HP cap (`target.hp - hp_before`) rather than the
+raw roll, so a capped potion no longer hands the model an inflated number to narrate.
+
+## Fix note: Strip model-written turn prompts that duplicate the engine's
+
+**Status:** Accepted
+
+**Context:** The engine owns the per-turn combat prompt (`DMAgent._closing_prompt` in
+`src/dm_agent.py`), appended deterministically as a trailer after each turn's narration. But
+the model frequently *also* ended its prose with one — e.g. `**Brom, what do you do?**`. A
+logged run (`saves/ember_deep_run_1.json`) showed this in **29 of 48** beats. Two harms: the
+player saw a duplicate (the model's bolded prompt immediately followed by the engine's
+trailer), and the contaminated narration was persisted to `narration_history` /
+`state.narrative`, which feed the bounded per-turn window (Decision 3) — so the model read
+its own prompts back as in-context examples and imitated them, a self-reinforcing leak.
+
+**Decision.** `_strip_turn_prompt(text, names)` removes a trailing prompt addressed to a
+known actor **by name** (`**Tilda, you're up — what do you do?**`, `**Sage**, what do you
+do?`), wired into all three narration-assembly sites in `take_turn`. It is name-anchored so a
+*deliberate* party-wide exploration prompt from the combat-over close ("… What do you do?",
+which names no one) and a rhetorical line ("Will Brom survive?", no comma) are preserved.
+
+**Update (broadened regex, commit `b297f08`).** The original regex required the name be
+**immediately followed by a comma**, so it caught only the whole-sentence-bold shape
+(`**Sage, …?**`). A later logged run (`saves/ember_deep_run_2.json`) showed the narrator had
+drifted to **name-only bold** (`**Sage**, what do you do?`) — the `**` between name and comma
+defeated the regex, so **22 of 47** beats leaked (vs 5 in run 1) and the feedback loop
+re-amplified the style it could no longer strip. The regex was broadened to allow bold around
+the name *and* a comma / em-dash / en-dash / colon separator, **anchored to a sentence
+boundary** (start, `.`/`!`/`?`, or newline) before the name so a mid-sentence name ("Do you
+trust Sage, after that?") is not over-stripped — which also closed a latent over-strip the
+comma-only form already had. Strips 17/22 of the run-2 leaks cleanly; the residual are
+name-less party-wide prompts (correctly kept) plus a rare em-dash-*preceded* / round-banner
+shape left untouched to avoid dangling punctuation.
+
+**Consequences.** Cleans the stored/returned narration and breaks the feedback loop — the
+high-value effect, since the model stops being trained on its own prompts. This sits in the
+same leak-screen family as Decisions 5 & 6. **Accepted residual (mirrors Decision 6):** the
+streaming combat paths have already emitted live by the time the strip runs, so the same-turn
+on-screen duplicate is only mitigated *indirectly* (the loop stops teaching the pattern); a
+fully synchronous fix would require handling it in `_NarrationGate`. Hard boundary on the
+helper itself, unit-tested (`tests/test_agent.py::test_strip_turn_prompt_*`); engine numbers
+are untouched. Commits `dfed0c1` (original), `b297f08` (broadened).

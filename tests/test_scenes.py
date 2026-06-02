@@ -249,7 +249,7 @@ def test_move_scene_declared_exit_refused_in_combat():
 
     Regression for the stale-combat_order bug: moving scenes mid-combat used to rebuild
     state.npcs from the destination while leaving combat_order pointing at the old scene's
-    combatants (see BUGS.md). The move is now refused, so combat state cannot go stale.
+    combatants. The move is now refused, so combat state cannot go stale.
     """
     gs = GameState(location="Start", current_scene="a")
     gs.scenes = {
