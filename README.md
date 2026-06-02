@@ -212,7 +212,6 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 *CLI & quality-of-life (all terminal, mostly cheap):*
 
-- **`--seed` flag:** fix the dice RNG for a whole session for reproducible demos and bug reports.
 - **API retry/backoff:** wrap the model calls so a rate-limit or network blip mid-turn doesn't abort the session.
 
 ## Potential implementations
@@ -273,6 +272,7 @@ cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
 python -m pytest -q                       # ~300 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
+python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
 ```
 
 > The virtual environment keeps this project's dependencies (`rich`, `anthropic`, …)

@@ -23,6 +23,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import rules
 from .dm_agent import DMAgent
 from .game_state import GameState
 from .views import (
@@ -204,7 +205,9 @@ def _resume_opening(gs, n: int = 1) -> str:
     return "\n\n".join(e["text"] for e in tail)
 
 
-def main() -> None:
+def _make_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser. Split out so the argument surface is unit-testable
+    without entering the interactive loop."""
     parser = argparse.ArgumentParser(
         prog="python -m src.main",
         description="DM Agent — agentic tabletop RPG dungeon master",
@@ -225,8 +228,22 @@ def main() -> None:
         action="store_true",
         help="disable color/Markdown/spinner (also auto-on when output isn't a terminal)",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        metavar="N",
+        help="seed the dice RNG for the whole session — reproducible rolls for demos and bug reports",
+    )
+    return parser
+
+
+def main() -> None:
+    args = _make_parser().parse_args()
     set_plain(args.plain or not sys.stdout.isatty())
+    # Fix the dice RNG up front (before any roll) so the whole session is reproducible.
+    if args.seed is not None:
+        rules.seed(args.seed)
     # Arrow-key recall and line editing at the prompt. Only when stdin is a real
     # terminal — a piped/CI run has no use for it and shouldn't write a history file.
     if sys.stdin.isatty():
@@ -245,6 +262,8 @@ def main() -> None:
     agent.on_narration_delta = _emit_delta
 
     banner(args.scenario)
+    if args.seed is not None:
+        print(f"  Dice RNG seeded with {args.seed} — rolls are reproducible this session.")
     mode = _launch_mode(state)
     if mode == "resume":
         opening = _resume_opening(state)
