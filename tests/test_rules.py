@@ -5455,6 +5455,7 @@ def test_srd_covers_core_mechanics():
         "advantage", "disadvantage", "death_saves", "saving_throws", "spell_slots",
         "armor_class", "attack", "critical_hit", "skill_check", "spell_attack",
         "initiative", "surprise", "influence", "magic_missile", "chromatic_orb",
+        "hazards", "healing", "using_items", "proficiency_bonus",
     }
     missing = expected - set(rules.SRD_RULES)
     assert not missing, f"SRD_RULES is missing core entries: {sorted(missing)}"
