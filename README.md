@@ -55,9 +55,13 @@ The boundary comes in two strengths:
 - **Soft boundaries — enforced by prompt, documented as such.** A handful of
   rules can't be expressed purely in code and are held by the system prompt:
   target selection (don't pick a target the player didn't name), loot being
-  author-placed, and the password-relay rule (relay what the player *says*, never
-  supply the word). These are deliberate, logged in `DECISIONS.md`, and the
-  surfaces that *can* be hardened (e.g. snapshot redaction) are.
+  author-placed, the password-relay rule (relay what the player *says*, never
+  supply the word), asking instead of guessing when a social attempt's actor or
+  approach is unspecified, concluding a hostile-free terminal scene only when the
+  player signals they're leaving, and *whether* to award inspiration (the budget
+  and the reroll stay engine-owned; only the judgment to grant it is the model's).
+  These are deliberate, logged in `DECISIONS.md`, and the surfaces that *can* be
+  hardened (e.g. snapshot redaction) are.
 
 ## Features (implemented)
 
@@ -143,9 +147,12 @@ hazard is save-for-half, none on a success). Hazards can be gated behind a quest
 concealed trap isn't telegraphed before it springs. This is the engine-authoritative
 upgrade of describing a trap's DC in prose: the numbers leave the model's hands entirely.
 
-**Quest flags.** Boolean story markers recording that something happened (a clue
-read, a seal broken), surfaced each turn and used to gate ways and endings.
-*(Hardening to strict-boolean values is in progress — see roadmap.)*
+**Quest flags.** Story markers recording that something happened (a clue read, a seal
+broken), surfaced each turn and used to gate ways and endings. Values are JSON primitives
+(usually booleans); the boundary is two-layer — *hard:* a reserved-key denylist
+(`hp, max_hp, ac, spell_slots, damage, initiative`), JSON-primitive validation, and string
+redaction in everything the model sees; *soft:* an action-vs-discovery prompt rule for what
+qualifies as a flag (see DECISIONS.md, "quest_flags hold narrative facts only").
 
 **Persistence & resume.** JSON save/load with a full round-trip (HP, slots, scene,
 combat, flags), mid-session resume, sensible defaults for older saves, and
@@ -267,7 +274,7 @@ Future work, ranked roughly least → most difficult to implement.
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
 - **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
-- **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks.
+- **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks. *(The keep-higher primitive already exists — `rules._d20(advantage=True)`, used by Inspiration on `skill_check`/`saving_throw`; what remains is threading it through `attack`/`cast_damaging_spell` and adding the keep-lower disadvantage direction.)*
 - **Resting:** a short/long rest that restores HP and spell slots between encounters.
 - **Conditions beyond unconscious:** prone, poisoned, frightened, restrained, etc., with mechanical effects on rolls.
 - **Enemy-initiated stealth:** let foes ambush the party — the mirror of `attempt_ambush`.
@@ -299,7 +306,7 @@ data/
   scenario.json        # the demo adventure
   DEMOS.md             # index of the demos + how to trigger each feature
   demos/               # per-feature demo scenarios (demo_*.json)
-tests/                 # ~610 tests total, all no-API
+tests/                 # ~614 tests total, all no-API
   test_rules.py        # 222 — enforcement core: dice, attack, spells, combat/turn guards
   test_tools.py        #  67 — dispatch, guards, target/redaction, get_state
   test_death_saves.py  #  44 — downed/dying/dead cycle + damage-while-down
@@ -327,7 +334,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY
-python -m pytest -q                       # ~610 enforcement tests, no API needed
+python -m pytest -q                       # ~614 enforcement tests, no API needed
 python -m src.main                        # play
 python -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -370,7 +377,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 610 tests across `tests/`, all running with **no API**. They drive the
+Roughly 614 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
