@@ -265,12 +265,12 @@ Future work, ranked roughly least → most difficult to implement.
 *Mechanics:*
 
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
+- **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
 - **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks.
 - **Resting:** a short/long rest that restores HP and spell slots between encounters.
 - **Conditions beyond unconscious:** prone, poisoned, frightened, restrained, etc., with mechanical effects on rolls.
 - **Enemy-initiated stealth:** let foes ambush the party — the mirror of `attempt_ambush`.
-- **Merchants (buy/sell):** shopkeeper NPCs with inventories that trade against the gold ledger.
 - **Utility & healing spells:** expand the spell table beyond damage (shield, bless, cure wounds).
 - **Multi-category spell engine:** today `cast_damaging_spell` resolves only single-target *damage* (auto-hit or spell-attack); generalize it into a category-aware resolver that also handles saving-throw spells (save for half), area-of-effect multi-target, healing, buffs/utility, and condition-inflicting spells — so the broad SRD spell list in `rules.SPELLS` is mechanically resolved, not just narrated.
 - **Concentration:** one concentration spell at a time, broken by damage — pairs with the multi-category spell engine.
