@@ -512,3 +512,42 @@ turn. The hard parts (declared-only, gating, once, save+damage math) are unit-te
 the model's choice of when to spring a hazard is soft. `demo_saving_throws` is converted from
 the prose-DC stopgap to a real manifest, retaining one bare `saving_throw` (the fear ward) to
 show the distinction: not every save is a hazard.
+
+## ADR: Underspecified social intent — ask, never default the actor/approach
+
+**Status:** Accepted
+
+**Context:** `influence_npc` requires three things the model supplies by name — the acting party
+member, the target NPC, and the approach (`persuade`/`intimidate`) — and the engine auto-resolves
+none of them. That is asymmetric with target selection: an omitted *target* on `attack`/`cast_spell`
+is auto-resolved or bounced back as `ambiguous_target` (a hard engine seam backstopping a soft
+prompt rule). There is no equivalent for the *actor* or the *approach* — every action tool requires
+the acting character, so the engine literally cannot represent "the player didn't say who," and out
+of combat there is no active combatant to imply one. A vague social input ("speak to the goblin")
+names neither the actor nor the approach, and the SOCIAL prompt rule only modeled the act branch
+("call `influence_npc` with the approach"). Two saved stats-traces from the identical opening
+(`saves/no_player_or_action_request_stats_trace.json`,
+`saves/requested_which_character_stats_trace.json`) capture the result: on the same input and
+byte-identical state, one run guessed (Aldric + persuade) and fired `influence_npc`; the other
+paused and asked which character. Same prompt, same context — pure model sampling, because nothing
+deterministic chose between guess-and-fire and ask.
+
+**Decision:** Make the soft rule explicit and one-directional. When social intent is expressed
+without a *named acting character* AND an *explicit approach*, the model STOPS and asks — names the
+present party members, asks persuade-or-intimidate — emitting no action tool that turn, mirroring
+the `ambiguous_target` re-prompt. It never defaults the actor or the approach, and must not assume
+a bare "speak to it" is even a Charisma attempt. If only one of the two is missing it asks only for
+the gap; a fully specified attempt ("Aldric intimidates the goblin") resolves immediately. In
+combat the actor is fixed by turn order (the active combatant), so only the approach can be missing
+there. Lives in the SOCIAL block of `SYSTEM_PROMPT`.
+
+**Consequences:** A **soft boundary**, in the same family as target-agency's prompt half and
+password-relay — the engine still has no `ambiguous_actor` seam, so this *reduces* but cannot
+eliminate the guess-path (a model that names a plausible actor produces a tool call indistinguishable
+from a player-named one). It deliberately costs a clarification round-trip on vague social inputs —
+the intended "always ask" behavior, chosen over defaulting because the acting character is the
+player's agency, not the model's. Hardening would need an engine affordance the action tools don't
+have today — an omittable actor with an `ambiguous_actor` resolver, the social-side mirror of
+`_resolve_offensive_target` — recorded as a possible future hard backstop, not built. Scope is
+`influence_npc`; other unnamed-actor cases are out of scope (in combat the turn-guard already fixes
+the actor).

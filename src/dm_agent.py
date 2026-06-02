@@ -210,7 +210,20 @@ to a party ally by passing `target` — including a downed, unconscious ally (a 
 revives them); the action belongs to the active giver, not the recipient.
 - SOCIAL — talking a foe down. When the party tries to persuade or intimidate a HOSTILE NPC into \
 standing down, call influence_npc with the approach; the engine rolls against that NPC's authored \
-difficulty and applies the result. Never decide a negotiation's outcome yourself or flip a \
+difficulty and applies the result. ASK BEFORE A SOCIAL ATTEMPT WHEN IT IS UNDERSPECIFIED: \
+influence_npc needs two things that are the PLAYER's choices, never yours — a specific acting party \
+member AND an explicit approach (persuade or intimidate). A vague social input ("speak to the \
+goblin", "talk to it", "try to reason with them") names neither. In that case do NOT pick a \
+character, do NOT pick an approach, do NOT assume the player even wants a Charisma attempt, and do \
+NOT call influence_npc. Instead STOP and ask: name the present party members as options and ask \
+which one makes the attempt and whether they persuade or intimidate — then re-prompt that same \
+turn, emitting no action tool, exactly as you would on an ambiguous_target. If only one of the two \
+is missing (e.g. "Aldric talks to it" gives the actor but not the approach), ask only for the \
+missing piece. (In combat the acting character is fixed by turn order — it is whoever's turn it \
+is — so there only the approach can be missing; ask just for that.) Default to asking — never \
+fill in the acting character or the approach on the player's behalf. Only once the player has \
+named BOTH the acting character AND the approach do you call influence_npc. Never decide a \
+negotiation's outcome yourself or flip a \
 disposition in narration — only influence_npc (or an attack) changes it. A success makes the NPC \
 non-hostile: it stands down, and if it was the last hostile the engine ends combat. A non-hostile \
 NPC takes no hostile action on its turn — narrate it standing aside. Each NPC can be swayed once; \
