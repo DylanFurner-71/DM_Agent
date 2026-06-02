@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 
 from .game_state import GameState
-from .rules import CONSUMABLES, roll
+from .rules import CONSUMABLES, SPELLS, roll
 
 # Optional rich rendering. The app degrades to plain text when rich isn't
 # installed, so it stays a soft dependency — every helper checks _rich_on().
@@ -167,6 +167,59 @@ def _pc_slots(c) -> str:
     return ", ".join(parts) or "none"
 
 
+def _spell_name(spell_id: str) -> str:
+    """Display name for a known spell: the SPELLS table's name, else the id title-cased."""
+    entry = SPELLS.get(spell_id)
+    if entry and entry.get("name"):
+        return entry["name"]
+    return spell_id.replace("_", " ").title()
+
+
+def _known_spells_by_level(c) -> list[tuple[str, str, bool]]:
+    """Build the spell-block rows for a caster: known spells grouped by level, with
+    that level's slot budget — the block is the single home for a caster's slots.
+
+    Returns [] for a non-caster (no known spells) so the caller knows to show no
+    block and keep the header's `slots` line instead. For a caster, returns ordered
+    (label, names, tapped) rows:
+      - cantrips first ('Cantrips', no fraction — they cost no slot),
+      - then every leveled slot in ascending order, labelled with its own budget
+        ('L1 (2/2)'). A level the caster has SLOTS for but knows no spell at shows
+        '— upcast only' (the slot is still castable by upcasting a lower spell), so
+        nothing the header used to carry is lost,
+      - then any spell not in the SPELLS table under '?'.
+    `tapped` is True for a leveled row whose current slots are 0 — castable from
+    that level only once refreshed (the rich view dims it). names uses the SPELLS
+    display name (title-cased id fallback), name-sorted and comma-joined.
+    """
+    if not c.spells:
+        return []
+    caps = getattr(c, "max_spell_slots", {}) or {}
+    buckets: dict = {}   # level (int) or None (untabled) -> [display names]
+    for sid in c.spells:
+        entry = SPELLS.get(sid)
+        lvl = entry.get("level") if entry else None
+        buckets.setdefault(lvl, []).append(_spell_name(sid))
+
+    rows: list[tuple[str, str, bool]] = []
+    if 0 in buckets:
+        rows.append(("Cantrips", ", ".join(sorted(buckets.pop(0))), False))
+    untabled = buckets.pop(None, None)
+    # Every leveled row: the union of levels the caster knows a spell at and levels
+    # they hold a slot for, so an upcast-only slot still appears.
+    leveled = sorted({k for k in buckets} | set(c.spell_slots) | set(caps))
+    for lvl in leveled:
+        if lvl < 1:
+            continue
+        cur = c.spell_slots.get(lvl, 0)
+        mx = caps.get(lvl, cur)
+        names = ", ".join(sorted(buckets[lvl])) if lvl in buckets else "— upcast only"
+        rows.append((f"L{lvl} ({cur}/{mx})", names, cur == 0))
+    if untabled:
+        rows.append(("?", ", ".join(sorted(untabled)), False))
+    return rows
+
+
 def _pc_status(c) -> str:
     """Health summary with the death-save lifecycle made explicit: a dying PC shows
     its running successes/failures, a stabilized one reads 'stable', a corpse 'dead'.
@@ -207,14 +260,21 @@ def _print_state_plain(state: GameState) -> None:
     if loot:
         print(f"  Loot here: {', '.join(loot)}")
     for c in state.party.values():
-        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac} | slots {_pc_slots(c)} | {_pc_status(c)}")
+        # Casters carry their slots in the spell block below; non-casters (no known
+        # spells) keep the header's slots segment as their only slot readout.
+        slots_seg = "" if c.spells else f" | slots {_pc_slots(c)}"
+        print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg} | {_pc_status(c)}")
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
         print(f"    Inventory: {inv}")
-        if c.spells:
+        rows = _known_spells_by_level(c)
+        if rows:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
-            print(f"    Spells{ability}: {', '.join(c.spells)}")
+            width = max(len(label) for label, _, _ in rows)
+            print(f"    Spells{ability}")
+            for label, names, _ in rows:
+                print(f"      {label:<{width}}  {names}")
     for n in state.npcs.values():
         kind, disposition = _npc_descriptor(n)
         status = " [down]" if n.is_down else ""
@@ -246,17 +306,25 @@ def _print_state_rich(state: GameState) -> None:
     if loot:
         con.print(f"  Loot here: [yellow]{escape(', '.join(loot))}[/yellow]")
     for c in state.party.values():
+        # Casters carry their slots in the spell block below; non-casters keep the
+        # header's slots segment as their only slot readout.
+        slots_seg = "" if c.spells else f" | slots {escape(_pc_slots(c))}"
         con.print(
             f"  [bold cyan]{escape(c.name)}[/bold cyan]: "
-            f"HP {c.hp}/{c.max_hp} | AC {c.ac} | slots {escape(_pc_slots(c))} | {escape(_pc_status(c))}"
+            f"HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg} | {escape(_pc_status(c))}"
         )
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
         con.print(f"    Inventory: {escape(inv)}")
-        if c.spells:
+        rows = _known_spells_by_level(c)
+        if rows:
             ability = f" [{c.spellcasting_ability}]" if c.spellcasting_ability else ""
-            con.print(f"    Spells{escape(ability)}: {escape(', '.join(c.spells))}")
+            width = max(len(label) for label, _, _ in rows)
+            con.print(f"    Spells{escape(ability)}")
+            for label, names, tapped in rows:
+                line = f"      {label:<{width}}  {escape(names)}"
+                con.print(f"[dim]{line}[/dim]" if tapped else line)
     for n in state.npcs.values():
         kind, disposition = _npc_descriptor(n)
         color = "cyan" if kind == "ally" else ("red" if n.hostile else "green")

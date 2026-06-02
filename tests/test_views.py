@@ -355,3 +355,115 @@ def test_format_transcript_markdown_skips_blank_entries():
     md = views.format_transcript_markdown(gs)
     assert "**You:**" not in md
     assert "The torch gutters." in md
+
+
+# --- spell display: known spells grouped by level with slot budget ----------
+
+def _caster() -> Character:
+    return Character(
+        name="Wisp", max_hp=16, hp=16, ac=12,
+        spell_slots={1: 2, 2: 1}, max_spell_slots={1: 2, 2: 2},
+        spellcasting_ability="int",
+        spells=["fire_bolt", "ray_of_frost", "magic_missile", "chromatic_orb", "scorching_ray"],
+    )
+
+
+def test_known_spells_grouped_and_ordered():
+    rows = views._known_spells_by_level(_caster())
+    assert [label for label, _, _ in rows] == ["Cantrips", "L1 (2/2)", "L2 (1/2)"]
+    assert rows[0][1] == "Fire Bolt, Ray of Frost"           # cantrips first, name-sorted
+    assert rows[1][1] == "Chromatic Orb, Magic Missile"      # display names, sorted
+    assert rows[2][1] == "Scorching Ray"
+    assert all(tapped is False for _, _, tapped in rows)     # all levels have slots
+
+
+def test_known_spells_tapped_level_flagged():
+    c = _caster()
+    c.spell_slots = {1: 2, 2: 0}
+    l2 = next(r for r in views._known_spells_by_level(c) if r[0].startswith("L2"))
+    assert l2[0] == "L2 (0/2)"
+    assert l2[2] is True   # known but uncastable from this level now → dimmed in rich
+
+
+def test_known_spells_slot_fraction_uses_cap():
+    """The fraction is current/max — max from max_spell_slots, not the live count."""
+    c = _caster()
+    c.spell_slots = {1: 0, 2: 1}     # L1 spent
+    rows = dict((label.split()[0], label) for label, _, _ in views._known_spells_by_level(c))
+    assert rows["L1"] == "L1 (0/2)"
+
+
+def test_known_spells_untabled_bucketed_last():
+    c = _caster()
+    c.spells.append("feather_fall")   # not in the SPELLS table
+    rows = views._known_spells_by_level(c)
+    assert rows[-1][0] == "?"
+    assert "Feather Fall" in rows[-1][1]   # id title-cased as a fallback name
+
+
+def test_known_spells_empty_for_non_caster():
+    assert views._known_spells_by_level(Character(name="Fighter")) == []
+
+
+def test_print_state_plain_groups_spells(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Tower")
+    gs.party["wisp"] = _caster()
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Spells [int]" in out
+    assert "Cantrips  Fire Bolt, Ray of Frost" in out
+    assert "L1 (2/2)  Chromatic Orb, Magic Missile" in out
+    assert "L2 (1/2)  Scorching Ray" in out
+    assert ESC not in out
+
+
+def test_print_state_rich_groups_spells(monkeypatch, capsys):
+    _force_rich(monkeypatch)
+    gs = GameState(location="Tower")
+    gs.party["wisp"] = _caster()
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Cantrips" in out and "Magic Missile" in out and "L2 (1/2)" in out
+
+
+# --- "block owns slots": header drops slots for casters; upcast-only rows -----
+
+def test_known_spells_upcast_only_level_shown():
+    """A slot level the caster knows no spell at still appears (castable by upcast)."""
+    c = Character(name="Mage", spells=["magic_missile"],
+                  spell_slots={1: 2, 2: 1}, max_spell_slots={1: 2, 2: 1},
+                  spellcasting_ability="int")
+    rows = views._known_spells_by_level(c)
+    assert [label for label, _, _ in rows] == ["L1 (2/2)", "L2 (1/1)"]
+    assert rows[1][1] == "— upcast only"
+    assert rows[1][2] is False   # has a slot → castable by upcast, not dimmed
+
+
+def test_known_spells_upcast_only_tapped_when_no_slots():
+    c = Character(name="Mage", spells=["magic_missile"],
+                  spell_slots={1: 2, 2: 0}, max_spell_slots={1: 2, 2: 1})
+    l2 = next(r for r in views._known_spells_by_level(c) if r[0].startswith("L2"))
+    assert l2 == ("L2 (0/1)", "— upcast only", True)
+
+
+def test_print_state_plain_caster_drops_header_slots(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Tower")
+    gs.party["wisp"] = _caster()
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    header = next(ln for ln in out.splitlines() if ln.strip().startswith("Wisp:"))
+    assert "slots" not in header   # the block owns the caster's slots now
+    assert "Spells [int]" in out   # block present instead
+
+
+def test_print_state_plain_non_caster_keeps_header_slots(capsys):
+    views.set_plain(True)
+    gs = GameState(location="Hall")
+    gs.party["rogue"] = Character(name="Rogue", max_hp=20, hp=20, ac=14,
+                                  spell_slots={1: 1}, max_spell_slots={1: 1})
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    header = next(ln for ln in out.splitlines() if ln.strip().startswith("Rogue:"))
+    assert "slots L1:1/1" in header   # no spell block → header keeps the readout
