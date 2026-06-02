@@ -175,6 +175,34 @@ def _spell_name(spell_id: str) -> str:
     return spell_id.replace("_", " ").title()
 
 
+def _hud_inventory_lines(c) -> list[str]:
+    """HUD inventory rows for a PC, split into two labelled lines.
+
+    'Items:' lists non-consumable gear in carried order. 'Consumables:' lists the
+    /use-able items with quantities — 'name xN' when more than one of the same is
+    held, just the name when one — in first-appearance order. Either line is omitted
+    when its bucket is empty; returns [] for an empty inventory. Mirrors how /state
+    flags consumables, but surfaces counts so the player sees at a glance how many
+    potions they hold.
+    """
+    gear = [i for i in c.inventory if i.strip().lower() not in CONSUMABLES]
+    counts: dict = {}
+    order: list = []
+    for i in c.inventory:
+        if i.strip().lower() in CONSUMABLES:
+            if i not in counts:
+                order.append(i)
+                counts[i] = 0
+            counts[i] += 1
+    rows: list[str] = []
+    if gear:
+        rows.append(f"Items: {', '.join(gear)}")
+    if order:
+        cons = ", ".join(f"{name} x{counts[name]}" if counts[name] > 1 else name for name in order)
+        rows.append(f"Consumables: {cons}")
+    return rows
+
+
 def _known_spell_groups(c) -> list[tuple[str, str]]:
     """Known spells grouped by level for the compact HUD: ordered (label, names).
 
@@ -405,10 +433,12 @@ def _combatant_marker(actor, key: str, state: GameState) -> str:
 def format_hud(state: GameState, width: int = 60) -> str:
     """A compact status header for display before each prompt.
 
-    Shows each PC's HP bar, spell slots, and conditions, and — in combat — the
-    round plus the initiative order with the active actor marked (▶) and
-    dying/dead/companion markers. Pure reformatting of data `/state` already
-    exposes; returns "" for an empty party so the caller can skip printing.
+    Shows each PC's HP bar, spell slots, and conditions on its line, then indented
+    sub-lines beneath: an Items line for gear and a Consumables line (with counts)
+    for any /use-able items carried, and known spells grouped by level. In combat it
+    adds the round plus the initiative order with the active actor marked (▶) and
+    dying/dead/companion markers. Pure reformatting of data `/state` already exposes;
+    returns "" for an empty party so the caller can skip printing.
     """
     pcs = list(state.party.values())
     if not pcs:
@@ -430,10 +460,13 @@ def format_hud(state: GameState, width: int = 60) -> str:
         if tags:
             seg += f"  [{', '.join(tags)}]"
         lines.append(seg)
-        # Known spells grouped by level, one sub-line per level, indented to align
-        # under the HP bar. Only casters add lines; the PC line above owns the slots.
+        indent = f"  {' ' * namew}  "   # align sub-lines under the HP bar
+        # Inventory: an Items line for gear, a Consumables line (with counts) for
+        # /use-able items. Then known spells grouped by level, one sub-line each.
+        for inv_line in _hud_inventory_lines(c):
+            lines.append(f"{indent}{inv_line}")
         for label, names in _known_spell_groups(c):
-            lines.append(f"  {' ' * namew}  {label} {names}")
+            lines.append(f"{indent}{label} {names}")
     if state.combat_round > 0 and state.combat_order:
         all_actors = {**state.party, **state.npcs}
         active_key = state.combat_order[state.combat_index]

@@ -10,7 +10,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.views import format_hud, _hp_bar, _combatant_marker, _known_spell_groups
+from src.views import (
+    format_hud, _hp_bar, _combatant_marker, _known_spell_groups, _hud_inventory_lines,
+)
 from src.game_state import Character, NPC, GameState
 
 
@@ -180,3 +182,51 @@ def test_hud_non_caster_adds_no_spell_line():
     # _two_pc_state PCs have slots but no known spells → no spell sub-lines
     hud = format_hud(_two_pc_state())
     assert len(hud.splitlines()) == 4   # 2 rules + 2 PC lines, nothing extra
+
+
+# --- inventory: Items line + Consumables line (with counts) ------------------
+
+def test_hud_inventory_lines_split_gear_and_consumables():
+    c = Character(name="Wisp", inventory=["dagger", "spellbook", "healing_potion",
+                                          "healing_potion", "pearl_of_power"])
+    assert _hud_inventory_lines(c) == [
+        "Items: dagger, spellbook",
+        "Consumables: healing_potion x2, pearl_of_power",
+    ]
+
+
+def test_hud_inventory_single_consumable_has_no_count():
+    c = Character(name="Rogue", inventory=["healing_potion"])
+    assert _hud_inventory_lines(c) == ["Consumables: healing_potion"]
+
+
+def test_hud_inventory_gear_only_omits_consumables_line():
+    c = Character(name="Aldric", inventory=["mace", "holy symbol", "torch"])
+    assert _hud_inventory_lines(c) == ["Items: mace, holy symbol, torch"]
+
+
+def test_hud_inventory_empty_returns_no_lines():
+    assert _hud_inventory_lines(Character(name="Bare")) == []
+
+
+def test_hud_inventory_consumables_keep_first_seen_order():
+    c = Character(name="W", inventory=["pearl_of_power", "healing_potion", "healing_potion"])
+    assert _hud_inventory_lines(c) == ["Consumables: pearl_of_power, healing_potion x2"]
+
+
+def test_hud_renders_inventory_indented_before_spells():
+    gs = GameState(location="Barrow")
+    gs.party["wisp"] = Character(
+        name="Wisp", max_hp=16, hp=16, spell_slots={1: 2},
+        spells=["magic_missile"], spellcasting_ability="int",
+        inventory=["dagger", "healing_potion", "healing_potion"],
+    )
+    hud = format_hud(gs)
+    lines = hud.splitlines()
+    # indented sub-lines (alignment depends on the longest name; just assert indent)
+    assert any(ln.startswith("  ") and ln.strip() == "Items: dagger" for ln in lines)
+    assert any(ln.strip() == "Consumables: healing_potion x2" for ln in lines)
+    # inventory lines come before the spell sub-line
+    items_i = next(i for i, ln in enumerate(lines) if "Items: dagger" in ln)
+    spell_i = next(i for i, ln in enumerate(lines) if "Magic Missile" in ln)
+    assert items_i < spell_i
