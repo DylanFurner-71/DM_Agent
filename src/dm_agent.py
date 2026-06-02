@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 
 from anthropic import Anthropic, APIConnectionError, APIStatusError
@@ -378,6 +379,38 @@ def _sanitize_narration(text: str) -> str:
     kept = [para for para in text.split("\n\n") if not _is_dump(para)]
     logging.warning("_sanitize_narration: dropped state-dump paragraph(s) from narration: %.80s", text)
     return "\n\n".join(kept).strip()
+
+
+def _strip_turn_prompt(text: str, names) -> str:
+    """Remove a trailing combat-turn prompt the model wrote into its own prose.
+
+    The engine owns the per-turn prompt (DMAgent._closing_prompt); when the model
+    ALSO ends its narration with one — e.g. '**Brom, what do you do?**' — the player
+    sees a duplicate, and the line is stored in the rolling narration window where the
+    model reads it back and imitates it (a self-reinforcing leak). We strip ONLY a
+    trailing prompt addressed to a known actor BY NAME followed by a comma, so a
+    deliberate party-wide exploration prompt ('… What do you do?') from the
+    combat-over close — which names no one — is preserved.
+
+    Returns the text unchanged when no such prompt is found, or when stripping would
+    leave nothing (defensive: never blank out a whole beat). Note: this cleans the
+    stored/returned narration (breaking the feedback loop); the streaming combat
+    paths have already emitted live, so the same-turn on-screen duplicate is only
+    mitigated indirectly as the loop stops teaching the model the pattern.
+    """
+    names = [n.strip() for n in (names or []) if n and n.strip()]
+    if not text or not names:
+        return text
+    alt = "|".join(re.escape(n) for n in sorted(set(names), key=len, reverse=True))
+    # Trailing: optional **, a known name, a comma, then prompt text up to a final
+    # ? or !, optional closing **, at end of string. [^.\n] keeps the match to the
+    # final sentence so preceding prose is never eaten.
+    pat = re.compile(r"\s*\*{0,2}\s*(?:" + alt + r")\s*,[^.\n]*?[?!]\s*\*{0,2}\s*$")
+    new = pat.sub("", text)
+    if new == text:
+        return text
+    new = new.rstrip()
+    return new if new else text
 
 
 def _screen_narration_text(text: str) -> str:
@@ -921,6 +954,11 @@ class DMAgent:
         ]
         return "**Initiative order:** " + " → ".join(parts)
 
+    def _actor_names(self) -> list[str]:
+        """Names of every current actor (party + NPCs) — used to detect a model-written
+        turn prompt addressed to one of them (see _strip_turn_prompt)."""
+        return [c.name for c in self.state.party.values()] + [n.name for n in self.state.npcs.values()]
+
     def _closing_prompt(self) -> str | None:
         """Engine-sourced closing prompt for the active combatant.
 
@@ -1068,6 +1106,7 @@ class DMAgent:
             if player_narration:
                 self._emit("\n\n")
             epilogue = self._narrate_epilogue(self.state.game_outcome)
+            player_narration = _strip_turn_prompt(player_narration, self._actor_names())
             combined = _sanitize_narration("\n\n".join(n for n in [player_narration, epilogue] if n))
             self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
@@ -1213,6 +1252,7 @@ class DMAgent:
             if exchange:
                 self._emit("\n\n")
             epilogue = self._narrate_epilogue(self.state.game_outcome)
+            exchange = _strip_turn_prompt(exchange, self._actor_names())
             combined = _sanitize_narration("\n\n".join(n for n in [exchange, epilogue] if n))
             self.narration_history.append((player_input, combined))
             if len(self.narration_history) > NARRATION_WINDOW:
@@ -1235,10 +1275,23 @@ class DMAgent:
         # (not streamed) and is emitted here as a chunk so the sink sees it in order.
         if combat_over_in_player_phase or combat_ended_in_npc_phase:
             narration = self._narrate_combat_over()
+            out_of_combat_capture = False
         elif in_combat or combat_beats:
             narration = self._narrate_turn(player_input, combat_beats)
+            out_of_combat_capture = False
         else:
             narration = player_narration
+            out_of_combat_capture = True
+
+        # The engine owns the next-turn prompt (appended below as `closing`). If the
+        # model also wrote one into its prose (e.g. "**Brom, what do you do?**"), strip
+        # it so the player isn't shown a duplicate and — crucially — it never enters the
+        # rolling window to be echoed back and imitated next turn.
+        narration = _strip_turn_prompt(narration, self._actor_names())
+
+        # Out-of-combat captured narration is emitted here (the in-combat / combat-over
+        # branches already streamed live inside their narration call).
+        if out_of_combat_capture:
             self._emit(_sanitize_narration(narration))
 
         # Persist narration (not the closing prompt) to the rolling window.
