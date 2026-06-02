@@ -565,11 +565,11 @@ def _render_hud_rich(state: GameState, width: int = 60) -> None:
             lbl, _, val = inv_line.partition(": ")
             if val:
                 valcol = "orange1" if lbl == "Consumables" else "grey70"
-                p(f"{indent}[dim]{escape(lbl)}:[/dim] [{valcol}]{escape(val)}[/{valcol}]")
+                p(f"{indent}[white]{escape(lbl)}:[/white] [{valcol}]{escape(val)}[/{valcol}]")
             else:
                 p(f"{indent}{escape(inv_line)}")
         for label, names in _known_spell_groups(c):
-            p(f"{indent}[dim]{escape(label)}[/dim] [medium_purple3]{escape(names)}[/medium_purple3]")
+            p(f"{indent}[white]{escape(label)}[/white] [medium_purple3]{escape(names)}[/medium_purple3]")
     if state.combat_round > 0 and state.combat_order:
         all_actors = {**state.party, **state.npcs}
         active_key = state.combat_order[state.combat_index]
