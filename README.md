@@ -154,12 +154,14 @@ fallback); exit status is non-zero only on errors.
 **Observability & CLI.** A tool trace (`/trace`, `/full_trace`) shows exactly what
 the agent decided each turn, alongside a per-call stats sidecar capturing latency and
 token usage — including prompt-cache reads and writes. A compact **status HUD**
-prints before each prompt — per-PC HP bars, spell slots, and conditions, plus, in
-combat, the round and initiative order with the active actor marked and
-dying/dead/companion tags (toggle with `/hud` or start with `--no-hud`). In-session
-commands include `/help`, `/state` (a full readout: per-PC HP/AC/spell-slot caps
-and death-save progress, companion allies, hostiles, and the current scene's exits
-and loot), `/recap` (replay the story so far),
+prints before each prompt — per-PC HP bars, spell slots, and conditions, plus
+indented sub-lines for each caster's known spells (grouped by level) and inventory
+(an Items line for gear and a Consumables line with quantities), and — in combat —
+the round and initiative order with the active actor marked and dying/dead/companion
+tags (toggle with `/hud` or start with `--no-hud`). In-session commands include
+`/help`, `/state` (a full readout: per-PC HP/AC, known spells grouped by level with
+their slot budget, death-save progress, inventory, companion allies, hostiles, and
+the current scene's exits and loot), `/recap` (replay the story so far),
 `/roll <notation>` (open flavor rolls), `/undo` (rewind the last turn), `/cost`
 (session token usage and estimated spend, derived from the per-call stats),
 `/export` (write the story so far to a shareable Markdown session log), and `/save`.
