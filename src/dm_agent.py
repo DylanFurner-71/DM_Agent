@@ -22,9 +22,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import time
 
-from anthropic import Anthropic
+from anthropic import Anthropic, APIConnectionError, APIStatusError
 
 from . import tools
 
@@ -33,6 +34,46 @@ MODEL = "claude-sonnet-4-6"
 MAX_TOOL_HOPS = 12      # safety cap on tool calls per _execute call
 NARRATION_WINDOW = 4    # past (player_input, narration) pairs kept in model context
 UNDO_DEPTH = 20         # how many completed turns /undo can rewind
+
+# Transient-error retry policy for model calls. A rate-limit (429), server error
+# (5xx), or network blip is retried with exponential backoff + jitter so a passing
+# failure doesn't abort the session mid-turn; deterministic 4xx errors (bad request,
+# auth) are not retried — they'd fail identically every time.
+MAX_API_RETRIES = 5     # retries per model call after the first attempt
+_RETRY_BASE = 1.0       # backoff base, seconds
+_RETRY_CAP = 30.0       # cap on any single backoff wait
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """True for transient API failures worth retrying: connection/timeout errors
+    (no HTTP response), rate limits (429), and server errors (5xx). 4xx client
+    errors are deterministic and not retried."""
+    if isinstance(exc, APIConnectionError):   # includes APITimeoutError
+        return True
+    if isinstance(exc, APIStatusError):       # RateLimitError/InternalServerError subclass this
+        return exc.status_code == 429 or exc.status_code >= 500
+    return False
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Honor a server-sent Retry-After header (seconds) when present, else None."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if not headers:
+        return None
+    try:
+        return float(headers.get("retry-after"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _retry_delay(attempt: int, exc: Exception) -> float:
+    """Backoff for the given attempt (1-based): Retry-After if the server gave one,
+    otherwise capped exponential (base·2^(attempt-1)) with 50–100% jitter."""
+    after = _retry_after(exc)
+    if after is not None:
+        return min(_RETRY_CAP, max(0.0, after))
+    base = min(_RETRY_CAP, _RETRY_BASE * (2 ** (attempt - 1)))
+    return base * random.uniform(0.5, 1.0)
 
 SYSTEM_PROMPT = """\
 You are the Dungeon Master for a single-session tabletop RPG. You narrate vividly \
@@ -392,6 +433,12 @@ class DMAgent:
         # calls stream their prose to it (behind a leak gate) for perceived latency;
         # when None, narration is produced with the buffered create() path unchanged.
         self.on_narration_delta = None
+        # Transient-error retry knobs. on_retry is an optional UI hook called before
+        # each backoff wait (the REPL wires it to a notice); _sleep is injectable so
+        # tests don't actually wait.
+        self.on_retry = None
+        self.max_api_retries = MAX_API_RETRIES
+        self._sleep = time.sleep
         self.messages: list[dict] = []
         self.tool_trace: list[dict] = []  # tool calls from the last turn
         self.api_stats: list[dict] = []   # per-API-call timing/usage for the current turn
@@ -405,6 +452,33 @@ class DMAgent:
             for i in range(0, len(msgs), 2):
                 if i + 1 < len(msgs) and msgs[i]["role"] == "user" and msgs[i + 1]["role"] == "assistant":
                     self.narration_history.append((msgs[i]["content"], msgs[i + 1]["content"]))
+
+    def _notify_retry(self, attempt: int, delay: float, exc: Exception) -> None:
+        """Log a transient-failure retry and fire the optional UI hook."""
+        logging.warning("model call failed (%s); retry %d/%d in %.1fs",
+                        type(exc).__name__, attempt, self.max_api_retries, delay)
+        if self.on_retry:
+            self.on_retry(attempt, delay, exc)
+
+    def _call_with_retries(self, fn):
+        """Run a non-streaming model call, retrying transient failures with backoff.
+
+        Re-raises immediately on a non-retryable error (4xx) or once retries are
+        exhausted, so genuine failures still surface. Used for the create() calls;
+        the streaming path retries inline (it must not retry after prose has been
+        shown to the player).
+        """
+        attempt = 0
+        while True:
+            try:
+                return fn()
+            except Exception as exc:
+                attempt += 1
+                if attempt > self.max_api_retries or not _is_retryable(exc):
+                    raise
+                delay = _retry_delay(attempt, exc)
+                self._notify_retry(attempt, delay, exc)
+                self._sleep(delay)
 
     def _state_snapshot(self) -> str:
         """Compact JSON of current game state for injection into each turn's prompt.
@@ -503,13 +577,13 @@ class DMAgent:
         narration = ""
         for _ in range(MAX_TOOL_HOPS):
             _t0 = time.monotonic()
-            resp = self.client.messages.create(
+            resp = self._call_with_retries(lambda: self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
                 system=_SYSTEM,
                 tools=_TOOLS_CACHED,
                 messages=self.messages,
-            )
+            ))
             _elapsed = time.monotonic() - _t0
             terminal = resp.stop_reason != "tool_use"
             phase = "narrating" if (terminal and capture_narration) else "thinking"
@@ -567,27 +641,42 @@ class DMAgent:
         """
         _t0 = time.monotonic()
         if self.on_narration_delta is None:
-            resp = self.client.messages.create(
+            resp = self._call_with_retries(lambda: self.client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 system=_SYSTEM,
                 messages=self.messages,
-            )
+            ))
             self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(resp.usage)})
             self.messages.append({"role": "assistant", "content": resp.content})
             return _extract_narration(resp.content)
 
-        gate = _NarrationGate(self.on_narration_delta)
-        with self.client.messages.stream(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=_SYSTEM,
-            messages=self.messages,
-        ) as stream:
-            for delta in stream.text_stream:
-                gate.feed(delta)
-            final = stream.get_final_message()
-        gate.close()
+        # Streaming path retries inline rather than via _call_with_retries: a retry is
+        # only safe while the gate has shown nothing to the player (gate.emitting is
+        # False). Once prose has streamed out, re-running would duplicate it on screen,
+        # so a mid-stream failure after first output is re-raised instead of retried.
+        attempt = 0
+        while True:
+            gate = _NarrationGate(self.on_narration_delta)
+            try:
+                with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    system=_SYSTEM,
+                    messages=self.messages,
+                ) as stream:
+                    for delta in stream.text_stream:
+                        gate.feed(delta)
+                    final = stream.get_final_message()
+                gate.close()
+                break
+            except Exception as exc:
+                attempt += 1
+                if gate.emitting or attempt > self.max_api_retries or not _is_retryable(exc):
+                    raise
+                delay = _retry_delay(attempt, exc)
+                self._notify_retry(attempt, delay, exc)
+                self._sleep(delay)
         self.api_stats.append({"phase": phase, "elapsed": round(time.monotonic() - _t0, 2), "usage": _usage_dict(final.usage)})
         self.messages.append({"role": "assistant", "content": final.content})
         return _extract_narration(final.content)

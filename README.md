@@ -166,6 +166,10 @@ the current scene's exits and loot), `/recap` (replay the story so far),
 (session token usage and estimated spend, derived from the per-call stats),
 `/export` (write the story so far to a shareable Markdown session log), and `/save`.
 The game **autosaves** to `saves/autosave.json` after every turn for crash-safe resume.
+Transient model-call failures (a rate limit, a 5xx, a network blip) are **retried with
+exponential backoff** — honoring a `Retry-After` header when present — so a passing hiccup
+doesn't abort a turn; deterministic 4xx errors surface immediately. A `--seed N` flag fixes
+the dice RNG for the whole session (reproducible rolls for demos and bug reports).
 Output is **color- and Markdown-rendered** with [`rich`](https://github.com/Textualize/rich)
 when stdout is a terminal — scene/recap prose as Markdown, NPC names colored by
 disposition, inline dice highlighted, and a *thinking* spinner over the pre-stream API
@@ -210,9 +214,8 @@ the lever, not output size), with wall time splitting roughly **40% tool-selecti
 
 ## Need to implement
 
-*CLI & quality-of-life (all terminal, mostly cheap):*
-
-- **API retry/backoff:** wrap the model calls so a rate-limit or network blip mid-turn doesn't abort the session.
+*(Nothing queued — the CLI & quality-of-life items here, input history, `--seed`, and
+API retry/backoff, are all implemented. New near-term work lands here.)*
 
 ## Potential implementations
 

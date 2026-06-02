@@ -261,6 +261,12 @@ def main() -> None:
         sys.stdout.flush()
     agent.on_narration_delta = _emit_delta
 
+    def _notify_retry(attempt: int, delay: float, exc: Exception) -> None:
+        spinner.stop()
+        print(f"  ⚠ API {type(exc).__name__} — retrying ({attempt}/{agent.max_api_retries}) "
+              f"in {delay:.0f}s…")
+    agent.on_retry = _notify_retry
+
     banner(args.scenario)
     if args.seed is not None:
         print(f"  Dice RNG seeded with {args.seed} — rolls are reproducible this session.")
