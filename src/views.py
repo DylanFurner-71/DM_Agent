@@ -160,6 +160,18 @@ def print_state(state: GameState) -> None:
         _print_state_plain(state)
 
 
+_ABILITY_ORDER = ("str", "dex", "con", "int", "wis", "cha")
+
+
+def _pc_abilities(c) -> str:
+    """The six ability modifiers in STR/DEX/CON/INT/WIS/CHA order, each signed
+    (e.g. 'STR +4  DEX +0  CON +3 ...'); '' when none are set so the line is omitted."""
+    mods = getattr(c, "ability_modifiers", {}) or {}
+    if not mods:
+        return ""
+    return "  ".join(f"{a.upper()} {mods.get(a, 0):+d}" for a in _ABILITY_ORDER)
+
+
 def _pc_slots(c) -> str:
     """Spell slots as 'LN:current/max', surfacing the per-level cap (max_spell_slots)."""
     caps = getattr(c, "max_spell_slots", {}) or {}
@@ -319,6 +331,9 @@ def _print_state_plain(state: GameState) -> None:
         slots_seg = "" if c.spells else f" | slots {_pc_slots(c)}"
         gold_seg = f" | {c.gold} gp" if getattr(c, "gold", 0) else ""
         print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg}{gold_seg} | {_pc_status(c)}")
+        abilities = _pc_abilities(c)
+        if abilities:
+            print(f"    Abilities: {abilities}")
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
@@ -373,6 +388,9 @@ def _print_state_rich(state: GameState) -> None:
             f"HP [{hpcol}]{c.hp}/{c.max_hp}[/{hpcol}] | AC [steel_blue1]{c.ac}[/steel_blue1]"
             f"{slots_seg}{gold_seg} | {escape(_pc_status(c))}"
         )
+        abilities = _pc_abilities(c)
+        if abilities:
+            con.print(f"    Abilities: [steel_blue1]{escape(abilities)}[/steel_blue1]")
         def _fmt_item(item: str) -> str:
             if item.lower() in CONSUMABLES:
                 return f"[orange1]{escape(item)} (consumable)[/orange1]"
@@ -714,13 +732,41 @@ def estimate_cost(usage: dict, model: str) -> dict:
     p = _price_for(model)
     pin, pout = p["input"], p["output"]
     cost = {
-        "input": usage["input"] / 1e6 * pin,
-        "cache_write": usage["cache_write"] / 1e6 * pin * _CACHE_WRITE_MULT,
-        "cache_read": usage["cache_read"] / 1e6 * pin * _CACHE_READ_MULT,
-        "output": usage["output"] / 1e6 * pout,
+        "input": usage.get("input", 0) / 1e6 * pin,
+        "cache_write": usage.get("cache_write", 0) / 1e6 * pin * _CACHE_WRITE_MULT,
+        "cache_read": usage.get("cache_read", 0) / 1e6 * pin * _CACHE_READ_MULT,
+        "output": usage.get("output", 0) / 1e6 * pout,
     }
     cost["total"] = sum(cost.values())
     return cost
+
+
+def estimate_cost_mixed(full_trace: list, default_model: str) -> dict:
+    """Per-call USD cost across a (possibly mixed-model) trace, same bucket shape as
+    estimate_cost. Each API call is priced by its OWN recorded `model` — so a two-model
+    session (fast tool-selection + quality narration) is costed correctly rather than at
+    one blended rate. Calls with no `model` tag (older traces, pre-split) fall back to
+    default_model. Reuses estimate_cost per call."""
+    cost = {"input": 0.0, "cache_write": 0.0, "cache_read": 0.0, "output": 0.0}
+    for entry in full_trace:
+        for ac in entry.get("api_calls", []):
+            c = estimate_cost(ac.get("usage", {}), ac.get("model") or default_model)
+            for k in ("input", "cache_write", "cache_read", "output"):
+                cost[k] += c[k]
+    cost["total"] = sum(cost.values())
+    return cost
+
+
+def _models_seen(full_trace: list, default_model: str) -> list[str]:
+    """Distinct models that served calls in the trace, in first-seen order; a call with
+    no `model` tag counts as default_model."""
+    seen: list[str] = []
+    for entry in full_trace:
+        for ac in entry.get("api_calls", []):
+            m = ac.get("model") or default_model
+            if m not in seen:
+                seen.append(m)
+    return seen or [default_model]
 
 
 def format_cost(full_trace: list, model: str) -> str:
@@ -733,17 +779,23 @@ def format_cost(full_trace: list, model: str) -> str:
     u = aggregate_usage(full_trace)
     if u["calls"] == 0:
         return "  No API calls recorded yet — play a turn first."
-    c = estimate_cost(u, model)
+    # Price each call by its own recorded model so a two-model session (fast
+    # tool-selection + quality narration) is costed correctly; token-bucket counts
+    # in the rows stay session totals from aggregate_usage.
+    c = estimate_cost_mixed(full_trace, model)
     total_tokens = u["input"] + u["cache_write"] + u["cache_read"] + u["output"]
-    known = any(model.startswith(prefix) for prefix in MODEL_PRICING)
+    models = _models_seen(full_trace, model)
+    known = all(any(m.startswith(prefix) for prefix in MODEL_PRICING) for m in models)
     rows = [
         ("Input",       u["input"],       c["input"]),
         ("Cache write", u["cache_write"], c["cache_write"]),
         ("Cache read",  u["cache_read"],  c["cache_read"]),
         ("Output",      u["output"],      c["output"]),
     ]
+    model_label = (f"model {models[0]}" if len(models) == 1
+                   else f"models {', '.join(models)}")
     lines = [
-        f"  Session cost — model {model}" + ("" if known else " (unknown id; Sonnet-rate estimate)"),
+        f"  Session cost — {model_label}" + ("" if known else " (unknown id; Sonnet-rate estimate)"),
         f"    {u['calls']} API call{'s' * (u['calls'] != 1)} over {u['elapsed']:.1f}s",
     ]
     for label, toks, dollars in rows:

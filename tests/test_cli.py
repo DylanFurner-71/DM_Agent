@@ -27,6 +27,13 @@ def test_seed_defaults_to_none():
     assert args.seed is None
 
 
+def test_scenario_defaults_to_none():
+    """No positional arg → None, so main() can tell 'open the start menu' apart
+    from an explicit path."""
+    args = _make_parser().parse_args([])
+    assert args.scenario is None
+
+
 def test_seed_coexists_with_scenario_and_other_flags():
     args = _make_parser().parse_args(["data/x.json", "--seed", "7", "--plain", "--no-hud"])
     assert args.scenario == "data/x.json"

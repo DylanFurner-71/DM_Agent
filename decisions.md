@@ -249,6 +249,10 @@ per-exit `requires` is the clean mechanism and the terminal `exit_requires` path
 the terminal gate exists for endings with no scene beyond. Backward compatible: string exits
 and ungated terminals are unchanged.
 
+## ADR: String-valued quest flags are redacted from model-facing channels
+
+**Status:** Accepted
+
 - **What:** String-valued quest flags (including answer-gate passwords stored via 
   `set_quest_flag`) are now redacted to `"<redacted>"` in both the `get_state` response 
   and the `set_quest_flag` echo before they reach the model. The real value is stored in 
@@ -321,9 +325,11 @@ spawns once (`already_spawned`); empty ids are rejected (`missing_instance_id`).
 engine-owned (numbers), and now *existence* is author-owned (content). What the model still
 owns is the *timing within the authored gate* — it decides the dramatic moment to bring in
 a triggered wave, and it sets the trigger flag, so the gate is hard on **what/whether** but
-soft on **when** (same trust model as gated exits and quest flags generally). The feature
-ships **dormant**: no scenario declares a manifest yet, so `add_npc` succeeds nowhere until
-an author opts in — turning it on is a scene-authoring act, not a code change. The neat
+soft on **when** (same trust model as gated exits and quest flags generally). Authors have
+since opted in: `data/adventures/tomb_of_the_sunken_king.json` declares a `reinforcements`
+manifest (the risen court, gated on `crypt_disturbed`) and `data/demos/demo_reinforcements.json`
+exercises it — so the feature is live in shipped content, not dormant; turning it on for a
+new scene is a scene-authoring act, not a code change. The neat
 mid-combat initiative-insertion capability (sorted-slot placement, pointer-stable) is
 preserved unchanged; only the source of *what* may enter was constrained. Backward note:
 the old free-form `template`/`name` arguments are gone from the schema.
@@ -359,7 +365,8 @@ narration phase was ~25 calls / ~92s / ~28.6k uncached input across 26 turns, *o
 top of* a terminating tool-loop generation that was scrubbed and thrown away. The
 two together were the dominant, serial per-turn cost. Merging removes the dedicated
 player-narration call (out of combat) and collapses player + NPC narration into one
-call (in combat): ~3.5 API calls/turn → ~2 out of combat, ~3 in combat.
+call (in combat): ~3.5 API calls/turn → ~2 out of combat, ~3 in combat. (A later change cut
+the count further — see *ADR: Cut two avoidable API hops per turn*.)
 
 **Trade-off — the leak guards become load-bearing.** The two-phase split previously
 gave defense-in-depth against the model dumping raw state/JSON into prose: a clean
@@ -486,8 +493,7 @@ terminal scene — an exploration/puzzle ending such as the vault beyond the iro
 door, a relic chamber — had no reliable victory trigger. The only engine path was
 the player calling `move_scene` with a non-exit key, which the system prompt forbade
 ("empty exits = dead end, nowhere to go"). Observed in a real run
-(trace `saves/epilogue_not_firing_stats_trace.json` — TODO: since-cleared saves; re-capture
-and re-link this evidence if needed): the party spoke the password, entered
+(captured in a since-cleared trace): the party spoke the password, entered
 the empty terminal vault, looted it, and tried to "leave"/"exit" twice — the model
 never called `move_scene`, so `game_over` was never set and the epilogue never fired;
 the run hung in the winning room.
@@ -553,7 +559,8 @@ not turn-guarded — a trap is environmental, not an actor's action, so it may f
 turn. The hard parts (declared-only, gating, once, save+damage math) are unit-tested; only
 the model's choice of when to spring a hazard is soft. `demo_saving_throws` is converted from
 the prose-DC stopgap to a real manifest, retaining one bare `saving_throw` (the fear ward) to
-show the distinction: not every save is a hazard.
+show the distinction: not every save is a hazard. Hazard manifests now also ship in shipped
+adventures (`data/adventures/emberdeep_mine.json`, `tomb_of_the_sunken_king.json`).
 
 ## ADR: Underspecified social intent — ask, never default the actor/approach
 
@@ -568,8 +575,7 @@ the acting character, so the engine literally cannot represent "the player didn'
 of combat there is no active combatant to imply one. A vague social input ("speak to the goblin")
 names neither the actor nor the approach, and the SOCIAL prompt rule only modeled the act branch
 ("call `influence_npc` with the approach"). Two saved stats-traces from the identical opening
-(`saves/no_player_or_action_request_stats_trace.json`,
-`saves/requested_which_character_stats_trace.json`) capture the result: on the same input and
+(since cleared) captured the result: on the same input and
 byte-identical state, one run guessed (Aldric + persuade) and fired `influence_npc`; the other
 paused and asked which character. Same prompt, same context — pure model sampling, because nothing
 deterministic chose between guess-and-fire and ask.
@@ -659,3 +665,86 @@ Untabled spells (no `SPELLS` entry) are not level-checked — the engine can't k
 so they retain the prior slot-consumed-and-narrated behavior. Related, same trace: `heal` now reports
 `healed` as the HP *actually* restored after the max-HP cap (`target.hp - hp_before`) rather than the
 raw roll, so a capped potion no longer hands the model an inflated number to narrate.
+
+## ADR: Strip model-written turn prompts that duplicate the engine's
+
+**Status:** Accepted
+
+**Context:** The engine owns the per-turn combat prompt (`DMAgent._closing_prompt` in
+`src/dm_agent.py`), appended deterministically as a trailer after each turn's narration. But
+the model frequently *also* ended its prose with one — e.g. `**Brom, what do you do?**`. A
+logged run (`saves/ember_deep_run_1.json`) showed this in **29 of 48** beats. Two harms: the
+player saw a duplicate (the model's bolded prompt immediately followed by the engine's
+trailer), and the contaminated narration was persisted to `narration_history` /
+`state.narrative`, which feed the bounded per-turn window (Decision 3) — so the model read
+its own prompts back as in-context examples and imitated them, a self-reinforcing leak.
+
+**Decision.** `_strip_turn_prompt(text, names)` removes a trailing prompt addressed to a
+known actor **by name followed by a comma** (`**Tilda, you're up — what do you do?**`),
+wired into all three narration-assembly sites in `take_turn`. It is name-anchored so a
+*deliberate* party-wide exploration prompt from the combat-over close ("… What do you do?",
+which names no one) and a rhetorical line ("Will Brom survive?", no comma) are preserved.
+
+**Consequences.** Cleans the stored/returned narration and breaks the feedback loop — the
+high-value effect, since the model stops being trained on its own prompts. This sits in the
+same leak-screen family as Decisions 5 & 6. **Accepted residual (mirrors Decision 6):** the
+streaming combat paths have already emitted live by the time the strip runs, so the same-turn
+on-screen duplicate is only mitigated *indirectly* (the loop stops teaching the pattern); a
+fully synchronous fix would require handling it in `_NarrationGate`. Known limitation: em-dash
+(`Sage — … — what do you do?`) and leading-name (`**X, you're up!** …`) shapes are left
+untouched to avoid eating legitimate prose. Hard boundary on the helper itself, unit-tested
+(`tests/test_agent.py::test_strip_turn_prompt_*`); engine numbers are untouched. Commit
+`dfed0c1`.
+
+## ADR: Cut two avoidable API hops per turn (latency)
+
+**Status:** Accepted
+
+**Context:** Trace analysis of 40 demo stats sidecars (305 turns, 742 calls) showed 2.43 API
+calls/turn against a ~3.3s fixed per-call cost, with 34% of turns paying a second
+tool-selection hop. Two causes dominated.
+
+**Decision.** (1) *Redundant `get_state` (~20% of turns):* the per-turn `[Current state]`
+snapshot already carries HP/slots/conditions/inventory/spells/NPCs/scene/exits/loot/flags/
+combat order, yet the system prompt still said "call `get_state` rather than guessing" — a
+line predating snapshot injection. Reworded to act on the snapshot directly and reserve
+`get_state` for a rare omitted detail. (2) *Wasted terminal hop after a failed combat action
+(44 turns, ~188s):* the combat fast-path broke only on `action_used` (success); an `ok=false`
+rejection (turn-guard, `ambiguous_target`, `combat_starting`, …) left `action_used` False, so
+the loop spent one more terminal `create()` whose text is scrubbed in combat anyway. Now also
+breaks on a hard-stop `ok=false` in the same hop.
+
+**Consequences.** This supersedes Decision 5's call-count figures (which measured the
+narration-folding win before this cut). Worst case is unchanged — the engine still owns every
+number; only redundant generations were removed. A test asserts a rejected combat action now
+yields exactly one thinking call (verified failing at two without the fix). Commit `3ad6b13`.
+(The separately-attempted parallel `tool_use` batching — `bf7cac0` and its "§8" ADR — was
+reverted in `dce6695`/`9a4ff2b` and is intentionally not documented.)
+
+## ADR: Gold ledger and merchants (buy/sell)
+
+**Status:** Accepted
+
+**Context:** The "Cross-scene resource economy" ADR established provisioning + loot + no rest,
+but had no *trade* layer — found gear and gold could not be exchanged. Gold needed an
+owner-enforced home for the same reason every other game number does.
+
+**Decision.** A per-character purse — `Character.gold` (int) — mutated only through
+`rules.add_gold` / `rules.spend_gold`, where `spend_gold` refuses an overspend
+(`insufficient_gold`) without changing the balance, the same refuse-when-short shape as the
+spell-slot economy. Merchant NPCs carry an authored `NPC.shop` catalogue (`{item_id:
+price_gp}`); a non-empty `shop` is what marks an NPC a merchant. Two tools, `buy_item` and
+`sell_item` (`src/tools.py`), take the acting party member and item (merchant optional —
+auto-selects the sole shopkeeper present). The engine owns every number: a buy pays the
+catalogue price and refuses `not_for_sale` / `insufficient_gold`; a sell credits **half**
+catalogue price (`SELL_RATE`) and refuses `not_in_inventory` / `not_buying` — a merchant only
+buys back what it stocks. Stock is an infinite catalogue (a buy never depletes it); the
+buyer/seller must be a PC (`not_a_pc`).
+
+**Consequences.** Engine-hard: prices, balance math, the half-price buyback, and every
+refusal. Soft (the model's): the *fiction* of haggling/roleplay around a sale, and choosing
+when to trade. The author owns the catalogue and its prices (declared in the scene's NPC
+`shop`), so the model can neither invent stock nor set prices — mirroring loot (`take_item`)
+and reinforcements (`add_npc`). v1 scope: flat infinite stock, fixed prices (no dynamic
+pricing or haggle mechanic), single-unit transactions. Commits `a4658ad` (ledger), `b8922c1`
+(merchants).

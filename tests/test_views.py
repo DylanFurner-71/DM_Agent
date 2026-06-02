@@ -81,6 +81,26 @@ def test_print_state_plain_core_fields(capsys):
     assert ESC not in out
 
 
+def test_pc_abilities_signed_and_ordered():
+    c = Character(name="X", ability_modifiers={"str": 4, "dex": 0, "con": 3,
+                                               "int": -1, "wis": 1, "cha": 2})
+    assert views._pc_abilities(c) == "STR +4  DEX +0  CON +3  INT -1  WIS +1  CHA +2"
+    assert views._pc_abilities(Character(name="Y")) == ""  # no modifiers → omitted
+
+
+def test_print_state_shows_ability_modifiers(capsys):
+    views.set_plain(True)
+    gs = GameState(location="The Ember Chamber")
+    gs.party["aldric"] = Character(
+        name="Aldric", max_hp=24, hp=24,
+        ability_modifiers={"str": 3, "dex": 1, "con": 2, "int": 0, "wis": -1, "cha": 0},
+    )
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Abilities: STR +3  DEX +1  CON +2  INT +0  WIS -1  CHA +0" in out
+    assert ESC not in out
+
+
 def test_print_state_shows_merchant_shop(capsys):
     views.set_plain(True)
     gs = GameState(location="Market")
@@ -503,3 +523,42 @@ def test_print_state_plain_non_caster_keeps_header_slots(capsys):
     out = capsys.readouterr().out
     header = next(ln for ln in out.splitlines() if ln.strip().startswith("Rogue:"))
     assert "slots L1:1/1" in header   # no spell block → header keeps the readout
+
+
+# --- two-model split: per-call mixed-model cost ---------------------------
+
+def test_estimate_cost_mixed_prices_each_call_by_its_model():
+    # 1M tokens per bucket makes the per-token math line up with list price.
+    trace = [{"turn": 1, "input": "x", "calls": [], "api_calls": [
+        {"phase": "thinking", "elapsed": 1.0, "model": "claude-haiku-4-5-20251001",
+         "usage": {"input": 1_000_000, "output": 1_000_000}},
+        {"phase": "narrating", "elapsed": 2.0, "model": "claude-sonnet-4-6",
+         "usage": {"input": 1_000_000, "output": 1_000_000}},
+    ]}]
+    c = views.estimate_cost_mixed(trace, "claude-sonnet-4-6")
+    # input bucket: haiku 1.0 + sonnet 3.0 ; output bucket: haiku 5.0 + sonnet 15.0
+    assert c["input"] == pytest.approx(1.0 + 3.0)
+    assert c["output"] == pytest.approx(5.0 + 15.0)
+    assert c["total"] == pytest.approx(1.0 + 3.0 + 5.0 + 15.0)
+
+
+def test_estimate_cost_mixed_untagged_call_uses_default():
+    # A call with no "model" key (older trace) is priced at the default model.
+    trace = [{"turn": 1, "input": "x", "calls": [], "api_calls": [
+        {"phase": "thinking", "elapsed": 1.0, "usage": {"input": 1_000_000}},
+    ]}]
+    c = views.estimate_cost_mixed(trace, "claude-sonnet-4-6")
+    assert c["input"] == pytest.approx(3.0)
+
+
+def test_format_cost_lists_both_models_when_mixed():
+    trace = [{"turn": 1, "input": "x", "calls": [], "api_calls": [
+        {"phase": "thinking", "elapsed": 1.0, "model": "claude-haiku-4-5-20251001",
+         "usage": {"input": 1000, "output": 80}},
+        {"phase": "narrating", "elapsed": 2.0, "model": "claude-sonnet-4-6",
+         "usage": {"input": 1000, "output": 200}},
+    ]}]
+    out = views.format_cost(trace, "claude-sonnet-4-6")
+    assert "models" in out
+    assert "claude-haiku-4-5-20251001" in out and "claude-sonnet-4-6" in out
+    assert "2 API calls" in out

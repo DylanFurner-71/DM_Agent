@@ -18,6 +18,8 @@ from src.validate import validate_scenario, _is_valid_dice
 def _valid() -> dict:
     """A minimal, clean two-scene scenario: a → b, b terminal."""
     return {
+        "title": "Test Adventure",
+        "blurb": "A clean two-scene scenario for tests.",
         "current_scene": "a",
         "scenes": {
             "a": {
@@ -59,6 +61,20 @@ def test_valid_scenario_is_clean():
     assert rep.ok, rep.errors
     assert rep.errors == []
     assert rep.warnings == [], rep.warnings
+
+
+def test_title_blurb_are_known_top_level_keys():
+    """The start-menu metadata keys don't trip the unknown-top-level-key warning."""
+    assert "unknown top-level key" not in _warns(_valid())
+
+
+def test_missing_title_warns_but_still_ok():
+    """A scene-based scenario without a title still loads, but the menu warns."""
+    d = _valid()
+    del d["title"]
+    rep = validate_scenario(d)
+    assert rep.ok, rep.errors
+    assert any("no 'title'" in w for w in rep.warnings), rep.warnings
 
 
 def test_all_shipped_scenarios_validate():

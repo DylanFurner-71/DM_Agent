@@ -1,8 +1,8 @@
 """Play a session from the terminal.
 
 Usage:
-    python -m src.main                              # load data/scenario.json
-    python -m src.main data/my_scenario.json        # load a custom scenario
+    python -m src.main                              # open the start menu (pick an adventure)
+    python -m src.main data/my_scenario.json        # load a custom scenario (skips the menu)
     python -m src.main savegame.json                # resume a saved game
     python -m src.main data/my_scenario.json --plain   # no color/Markdown/spinner
 
@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 from . import rules
 from .dm_agent import DMAgent
 from .game_state import GameState
+from .start_menu import run_start_menu
 from .views import (
     Spinner,
     _build_stats_trace,
@@ -207,8 +208,9 @@ def _make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "scenario",
         nargs="?",
-        default=DEFAULT_SCENARIO,
-        help="path to a scenario or saved-game JSON (default: data/scenario.json)",
+        default=None,
+        help="path to a scenario or saved-game JSON; omit to open the start menu "
+             "(falls back to data/scenario.json when not on a terminal)",
     )
     parser.add_argument(
         "--no-hud",
@@ -241,7 +243,20 @@ def main() -> None:
     # terminal — a piped/CI run has no use for it and shouldn't write a history file.
     if sys.stdin.isatty():
         _init_input_history()
-    state = GameState.load(args.scenario)
+
+    # No path given → open the start menu on an interactive terminal, else fall
+    # back to the default scenario (keeps piped/CI/--plain runs non-interactive).
+    scenario = args.scenario
+    if scenario is None:
+        if sys.stdin.isatty() and sys.stdout.isatty() and not args.plain:
+            scenario = run_start_menu(SAVE_DIR, AUTOSAVE_NAME)
+            if scenario is None:
+                print("Farewell, adventurer.")
+                return
+        else:
+            scenario = DEFAULT_SCENARIO
+
+    state = GameState.load(scenario)
     agent = DMAgent(state)
 
     # A 'thinking' spinner fills the pre-stream API latency; the first narration
@@ -260,7 +275,9 @@ def main() -> None:
               f"in {delay:.0f}s…")
     agent.on_retry = _notify_retry
 
-    banner(args.scenario)
+    banner(scenario)
+    if agent.fast_model and agent.fast_model != agent.model:
+        print(f"  Models: {agent.model} (narration) · {agent.fast_model} (tool-selection)")
     if args.seed is not None:
         print(f"  Dice RNG seeded with {args.seed} — rolls are reproducible this session.")
     mode = _launch_mode(state)

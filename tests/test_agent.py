@@ -1321,6 +1321,74 @@ def test_closing_prompt_youre_up_after_start_combat():
 
 
 
+# --- _strip_turn_prompt: drop a model-written turn prompt the engine owns -----
+
+_NAMES = ["Brom", "Tilda", "Sage", "Cinderfang"]
+
+
+def test_strip_turn_prompt_removes_trailing_named_prompt():
+    from src.dm_agent import _strip_turn_prompt
+    text = ("Brom's warhammer connects with a thunderous clang. **Brom, what do you do?**")
+    assert _strip_turn_prompt(text, _NAMES) == "Brom's warhammer connects with a thunderous clang."
+
+
+def test_strip_turn_prompt_removes_youre_up_variant():
+    from src.dm_agent import _strip_turn_prompt
+    text = "The heat is unbearable. **Tilda, you're up — what do you do?**"
+    assert _strip_turn_prompt(text, _NAMES) == "The heat is unbearable."
+
+
+def test_strip_turn_prompt_removes_name_only_bold_prompt():
+    """The narrator's '**Sage**, …?' form (bold around the name only) — the run-2 leak."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "Cinderfang's tail catches her ribs.\n\n**Sage**, what do you do?"
+    assert _strip_turn_prompt(text, _NAMES) == "Cinderfang's tail catches her ribs."
+
+
+def test_strip_turn_prompt_removes_emdash_separated_prompt():
+    """'**Sage** — … — what do you do?' (em-dash after the bold name)."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "The world tilts.\n\n**Sage** — still standing, barely — what do you do?"
+    assert _strip_turn_prompt(text, _NAMES) == "The world tilts."
+
+
+def test_strip_turn_prompt_not_over_strips_midsentence_name():
+    """A name+comma INSIDE a sentence (not at a sentence boundary) is left alone."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "Do you trust Sage, knowing what you do?"
+    assert _strip_turn_prompt(text, _NAMES) == text
+
+
+def test_strip_turn_prompt_preserves_party_wide_exploration_prompt():
+    """A combat-over close ends with a deliberate, un-named 'What do you do?' — keep it."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "The drake collapses. The passage yawns ahead. What do you do?"
+    assert _strip_turn_prompt(text, _NAMES) == text
+
+
+def test_strip_turn_prompt_keeps_named_rhetorical_question_without_comma():
+    """A dramatic 'Will Brom survive?' is prose, not a turn prompt (no 'Name,')."""
+    from src.dm_agent import _strip_turn_prompt
+    text = "The blow lands hard. Will Brom survive?"
+    assert _strip_turn_prompt(text, _NAMES) == text
+
+
+def test_strip_turn_prompt_unchanged_when_no_prompt():
+    from src.dm_agent import _strip_turn_prompt
+    text = "Brom swings his warhammer and shatters another obsidian scale."
+    assert _strip_turn_prompt(text, _NAMES) is text
+
+
+def test_strip_turn_prompt_defensive_on_prompt_only_and_empty_inputs():
+    from src.dm_agent import _strip_turn_prompt
+    # Whole text is just a prompt → return unchanged rather than blanking the beat.
+    only = "**Brom, what do you do?**"
+    assert _strip_turn_prompt(only, _NAMES) == only
+    # Empty text / no names → unchanged.
+    assert _strip_turn_prompt("", _NAMES) == ""
+    assert _strip_turn_prompt("Brom, what do you do?", []) == "Brom, what do you do?"
+
+
 def test_take_turn_start_combat_defers_attack():
     """End-to-end: a player input that calls start_combat AND attack in the same
     tool-use phase has the attack silently blocked (combat_starting barrier).

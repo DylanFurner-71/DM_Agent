@@ -1,4 +1,6 @@
 {
+  "title": "The Velvet Mask",
+  "blurb": "Infiltrate a crime-lord's masquerade to steal the ledger that would hang him.",
   "current_scene": "masque_landing",
   "scenes": {
     "masque_landing": {
