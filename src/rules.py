@@ -77,6 +77,48 @@ def cast_spell(caster, spell_level: int) -> dict:
     return {"ok": True, "reason": "slot expended", "slots_remaining": available - 1}
 
 
+def _d20(advantage: bool = False) -> tuple[int, list[int]]:
+    """Roll a d20, or 2d20-keep-higher with advantage. Returns (kept_nat, all_rolls).
+
+    Goes through roll('1d20') so force_rolls/seed still drive the dice deterministically.
+    """
+    if advantage:
+        a = roll("1d20").rolls[0]
+        b = roll("1d20").rolls[0]
+        return max(a, b), [a, b]
+    nat = roll("1d20").rolls[0]
+    return nat, [nat]
+
+
+def award_inspiration(character, cap: int = 1) -> dict:
+    """Grant a character their single session reroll (inspiration). Engine-owned budget.
+
+    Mirrors the spell-slot / Pearl-of-Power refusal style — never raises, returns a
+    structured result. A PC holds at most ``cap`` (1) inspiration AND may only ever be
+    awarded one per session: once spent (inspiration_used) it can never be re-awarded.
+    The DM *decides* when to award (a soft, discretionary judgment); the cap and the dice
+    stay in the engine, so the model can never manufacture a result.
+    """
+    if getattr(character, "inspiration_used", False):
+        return {
+            "ok": False,
+            "reason": "already_used",
+            "character": character.name,
+            "error": f"{character.name} has already used their inspiration this session.",
+        }
+    current = getattr(character, "inspiration", 0)
+    if current >= cap:
+        return {
+            "ok": False,
+            "reason": "at_cap",
+            "character": character.name,
+            "inspiration": current,
+            "error": f"{character.name} already holds inspiration.",
+        }
+    character.inspiration = 1
+    return {"ok": True, "character": character.name, "inspiration": 1}
+
+
 def _mark_dead(target) -> None:
     """Transition a PC to dead and keep condition tags consistent.
 
@@ -362,12 +404,36 @@ def attack(attacker, defender, weapon: str | None = None) -> dict:
     return result
 
 
-def skill_check(character, ability: str, dc: int) -> dict:
-    """Roll d20 + the character's ability modifier against DC. Always resolves."""
+def _spend_inspiration(character, use_inspiration: bool) -> tuple[int, dict]:
+    """Roll the d20 for a check/save, spending inspiration for advantage when asked.
+
+    Returns (kept_nat, extra_fields) where extra_fields is merged into the result so the
+    model can narrate the reroll. When use_inspiration is True and the character holds a
+    point, the engine rolls 2d20-keep-higher, zeroes the point, and locks it for the
+    session (inspiration_used). When asked but none is held, it rolls normally and reports
+    inspiration_used=False so the model narrates 'no luck left to spend'.
+    """
+    if not use_inspiration:
+        nat, _ = _d20(advantage=False)
+        return nat, {}
+    if getattr(character, "inspiration", 0) >= 1:
+        nat, rolls = _d20(advantage=True)
+        character.inspiration = 0
+        character.inspiration_used = True
+        return nat, {"inspiration_used": True, "inspiration_rolls": rolls}
+    nat, _ = _d20(advantage=False)
+    return nat, {"inspiration_used": False, "inspiration_reason": "no_inspiration"}
+
+
+def skill_check(character, ability: str, dc: int, use_inspiration: bool = False) -> dict:
+    """Roll d20 + the character's ability modifier against DC. Always resolves.
+
+    Passing use_inspiration spends the character's inspiration (if held) for advantage —
+    see _spend_inspiration; the engine owns the reroll and the budget.
+    """
     ability = ability.strip().lower()
     modifier = character.ability_modifiers.get(ability, 0)
-    r = roll("1d20")
-    nat = r.rolls[0]
+    nat, insp = _spend_inspiration(character, use_inspiration)
     total = nat + modifier
     sign = "+" if modifier >= 0 else ""
     return {
@@ -380,10 +446,11 @@ def skill_check(character, ability: str, dc: int) -> dict:
         "dc": dc,
         "success": total >= dc,
         "detail": f"d20({nat}) {sign}{modifier} = {total} vs DC {dc}",
+        **insp,
     }
 
 
-def saving_throw(character, ability: str, dc: int) -> dict:
+def saving_throw(character, ability: str, dc: int, use_inspiration: bool = False) -> dict:
     """Roll a saving throw: d20 + ability modifier (+ proficiency if proficient in
     that save) against a DC. Always resolves.
 
@@ -401,8 +468,7 @@ def saving_throw(character, ability: str, dc: int) -> dict:
     proficient = ability in {a.strip().lower() for a in getattr(character, "save_proficiencies", [])}
     if proficient:
         modifier += getattr(character, "proficiency_bonus", 0)
-    r = roll("1d20")
-    nat = r.rolls[0]
+    nat, insp = _spend_inspiration(character, use_inspiration)
     total = nat + modifier
     sign = "+" if modifier >= 0 else ""
     return {
@@ -417,6 +483,7 @@ def saving_throw(character, ability: str, dc: int) -> dict:
         "dc": dc,
         "success": total >= dc,
         "detail": f"{ability.upper()} save: d20({nat}) {sign}{modifier} = {total} vs DC {dc}",
+        **insp,
     }
 
 
@@ -812,6 +879,7 @@ SRD_RULES = {
     "healing": "Healing restores HP up to the target's maximum (never above it) and cannot revive a dead character. Healing a dying or stable character at 0 HP brings them back to consciousness and resets their death saves. Rolled healing (a potion via use_item, or apply_dice) is rolled and applied by the engine — never narrate a specific amount yourself.",
     "using_items": "A consumable is spent with use_item; the engine applies its fixed effect (a healing potion rolls and restores HP; a Pearl of Power restores one spell slot, refused at the slot cap). In combat, using an item is the user's action and is turn-guarded, and it may instead be administered to a party ally — including a downed one, reviving them. Out of combat there is no action cost.",
     "proficiency_bonus": "The proficiency bonus is added by the engine to weapon attack rolls, spell attacks, and saving throws the character is proficient in (its save_proficiencies) — never to a plain ability check (skill_check). It is a flat per-character value (+2 by default), and for spellcasting scales with caster level (+2 at levels 1-4).",
+    "inspiration": "A single DM-awarded reroll. The DM may grant a character inspiration (award_inspiration) to reward clever play or strong roleplay. A character holds at most one and gets only one for the entire session — once spent it is never re-awarded. To spend it, set use_inspiration=true on that character's skill_check or saving_throw: the engine rolls 2d20 and keeps the higher, then locks the point. If none is held when spent, the roll is normal and the result reports inspiration_used=false. The engine owns the reroll and the budget — never narrate a chosen result.",
 }
 
 

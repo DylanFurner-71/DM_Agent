@@ -565,3 +565,34 @@ have today — an omittable actor with an `ambiguous_actor` resolver, the social
 `_resolve_offensive_target` — recorded as a possible future hard backstop, not built. Scope is
 `influence_npc`; other unnamed-actor cases are out of scope (in combat the turn-guard already fixes
 the actor).
+
+## ADR: Inspiration is an engine-owned reroll budget; the award is a safe soft boundary
+
+**Status:** Accepted
+
+**Context:** The roadmap's easiest next mechanic is a "once-per-session reroll the DM can award"
+(inspiration / luck point). The concern: "the DM awards it" hands the *model* a lever over a game
+outcome, which looks like it might breach the project's core discipline (every game number is
+engine-owned; the model only requests). The question is whether inspiration can be added without
+letting narration launder a better result.
+
+**Decision.** Split the mechanic into its two halves and place each on the correct side of the
+boundary. (1) The **reroll and the budget are hard, engine-owned**: a PC carries `inspiration`
+(0/1) and `inspiration_used` (a lifetime lock) on `Character`; `rules.award_inspiration` caps the
+hold at one and refuses re-award after a spend (`already_used`) — the same refuse-when-spent shape
+as `cast_spell`'s slot economy and the Pearl-of-Power cap. Spending is a flag (`use_inspiration`)
+on `skill_check` / `saving_throw`; when set and a point is held, the engine rolls 2d20-keep-higher
+*inside the same atomic roll*, zeroes the point, and locks it. The reroll goes through `roll("1d20")`
+so `--seed`/`force_rolls` still drive it. (2) The **award decision is soft** — a DM judgment about
+clever play or roleplay, held in `SYSTEM_PROMPT`, in the same family as target-agency and
+reveal-through-exploration.
+
+**Consequences.** The soft half is *benign* because the engine still owns the cap and the dice: the
+model's discretion affects only *whether* a reroll is offered, never *what number* comes up, and it
+can never grant a second one or pick the result. Scope kept tight: spend applies to the two clean
+d20 rolls (`skill_check`, `saving_throw`) that have no atomic damage side-effect; threading it
+through `attack` / spell-attack (which would touch the crit/nat-20 path) is left as a same-flag
+extension. Semantics are advantage-style (2d20 keep higher) rather than a true retroactive reroll,
+which avoids having to store and undo a committed roll. Economy chosen: one reroll per character for
+the entire session (lifetime lock), the strictest faithful reading of "once-per-session." The hard
+parts (cap, lifetime lock, advantage roll, decrement) are unit-tested; only *when to award* is soft.

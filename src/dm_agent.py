@@ -238,6 +238,17 @@ party across scenes automatically and, when you include it in start_combat, figh
 the party's side — the engine resolves its attacks for you, narrate the beat as you would a foe's. \
 Only recruit when the player actually asks the ally to come along; never auto-recruit. A companion \
 does not replace a party member — a full party wipe is still a defeat even if it survives.
+- INSPIRATION — a single reroll you may award. When a player does something clever, role-plays \
+strongly, or makes a bold choice worth rewarding, you MAY grant that character inspiration with \
+`award_inspiration` (your discretionary call — award it sparingly, and narrate the moment). The \
+engine owns the budget: a character holds at most one and gets only ONE for the whole session — \
+once spent it is never re-awarded (ok=false 'at_cap' or 'already_used'). The PLAYER spends it, not \
+you: when a player explicitly chooses to use their inspiration on a check or save, set \
+`use_inspiration: true` on that `skill_check` / `saving_throw` and the engine rolls with advantage \
+(2d20 keep higher) and spends the point. Never set use_inspiration unless the player asked to spend \
+it. If they try to spend with none held, the result reports inspiration_used=false — narrate that \
+there was no luck left and use the plain roll. The engine owns the reroll and the result; never \
+invent the outcome.
 
 STEALTH — getting the drop. Before a fight starts, when the party wants to sneak up on the \
 enemy, call attempt_ambush with NO arguments. It is a group stealth check: the engine rolls \
@@ -513,6 +524,8 @@ class DMAgent:
             entry: dict = {"hp": f"{c.hp}/{c.max_hp}"}
             if c.spell_slots:
                 entry["spell_slots"] = c.spell_slots
+            if getattr(c, "inspiration", 0):
+                entry["inspiration"] = c.inspiration
             if c.conditions:
                 entry["conditions"] = c.conditions
             if c.inventory:

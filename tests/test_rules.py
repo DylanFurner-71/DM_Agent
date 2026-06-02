@@ -1338,6 +1338,75 @@ def test_saving_throw_missing_ability_defaults_to_zero():
     assert res["total"] == 12
 
 
+# --- inspiration: a single DM-awarded reroll -------------------------------
+
+def test_award_inspiration_grants_one():
+    c = Character(name="Aldric")
+    res = rules.award_inspiration(c)
+    assert res["ok"] is True
+    assert res["inspiration"] == 1
+    assert c.inspiration == 1
+    assert c.inspiration_used is False
+
+
+def test_award_inspiration_refused_at_cap():
+    c = Character(name="Aldric", inspiration=1)
+    res = rules.award_inspiration(c)
+    assert res["ok"] is False
+    assert res["reason"] == "at_cap"
+    assert c.inspiration == 1  # unchanged
+
+
+def test_award_inspiration_refused_after_use():
+    # Lifetime lock: once spent, a PC can never be re-awarded for the session.
+    c = Character(name="Aldric", inspiration_used=True)
+    res = rules.award_inspiration(c)
+    assert res["ok"] is False
+    assert res["reason"] == "already_used"
+    assert c.inspiration == 0
+
+
+def test_skill_check_inspiration_keeps_higher_and_spends():
+    c = Character(name="Aldric", ability_modifiers={"dex": 0}, inspiration=1)
+    rules.force_rolls([3, 17])  # 2d20 with advantage → keep 17
+    res = rules.skill_check(c, "dex", dc=10, use_inspiration=True)
+    assert res["roll"] == 17
+    assert res["inspiration_used"] is True
+    assert res["inspiration_rolls"] == [3, 17]
+    assert c.inspiration == 0          # point spent
+    assert c.inspiration_used is True  # lifetime-locked
+
+
+def test_saving_throw_inspiration_keeps_higher_and_spends():
+    c = Character(name="Aldric", ability_modifiers={"con": 0}, inspiration=1)
+    rules.force_rolls([18, 4])  # keep 18
+    res = rules.saving_throw(c, "con", dc=12, use_inspiration=True)
+    assert res["roll"] == 18
+    assert res["inspiration_used"] is True
+    assert c.inspiration == 0 and c.inspiration_used is True
+
+
+def test_use_inspiration_with_none_held_rolls_normally():
+    c = Character(name="Aldric", ability_modifiers={"dex": 0})  # holds none
+    rules.force_rolls([5, 19])  # only the first d20 is consumed — no advantage
+    res = rules.skill_check(c, "dex", dc=10, use_inspiration=True)
+    assert res["roll"] == 5
+    assert res["inspiration_used"] is False
+    assert res["inspiration_reason"] == "no_inspiration"
+    assert c.inspiration_used is False  # nothing was spent or locked
+
+
+def test_check_and_save_without_flag_unchanged():
+    # Default use_inspiration=False adds no inspiration keys and consumes one d20.
+    c = Character(name="Aldric", ability_modifiers={"dex": 1}, inspiration=1)
+    rules.force_rolls([8, 20])
+    chk = rules.skill_check(c, "dex", dc=5)
+    assert chk["roll"] == 8 and "inspiration_used" not in chk
+    assert c.inspiration == 1  # untouched when the flag is off
+    sav = rules.saving_throw(c, "dex", dc=5)
+    assert sav["roll"] == 20 and "inspiration_used" not in sav
+
+
 def test_saving_throw_npc_has_no_proficiency():
     # NPC lacks proficiency_bonus / save_proficiencies — just d20 + ability mod.
     npc = NPC(name="Snik", ability_modifiers={"dex": 1})

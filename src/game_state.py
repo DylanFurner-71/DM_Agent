@@ -60,6 +60,11 @@ class Character:
     death_save_failures: int = 0
     dead: bool = False
     stable: bool = False
+    # Inspiration: a single DM-awarded reroll (see rules.award_inspiration). A PC holds
+    # at most one (inspiration 0/1) and only ever one for the whole session — once spent,
+    # inspiration_used locks it so it can never be re-awarded.
+    inspiration: int = 0
+    inspiration_used: bool = False
 
     @property
     def is_down(self) -> bool:

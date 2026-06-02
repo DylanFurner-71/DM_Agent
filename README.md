@@ -121,6 +121,17 @@ character proficient in the save (its `save_proficiencies`) adds proficiency, wh
 plain check never does. The engine owns the roll; the model applies the consequence of a
 failed save through `apply_dice`/`modify_hp`.
 
+**Inspiration.** A single DM-awarded reroll, built as another capped engine resource — the
+same shape as the spell-slot economy. The DM may grant a character inspiration
+(`award_inspiration`) to reward clever play or strong roleplay; that *award* is a soft
+judgment, but the budget is hard: a character holds at most one and gets only one for the
+entire session — once spent it is lifetime-locked and can never be re-awarded (refused
+`at_cap`/`already_used`). The player spends it by setting `use_inspiration` on that
+character's `skill_check` or `saving_throw`, and the engine rolls **2d20 and keeps the
+higher** inside the same atomic roll, then spends the point (trying to spend with none held
+rolls normally and reports `inspiration_used: false`). The model's discretion only decides
+*whether* a reroll is offered — never the number, which stays in the engine.
+
 **Hazards & traps.** Author-placed scene dangers — a dart trap, a spore cloud, a
 rune-ward — declared in a scene's `hazards` manifest and sprung with `trigger_hazard`.
 The manifest is the sole authority (mirroring loot, exits, and reinforcements): the model
@@ -253,7 +264,6 @@ Future work, ranked roughly least → most difficult to implement.
 
 *Mechanics:*
 
-- **Inspiration / luck point:** a once-per-session reroll the DM can award.
 - **Gold ledger:** a tracked party currency (a `gold` total plus add/spend tools) so loot and rewards carry a real number.
 - **Equipment → AC:** an armor table so worn gear sets a character's AC instead of a flat value.
 - **Advantage/disadvantage:** roll 2d20 and take the higher (or lower), threaded through attacks and checks.

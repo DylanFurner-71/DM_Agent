@@ -319,13 +319,20 @@ TOOLS = [
     },
     {
         "name": "skill_check",
-        "description": "Roll d20 + a character's ability modifier against a Difficulty Class (DC). Use for any non-attack check — perception, persuasion, athletics, stealth, arcana, etc.",
+        "description": (
+            "Roll d20 + a character's ability modifier against a Difficulty Class (DC). "
+            "Use for any non-attack check — perception, persuasion, athletics, stealth, arcana, etc. "
+            "Set use_inspiration=true ONLY when the player chooses to spend that character's "
+            "inspiration on this check — the engine rolls with advantage (2d20 keep higher) and "
+            "spends the point; if they hold none the result reports inspiration_used=false."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "character": {"type": "string", "description": "Name of the character making the check"},
                 "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha"},
                 "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
+                "use_inspiration": {"type": "boolean", "description": "Spend the character's inspiration for advantage on this check. Only when the player opts to."},
             },
             "required": ["character", "ability", "dc"],
         },
@@ -342,7 +349,10 @@ TOOLS = [
             "it is. Proficient saves add proficiency automatically. The engine owns the "
             "roll — never decide the outcome yourself; on a failed save, apply the "
             "consequence with the matching tool (apply_dice for dice damage, modify_hp for "
-            "a flat amount)."
+            "a flat amount). Set use_inspiration=true ONLY when the player chooses to spend "
+            "that character's inspiration on this save — the engine rolls with advantage "
+            "(2d20 keep higher) and spends the point; if they hold none the result reports "
+            "inspiration_used=false."
         ),
         "input_schema": {
             "type": "object",
@@ -350,6 +360,7 @@ TOOLS = [
                 "character": {"type": "string", "description": "Name of the character making the save"},
                 "ability": {"type": "string", "description": "Ability name: str, dex, con, int, wis, or cha"},
                 "dc": {"type": "integer", "description": "Difficulty Class the total must meet or exceed"},
+                "use_inspiration": {"type": "boolean", "description": "Spend the character's inspiration for advantage on this save. Only when the player opts to."},
             },
             "required": ["character", "ability", "dc"],
         },
@@ -513,6 +524,26 @@ TOOLS = [
                 "npc": {"type": "string", "description": "Name of the non-hostile NPC to recruit"},
             },
             "required": ["npc"],
+        },
+    },
+    {
+        "name": "award_inspiration",
+        "description": (
+            "Award a party member their single session reroll (inspiration) — a DM reward "
+            "for clever play, a strong roleplay moment, or a bold choice. This is YOUR "
+            "discretionary call, but the engine owns the budget: a character holds at most "
+            "one and gets only ONE for the entire session — ok=false reason 'at_cap' if they "
+            "already hold one, 'already_used' if they have already spent theirs (it can never "
+            "be re-awarded). Only party members can be inspired (ok=false 'not_a_pc' for an "
+            "NPC). The player spends it later by choosing use_inspiration on a skill_check or "
+            "saving_throw. Award sparingly and narrate the moment of inspiration."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "character": {"type": "string", "description": "Name of the party member to inspire"},
+            },
+            "required": ["character"],
         },
     },
 ]
@@ -1214,9 +1245,10 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(character.name, state)
         if err:
             return err
-        res = rules.skill_check(character, args["ability"], int(args["dc"]))
+        res = rules.skill_check(character, args["ability"], int(args["dc"]), bool(args.get("use_inspiration", False)))
         if res["ok"]:
-            state.record(f"{character.name} {args['ability']} check DC {args['dc']}: {'success' if res['success'] else 'failure'}")
+            insp = " (inspired)" if res.get("inspiration_used") else ""
+            state.record(f"{character.name} {args['ability']} check DC {args['dc']}{insp}: {'success' if res['success'] else 'failure'}")
         return res
 
     if name == "saving_throw":
@@ -1226,12 +1258,26 @@ def dispatch(name: str, args: dict, state) -> dict:
         # A saving throw is reactive — it resists an effect and is NOT the actor's
         # action. Deliberately no turn/action/combat_starting guard: any affected
         # character may save on anyone's turn (e.g. everyone saves vs a trap).
-        res = rules.saving_throw(character, args["ability"], int(args["dc"]))
+        res = rules.saving_throw(character, args["ability"], int(args["dc"]), bool(args.get("use_inspiration", False)))
         if res["ok"]:
+            insp = " (inspired)" if res.get("inspiration_used") else ""
             state.record(
-                f"{character.name} {args['ability']} save DC {args['dc']}: "
+                f"{character.name} {args['ability']} save DC {args['dc']}{insp}: "
                 f"{'success' if res['success'] else 'failure'}"
             )
+        return res
+
+    if name == "award_inspiration":
+        character = state.find_actor(args["character"])
+        if not character:
+            return {"ok": False, "error": "Unknown character; call get_state to see valid names."}
+        # Inspiration is a PC-only reward; an NPC has no death-save lifecycle attr.
+        if not hasattr(character, "death_save_failures"):
+            return {"ok": False, "reason": "not_a_pc",
+                    "error": f"{character.name} is not a party member; only PCs can be inspired."}
+        res = rules.award_inspiration(character)
+        if res["ok"]:
+            state.record(f"{character.name} awarded inspiration")
         return res
 
     if name == "trigger_hazard":

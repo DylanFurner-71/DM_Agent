@@ -177,6 +177,34 @@ def test_template_override_persists(tmp_path):
     assert grik.hp == 7, "damaged HP must not be reset to max on load"
 
 
+def test_inspiration_round_trips(tmp_path):
+    """A held inspiration point and the lifetime-used lock must survive save/load."""
+    gs = GameState(party={
+        "holder": Character(name="Holder", inspiration=1),
+        "spent": Character(name="Spent", inspiration=0, inspiration_used=True),
+    })
+    loaded = _save_load(gs, tmp_path)
+    assert loaded.party["holder"].inspiration == 1
+    assert loaded.party["holder"].inspiration_used is False
+    assert loaded.party["spent"].inspiration == 0
+    assert loaded.party["spent"].inspiration_used is True
+
+
+def test_inspiration_defaults_on_older_save(tmp_path):
+    """A save predating inspiration (no field) loads with the safe defaults."""
+    path = tmp_path / "old.json"
+    gs = GameState(party={"hero": Character(name="Hero")})
+    d = gs.to_dict()
+    for pc in d["party"].values():
+        pc.pop("inspiration", None)
+        pc.pop("inspiration_used", None)
+    import json as _json
+    path.write_text(_json.dumps(d))
+    loaded = GameState.load(str(path))
+    assert loaded.party["hero"].inspiration == 0
+    assert loaded.party["hero"].inspiration_used is False
+
+
 def test_combat_state_preserved(tmp_path):
     """All five combat fields must round-trip exactly, and the active pointer
     must still resolve to a live actor in the merged party+npc map."""

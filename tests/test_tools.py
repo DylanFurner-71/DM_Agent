@@ -882,3 +882,52 @@ def test_snapshot_redacts_string_password_flag():
     raw_snap = agent._state_snapshot()
     assert "ashfall" not in raw_snap
     assert _json.loads(raw_snap)["quest_flags"]["secret_phrase"] == "<redacted>"
+
+
+# --- inspiration dispatch ---------------------------------------------------
+
+def test_award_inspiration_dispatch_grants_to_pc():
+    gs = _make_state()
+    res = tools.dispatch("award_inspiration", {"character": "Hero"}, gs)
+    assert res["ok"] is True
+    assert gs.party["Hero"].inspiration == 1
+
+
+def test_award_inspiration_dispatch_refuses_npc():
+    gs = _make_state()
+    gs.npcs["snik"] = NPC(name="Snik")
+    res = tools.dispatch("award_inspiration", {"character": "Snik"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "not_a_pc"
+
+
+def test_award_inspiration_dispatch_unknown_character():
+    gs = _make_state()
+    res = tools.dispatch("award_inspiration", {"character": "Nobody"}, gs)
+    assert res["ok"] is False
+    assert "unknown" in res["error"].lower()
+
+
+def test_skill_check_dispatch_spends_inspiration():
+    from src import rules
+    gs = _make_state()
+    gs.party["Hero"].inspiration = 1
+    rules.force_rolls([2, 19])  # advantage keeps 19
+    res = tools.dispatch("skill_check", {"character": "Hero", "ability": "dex", "dc": 10, "use_inspiration": True}, gs)
+    assert res["ok"] is True
+    assert res["roll"] == 19
+    assert res["inspiration_used"] is True
+    assert gs.party["Hero"].inspiration == 0
+    assert gs.party["Hero"].inspiration_used is True
+
+
+def test_saving_throw_dispatch_spends_inspiration():
+    from src import rules
+    gs = _make_state()
+    gs.party["Hero"].inspiration = 1
+    rules.force_rolls([16, 1])  # keep 16
+    res = tools.dispatch("saving_throw", {"character": "Hero", "ability": "con", "dc": 12, "use_inspiration": True}, gs)
+    assert res["ok"] is True
+    assert res["roll"] == 16
+    assert res["inspiration_used"] is True
+    assert gs.party["Hero"].inspiration == 0

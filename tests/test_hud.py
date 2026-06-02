@@ -87,6 +87,15 @@ def test_hud_shows_conditions_tag():
     assert "[prone]" in hud
 
 
+def test_hud_shows_inspiration_tag():
+    gs = _two_pc_state()
+    gs.party["aldric"].inspiration = 1
+    hud = format_hud(gs)
+    assert "inspiration" in hud
+    # A PC holding none does not show the tag.
+    assert format_hud(_two_pc_state()).count("inspiration") == 0
+
+
 def test_hud_dying_and_dead_tags():
     gs = _two_pc_state()
     gs.party["aldric"].hp = 0                       # dying (down, not dead)

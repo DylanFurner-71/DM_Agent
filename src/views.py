@@ -286,6 +286,8 @@ def _pc_status(c) -> str:
     else:
         tags = []
     tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
+    if getattr(c, "inspiration", 0):
+        tags.append("inspiration")
     return ", ".join(tags) or "ok"
 
 
