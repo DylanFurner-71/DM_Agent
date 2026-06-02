@@ -1,0 +1,7 @@
+# demo_flat_effects — a fiction-only coin count (roll_dice, no state change), a flat
+# modify_hp toll and a flat heal, then claim the reliquary and leave. Peaceful room.
+Wisp counts the spilled coins
+Aldric lays his hand on the warding runes
+Aldric drinks from the restorative font
+take the silver reliquary
+we have what we came for — let's leave

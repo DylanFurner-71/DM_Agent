@@ -1,0 +1,13 @@
+# demo_skill_checks — one proactive check per talent (perception, athletics, arcana),
+# a check that gates a door, then an in-combat shove that IS the actor's action.
+Senna scans the floor for anything out of place
+take the healing potion
+Bram heaves the jammed portcullis open
+Orin studies the glyph-lock and reads the cipher
+now open the rune door and go through
+we attack the Bone Sentinel
+Bram tries to shove the Sentinel off the span
+the party attacks the Bone Sentinel
+keep attacking until the Sentinel falls
+take the warden token
+is there anywhere further to go?

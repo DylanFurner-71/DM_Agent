@@ -1,0 +1,10 @@
+# demo_stealth — ambush the drowsy goblins for a surprise round, then meet a foe
+# that cannot be ambushed (the engine drops you into a fair fight).
+we sneak up on the two lookouts
+now we strike!
+the party cuts down the surprised goblins
+keep attacking until both goblins fall
+we crawl deeper toward the blue glow
+we try to sneak up on the Watcher
+the party fights the Watcher
+keep attacking until the Watcher falls

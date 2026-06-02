@@ -1,0 +1,13 @@
+# demo_spells_items — spend Wisp's only L1 slot, watch the second cast fizzle, fall
+# back to a free cantrip, restore the slot with the Pearl of Power, self-heal, look
+# up a rule, then finish the kobolds.
+we attack the kobolds!
+Wisp casts magic missile at Zik
+Wisp casts magic missile at Zak again
+Wisp casts fire bolt at Zak
+Wisp grabs the Pearl of Power
+Wisp crushes the Pearl of Power
+Aldric drinks his healing potion
+how do spell slots work?
+the party finishes off the kobolds
+keep attacking until the kobolds are down

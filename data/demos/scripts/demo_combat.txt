@@ -1,0 +1,10 @@
+# demo_combat — clear Grik (goblin) + Fang (wolf) for the victory epilogue.
+# One player input per line; blank lines and # comments are ignored.
+we attack the goblin and the wolf!
+Kael shoots Fang with the shortbow
+Aldric swings his mace at Grik
+Wisp casts magic missile at Fang
+the party presses the attack on the wolf
+the party presses the attack on the goblin
+everyone strikes down the last foe
+keep attacking until both enemies are down

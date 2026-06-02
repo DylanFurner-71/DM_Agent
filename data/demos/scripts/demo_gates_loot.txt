@@ -1,0 +1,10 @@
+# demo_gates_loot — search for loot, hit a locked flag gate, open it with the lever,
+# pass an answer gate by speaking the password, then claim the crown. No combat.
+search the antechamber
+try the warded arch
+pull the bronze lever
+now go through the arch
+take the pearl
+go to the iron door and say "ashfall"
+take the crown
+is there anywhere further to go?

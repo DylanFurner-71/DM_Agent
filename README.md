@@ -394,6 +394,24 @@ answer-gate matching plus redaction. What unit tests can't reach by construction
 whether the model drives the verified machinery correctly in live play — is the job
 of a real playthrough.
 
+**Smoke test — the demos, end to end.** `smoke_test.py` replays each demo's
+scripted inputs (`data/demos/scripts/<demo>.txt`, lifted from the DEMOS.md
+walkthroughs) against the live model, stops when the game ends, and saves the
+final state:
+
+```bash
+python smoke_test.py            # → saves/demo_combat.json, demo_death_saves.json, …
+python smoke_test.py _1         # suffix each save → saves/demo_combat_1.json, … (run again as _2, _3)
+```
+
+It prints a per-demo pass/`no-end` line and exits non-zero if any demo throws —
+an *integration* check that a full run survives end to end, complementing the
+no-API suite above. Two caveats: it calls the Anthropic API (needs
+`ANTHROPIC_API_KEY`, spends tokens), and the fixed seed only steadies the
+**dice** — the model is non-deterministic, so a scripted line can occasionally
+desync from the game state. The suffix lets repeated runs sit side by side for
+comparison.
+
 ## Mechanics note
 
 Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0). Expand `rules.SRD_RULES`
