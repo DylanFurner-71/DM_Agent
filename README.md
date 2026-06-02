@@ -78,9 +78,9 @@ The boundary comes in two strengths:
 
 **Combat.** Turn-based, multi-actor combat with rolled initiative and a strict
 turn guard — you can only act on your turn, and the engine owns the pointer.
-Weapons resolve from inventory + ability modifiers (finesse picks the better of
-STR/DEX), roll to-hit against AC, and crit on a natural 20 (which doubles into the
-damage and death-save paths). HP is clamped at zero; damage and healing are atomic
+Weapons resolve from inventory, roll to-hit against AC using the attacker's
+`attack_bonus`, and add an ability modifier to **damage** (finesse weapons pick the
+better of STR/DEX). A natural 20 crits, doubling into the damage and death-save paths. HP is clamped at zero; damage and healing are atomic
 through the tool that *rolls and applies together*, so fiction-only dice can't be
 laundered into real HP changes. `start_combat` / `end_combat` / `next_turn` are
 engine-driven, combat auto-ends when one side is down, and unnamed targets trigger
@@ -93,8 +93,9 @@ while down adds failures (a crit adds two); massive overkill is instant death;
 healing resets the whole state. A party wipe produces a defeat epilogue; clearing
 a terminal scene produces a victory epilogue. The engine decides when the run ends.
 
-**Social & companions.** `influence_npc` allows one persuasion attempt per NPC
-against a `disposition_dc` (`None` = unreachable by talk). Each monster template
+**Social & companions.** `influence_npc` allows one social attempt per NPC —
+`persuade` or `intimidate` (the `approach` is narrative flavor; both roll the same
+Charisma check) — against a `disposition_dc` (`None` = unreachable by talk). Each monster template
 carries a **randomly-assigned default** `disposition_dc` (it is not a 5e stat, unlike
 `alertness_dc`, which derives from passive Perception); authors can override it per-NPC.
 Success flips a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and de-escalating
@@ -189,8 +190,19 @@ hazard is save-for-half, none on a success). Hazards can be gated behind a quest
 concealed trap isn't telegraphed before it springs. This is the engine-authoritative
 upgrade of describing a trap's DC in prose: the numbers leave the model's hands entirely.
 
+**Reinforcements.** Mid-encounter arrivals are author-placed, the same discipline as
+loot, exits, and hazards. A scene declares a `reinforcements` manifest keyed by
+`instance_id`, each entry an NPC spec (`{template, name, …overrides}`); `add_npc` may
+spawn only a declared key, so the stats, name, and template come from the manifest and
+**never** from the model — it owns only the dramatic timing. An entry can be `requires`-
+gated: hidden from the model's state and refused on spawn (`locked`) until the quest
+flag is set, then triggered in the fiction like a gated exit opening. Each spawns once,
+and a mid-combat arrival is inserted into the initiative order in its sorted slot without
+disturbing the active pointer.
+
 **Quest flags.** Story markers recording that something happened (a clue read, a seal
-broken), surfaced each turn and used to gate ways and endings. Values are JSON primitives
+broken), set and cleared via `set_quest_flag` / `clear_quest_flag`, surfaced each turn
+and used to gate ways and endings. Values are JSON primitives
 (usually booleans); the boundary is two-layer — *hard:* a reserved-key denylist
 (`hp, max_hp, ac, spell_slots, damage, initiative`), JSON-primitive validation, and string
 redaction in everything the model sees; *soft:* an action-vs-discovery prompt rule for what
@@ -224,12 +236,15 @@ indented sub-lines for each caster's known spells (grouped by level) and invento
 (an Items line for gear and a Consumables line with quantities), and — in combat —
 the round and initiative order with the active actor marked and dying/dead/companion
 tags (toggle with `/hud` or start with `--no-hud`). In-session commands include
-`/help`, `/state` (a full readout: per-PC HP/AC, known spells grouped by level with
-their slot budget, death-save progress, inventory, companion allies, hostiles, and
-the current scene's exits and loot), `/recap` (replay the story so far),
+`/help`, `/state` (a full readout: per-PC HP/AC, ability modifiers, known spells
+grouped by level with their slot budget, death-save progress, inventory, companion
+allies, hostiles, and the current scene's exits and loot), `/recap` (replay the story so far),
 `/roll <notation>` (open flavor rolls), `/undo` (rewind the last turn), `/cost`
 (session token usage and estimated spend, derived from the per-call stats),
 `/export` (write the story so far to a shareable Markdown session log), and `/save`.
+Launching with no scenario argument on an interactive terminal opens an **arrow-key
+start menu** — pick a shipped adventure, resume the last game, or load another save;
+an explicit scenario path or a piped/`--plain` run bypasses it and loads directly.
 The game **autosaves** to `saves/autosave.json` after every turn for crash-safe resume.
 Transient model-call failures (a rate limit, a 5xx, a network blip) are **retried with
 exponential backoff** — honoring a `Retry-After` header when present — so a passing hiccup
