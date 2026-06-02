@@ -130,9 +130,9 @@ for long-range callbacks (at the cost of one extra maintenance call). Low lock-i
 ## 4. NPC weapons are engine-selected, not model-named
 
 **Decision.** For NPC attacks, the engine picks the weapon from the NPC's statblock
-(the first melee weapon in its inventory); the model names only attacker and defender,
-never the weapon. PC attacks are unchanged — the player names the weapon, validated
-against inventory.
+(the first weapon from the `WEAPONS` table in its inventory, melee or ranged); the
+model names only attacker and defender, never the weapon. PC attacks are unchanged —
+the player names the weapon, validated against inventory.
 
 **Why.** The model has strong D&D priors and will supply a plausible weapon whenever it's
 left to name one. A goblin whose defined inventory was shortsword/shortbow was attacked
