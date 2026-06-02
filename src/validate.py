@@ -35,6 +35,12 @@ _NPC_FIELDS = {f.name for f in dataclasses.fields(NPC)}
 _EXIT_KEYS = {"to", "requires", "requires_answer", "denied"}
 _HAZARD_KEYS = {"name", "ability", "dc", "damage", "damage_type", "on_success",
                 "once", "requires", "hidden"}
+# Scene-level keys the engine actually reads (move_scene, get_state, _available_*).
+# A scene dict is consumed via .get(), so an unknown key is silently ignored rather
+# than crashing — a typo like 'hazardz' would quietly disable an intended manifest,
+# which is exactly what the unknown-key warning catches everywhere else.
+_SCENE_KEYS = {"location", "scene", "npcs", "loot", "exits", "hazards",
+               "reinforcements", "exit_requires", "exit_denied"}
 # Top-level scenario keys the loader/saver knows. Derived from GameState.to_dict so it
 # tracks the real schema (savegame fields included) and can't drift. `title`/`blurb`
 # are author metadata read only by the start menu — the loader ignores them — so add
@@ -446,6 +452,9 @@ def validate_scenario(data: dict) -> Report:
         if not isinstance(scene, dict):
             rep.error(where, f"must be an object, got {type(scene).__name__}")
             continue
+        for k in scene:
+            if k not in _SCENE_KEYS:
+                rep.warn(where, f"unknown scene field {k!r} — ignored by the engine{_suggest(k, _SCENE_KEYS)}")
         if not scene.get("location"):
             rep.warn(where, "no 'location' name")
         if not scene.get("scene"):

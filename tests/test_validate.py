@@ -123,6 +123,18 @@ def test_unknown_npc_field_is_error():
     assert "unknown NPC field" in _errs(d)
 
 
+def test_unknown_scene_field_warns_with_suggestion():
+    """A typo'd scene-level key (e.g. 'hazardz') is silently ignored by the engine,
+    so the validator warns and suggests the intended key."""
+    d = _valid()
+    d["scenes"]["a"]["hazardz"] = {"trap": {}}  # typo'd 'hazards'
+    out = _warns(d)
+    assert "unknown scene field 'hazardz'" in out
+    assert "hazards" in out  # close-match suggestion
+    # A warning (not an error): the scenario still loads.
+    assert validate_scenario(d).ok
+
+
 def test_inline_npc_without_name_is_error():
     d = _valid()
     d["scenes"]["a"]["npcs"]["mystery"] = {"max_hp": 10, "hp": 10}
