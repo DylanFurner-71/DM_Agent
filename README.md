@@ -83,7 +83,10 @@ healing resets the whole state. A party wipe produces a defeat epilogue; clearin
 a terminal scene produces a victory epilogue. The engine decides when the run ends.
 
 **Social & companions.** `influence_npc` allows one persuasion attempt per NPC
-against an author-set `disposition_dc` (`None` = unreachable by talk). Success flips
+against a `disposition_dc` (`None` = unreachable by talk). Each monster template
+carries a **randomly-assigned default** `disposition_dc` (it is not a 5e stat, unlike
+`alertness_dc`, which derives from passive Perception); authors can override it per-NPC.
+Success flips
 a hostile NPC to neutral; attacking a calmed NPC re-provokes it; and de-escalating
 the *last* hostile ends combat. In combat it costs the actor's action. A won-over NPC
 can then be recruited with `recruit_npc`: a **companion** follows the party across
