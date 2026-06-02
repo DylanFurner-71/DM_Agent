@@ -23,6 +23,8 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from . import rules
 from .dm_agent import DMAgent
 from .game_state import GameState
@@ -229,6 +231,7 @@ def _make_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    load_dotenv()  # pull ANTHROPIC_API_KEY (and friends) from a .env at the project root
     args = _make_parser().parse_args()
     set_plain(args.plain or not sys.stdout.isatty())
     # Fix the dice RNG up front (before any roll) so the whole session is reproducible.

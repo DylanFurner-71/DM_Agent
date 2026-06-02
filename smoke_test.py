@@ -38,6 +38,8 @@ import sys
 import traceback
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from src import rules
 from src.dm_agent import DMAgent
 from src.game_state import GameState
@@ -88,6 +90,7 @@ def run_demo(scenario_path: Path, script_path: Path, suffix: str) -> dict:
 
 
 def main() -> int:
+    load_dotenv()  # pull ANTHROPIC_API_KEY from a .env at the project root
     suffix = sys.argv[1] if len(sys.argv) > 1 else ""
     set_plain(True)  # no color codes in the smoke log
 
