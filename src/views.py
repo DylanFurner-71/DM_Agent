@@ -415,6 +415,30 @@ def _hp_bar(hp: int, max_hp: int, width: int = 10) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def _hp_color(hp: int, max_hp: int) -> str:
+    """Health-band color for an HP bar: green healthy, yellow wounded, red low/down."""
+    if max_hp <= 0 or hp <= 0:
+        return "red"
+    frac = hp / max_hp
+    if frac > 0.5:
+        return "green"
+    if frac > 0.25:
+        return "yellow"
+    return "red"
+
+
+def _combatant_color(actor, key: str, state: GameState) -> str:
+    """Initiative-order name color, mirroring /state: PCs and allies cyan, hostiles
+    red, friendly NPCs green, anyone down dimmed."""
+    if key in state.party:
+        return "dim" if (getattr(actor, "dead", False) or actor.hp <= 0) else "cyan"
+    if actor.is_down:
+        return "dim"
+    if getattr(actor, "companion", False):
+        return "cyan"
+    return "red" if actor.hostile else "green"
+
+
 def _combatant_marker(actor, key: str, state: GameState) -> str:
     """Initiative-order marker: dying/dead for PCs, down/ally for NPCs ('' if none)."""
     if key in state.party:
@@ -480,6 +504,77 @@ def format_hud(state: GameState, width: int = 60) -> str:
         lines.append(f"  ⚔ Round {state.combat_round}: " + " → ".join(parts))
     lines.append(rule)
     return "\n".join(lines)
+
+
+def render_hud(state: GameState, width: int = 60) -> None:
+    """Print the status HUD — colored via rich when active, else the plain string.
+
+    Mirrors print_state's rich/plain split: the rich path colors names, HP bars (by
+    health), tags, and the initiative line with the same scheme /state uses; the plain
+    path is the byte-identical format_hud string. No-op for an empty party.
+    """
+    if not state.party:
+        return
+    if _rich_on():
+        _render_hud_rich(state, width)
+    else:
+        text = format_hud(state, width)
+        if text:
+            print(text)
+
+
+def _render_hud_rich(state: GameState, width: int = 60) -> None:
+    """Colored HUD via the rich console — same layout/spacing as format_hud, with
+    semantic color. Every interpolated string is escape()d so a bracket-bearing name
+    or condition tag renders literally instead of being parsed as markup. soft_wrap
+    keeps long lines (the initiative row) from being re-wrapped, matching plain print.
+    """
+    con = _console()
+    pcs = list(state.party.values())
+    namew = max(len(c.name) for c in pcs)
+    rule = "─" * width
+    p = lambda s: con.print(s, soft_wrap=True)   # noqa: E731 — local print shorthand
+    p(f"[dim]{rule}[/dim]")
+    for c in pcs:
+        name = escape(f"{c.name:<{namew}}")
+        bar = _hp_bar(c.hp, c.max_hp)
+        hpcol = _hp_color(c.hp, c.max_hp)
+        seg = (f"  [bold cyan]{name}[/bold cyan]"
+               f"  [{hpcol}]{bar} {c.hp:>3}/{c.max_hp:<3}[/{hpcol}]")
+        slots = " ".join(f"L{lvl}:{n}" for lvl, n in sorted(c.spell_slots.items()))
+        if slots:
+            seg += f"  {escape(slots)}"
+        tags = []
+        if c.dead:
+            tags.append("dead")
+        elif c.hp <= 0:
+            tags.append("dying")
+        tags += [x for x in c.conditions if x not in ("unconscious", "dead")]
+        if tags:
+            tagcol = "red" if (c.dead or c.hp <= 0) else "yellow"
+            seg += f"  [{tagcol}]{escape('[' + ', '.join(tags) + ']')}[/{tagcol}]"
+        p(seg)
+        indent = f"  {' ' * namew}  "
+        for inv_line in _hud_inventory_lines(c):
+            lbl, _, val = inv_line.partition(": ")
+            p(f"{indent}[dim]{escape(lbl)}:[/dim] {escape(val)}" if val
+              else f"{indent}{escape(inv_line)}")
+        for label, names in _known_spell_groups(c):
+            p(f"{indent}[dim]{escape(label)}[/dim] {escape(names)}")
+    if state.combat_round > 0 and state.combat_order:
+        all_actors = {**state.party, **state.npcs}
+        active_key = state.combat_order[state.combat_index]
+        parts = []
+        for k in state.combat_order:
+            a = all_actors.get(k)
+            text = escape((a.name if a else k) + (_combatant_marker(a, k, state) if a else ""))
+            if a:
+                text = f"[{_combatant_color(a, k, state)}]{text}[/]"
+            if k == active_key:
+                text = f"[bold]▶{text}[/bold]"
+            parts.append(text)
+        p(f"  ⚔ Round {state.combat_round}: " + " → ".join(parts))
+    p(f"[dim]{rule}[/dim]")
 
 
 def print_tool_trace(trace: list) -> None:

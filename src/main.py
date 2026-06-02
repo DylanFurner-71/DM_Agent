@@ -31,7 +31,6 @@ from .views import (
     _build_stats_trace,
     banner,
     format_cost,
-    format_hud,
     format_transcript_markdown,
     print_full_trace,
     print_full_trace_verbose,
@@ -39,6 +38,7 @@ from .views import (
     print_recap,
     print_roll,
     print_state,
+    render_hud,
     render_markdown,
     set_plain,
 )
@@ -286,9 +286,7 @@ def main() -> None:
 
     while True:
         if hud_enabled:
-            hud = format_hud(state)
-            if hud:
-                print(hud)
+            render_hud(state)
         try:
             player = input("> ").strip()
         except (EOFError, KeyboardInterrupt):

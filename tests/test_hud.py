@@ -8,12 +8,31 @@ the active actor marked and dying/dead/companion markers.
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src import views
 from src.views import (
-    format_hud, _hp_bar, _combatant_marker, _known_spell_groups, _hud_inventory_lines,
+    format_hud, render_hud, _hp_bar, _hp_color, _combatant_marker, _combatant_color,
+    _known_spell_groups, _hud_inventory_lines,
 )
 from src.game_state import Character, NPC, GameState
+
+ESC = "\x1b"  # ANSI escape introducer
+
+
+def _force_rich(monkeypatch):
+    """Drive the rich HUD path with a deterministic no-color console (stable under any
+    ambient FORCE_COLOR), so assertions check content/structure, not ANSI."""
+    if not views._RICH:
+        pytest.skip("rich not installed")
+    from rich.console import Console
+    monkeypatch.setattr(views, "_rich_on", lambda: True)
+    monkeypatch.setattr(
+        views, "_CONSOLE",
+        Console(no_color=True, highlight=False, force_terminal=False, width=200),
+    )
 
 
 # --- HP bar -------------------------------------------------------------------
@@ -230,3 +249,68 @@ def test_hud_renders_inventory_indented_before_spells():
     items_i = next(i for i, ln in enumerate(lines) if "Items: dagger" in ln)
     spell_i = next(i for i, ln in enumerate(lines) if "Magic Missile" in ln)
     assert items_i < spell_i
+
+
+# --- HUD color: helpers + rich/plain dispatch --------------------------------
+
+def test_hp_color_bands():
+    assert _hp_color(24, 24) == "green"     # full → green
+    assert _hp_color(13, 24) == "green"     # >50%
+    assert _hp_color(9, 24) == "yellow"     # 25–50%
+    assert _hp_color(4, 16) == "red"        # ≤25%
+    assert _hp_color(0, 16) == "red"        # down
+    assert _hp_color(5, 0) == "red"         # guard: zero max
+
+
+def test_combatant_color_by_side():
+    gs = GameState(location="X")
+    gs.party["pc"] = Character(name="PC", max_hp=10, hp=10)
+    gs.npcs["foe"] = NPC(name="Foe", max_hp=8, hp=8, hostile=True)
+    gs.npcs["pal"] = NPC(name="Pal", max_hp=8, hp=8, hostile=False)
+    ally = NPC(name="Ally", max_hp=8, hp=8, hostile=False); ally.companion = True
+    gs.npcs["ally"] = ally
+    assert _combatant_color(gs.party["pc"], "pc", gs) == "cyan"
+    assert _combatant_color(gs.npcs["foe"], "foe", gs) == "red"
+    assert _combatant_color(gs.npcs["pal"], "pal", gs) == "green"
+    assert _combatant_color(gs.npcs["ally"], "ally", gs) == "cyan"
+    gs.party["pc"].hp = 0
+    assert _combatant_color(gs.party["pc"], "pc", gs) == "dim"
+    gs.npcs["foe"].hp = 0
+    assert _combatant_color(gs.npcs["foe"], "foe", gs) == "dim"
+
+
+def test_render_hud_plain_matches_format_hud(capsys):
+    views.set_plain(True)   # force the plain branch
+    gs = _caster_state()
+    render_hud(gs)
+    out = capsys.readouterr().out
+    assert out == format_hud(gs) + "\n"   # plain path is byte-identical to the builder
+    assert ESC not in out
+
+
+def test_render_hud_empty_party_prints_nothing(capsys):
+    render_hud(GameState(location="Void"))
+    assert capsys.readouterr().out == ""
+
+
+def test_render_hud_rich_keeps_content(monkeypatch, capsys):
+    _force_rich(monkeypatch)
+    gs = _caster_state()
+    gs.party["aldric"].conditions = ["prone"]
+    render_hud(gs)
+    out = capsys.readouterr().out
+    assert "Aldric" in out and "Wisp" in out
+    assert "24/24" in out                 # HP fraction preserved
+    assert "[prone]" in out               # bracket tag rendered literally, not parsed
+    assert "L1 Guiding Bolt" in out       # spell sub-line still present
+    assert "█" in out                     # bar rendered
+
+
+def test_render_hud_rich_combat_line(monkeypatch, capsys):
+    _force_rich(monkeypatch)
+    gs = _combat_state()
+    render_hud(gs)
+    out = capsys.readouterr().out
+    assert "Round 2" in out
+    assert "▶Wisp" in out                 # active marker survives coloring
+    assert "Narl(down)" in out

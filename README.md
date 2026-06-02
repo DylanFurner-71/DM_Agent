@@ -172,8 +172,9 @@ doesn't abort a turn; deterministic 4xx errors surface immediately. A `--seed N`
 the dice RNG for the whole session (reproducible rolls for demos and bug reports).
 Output is **color- and Markdown-rendered** with [`rich`](https://github.com/Textualize/rich)
 when stdout is a terminal — scene/recap prose as Markdown, NPC names colored by
-disposition, inline dice highlighted, and a *thinking* spinner over the pre-stream API
-latency — with `--plain` (auto-on when piped or non-tty) for clean text in pipes/CI.
+disposition, the HUD colored by health (HP bars green/yellow/red) and side, inline dice
+highlighted, and a *thinking* spinner over the pre-stream API latency — with `--plain`
+(auto-on when piped or non-tty) for clean text in pipes/CI.
 `rich` is a soft dependency: absent it, the app degrades to plain text. The prompt
 also has **input history** — `readline` (stdlib) gives arrow-key recall and line
 editing, persisted across sessions to `saves/.input_history` (best-effort; a quiet
