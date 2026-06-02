@@ -392,9 +392,23 @@ a leading dump (the observed leak shape is always dump-first). Plain prose (not
 starting with `[`/`{`/`"party"`) is released immediately and then passed through live;
 bracket/brace-leading text is held until a paragraph boundary lets the same screens
 (`_screen_narration_text` + `_sanitize_narration`) decide what survives. The realistic
-dump-first leak never reaches the sink, and on-screen output equals what is stored. The
-residual gap — clean prose *followed* by a mid-stream dump — is the same pathological
-case `_sanitize_narration` was always weak on, and is not the observed failure mode.
+dump-first leak never reaches the sink.
+
+**Accepted residual — the streaming on-screen path (decided, not a TODO).** The gap is
+now isolated to *live streaming*: once the gate has released leading prose it flips to
+live pass-through, so a model that writes clean prose and *then* dumps mid-stream would
+flash that dump on screen before the stream ends. We accept this deliberately. Closing
+it would mean re-screening every post-opening delta — or buffering the whole stream and
+re-checking — which defeats the live, token-by-token streaming this decision exists to
+provide; the trade we are making is transient on-screen exposure of a pathological,
+unobserved ordering in exchange for the streaming UX. It is backstopped on the side that
+matters most: the *stored* value is re-screened by `_sanitize_narration` in `take_turn`,
+which — since the dump-anywhere fix (it now drops a dump paragraph wherever it sits, not
+only when dump-first) — keeps `state.narrative`/`transcript` and the `take_turn` return
+clean even in this ordering. So only the transient render could flicker; persisted state
+and the dump-first case (which the gate fully suppresses) stay airtight. Revisit if a
+real prose-then-dump leak is ever observed, or if the gate moves to a fully buffered
+screen-then-stream model.
 
 **Scope — what's unaffected.** Pure presentation/transport. No tool, enforcement,
 redaction, or storage change; `take_turn` still returns the full assembled narration
