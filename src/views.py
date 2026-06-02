@@ -160,6 +160,18 @@ def print_state(state: GameState) -> None:
         _print_state_plain(state)
 
 
+_ABILITY_ORDER = ("str", "dex", "con", "int", "wis", "cha")
+
+
+def _pc_abilities(c) -> str:
+    """The six ability modifiers in STR/DEX/CON/INT/WIS/CHA order, each signed
+    (e.g. 'STR +4  DEX +0  CON +3 ...'); '' when none are set so the line is omitted."""
+    mods = getattr(c, "ability_modifiers", {}) or {}
+    if not mods:
+        return ""
+    return "  ".join(f"{a.upper()} {mods.get(a, 0):+d}" for a in _ABILITY_ORDER)
+
+
 def _pc_slots(c) -> str:
     """Spell slots as 'LN:current/max', surfacing the per-level cap (max_spell_slots)."""
     caps = getattr(c, "max_spell_slots", {}) or {}
@@ -319,6 +331,9 @@ def _print_state_plain(state: GameState) -> None:
         slots_seg = "" if c.spells else f" | slots {_pc_slots(c)}"
         gold_seg = f" | {c.gold} gp" if getattr(c, "gold", 0) else ""
         print(f"  {c.name}: HP {c.hp}/{c.max_hp} | AC {c.ac}{slots_seg}{gold_seg} | {_pc_status(c)}")
+        abilities = _pc_abilities(c)
+        if abilities:
+            print(f"    Abilities: {abilities}")
         def _fmt_item(item: str) -> str:
             return f"{item} (consumable)" if item.lower() in CONSUMABLES else item
         inv = ", ".join(_fmt_item(i) for i in c.inventory) if c.inventory else "—"
@@ -373,6 +388,9 @@ def _print_state_rich(state: GameState) -> None:
             f"HP [{hpcol}]{c.hp}/{c.max_hp}[/{hpcol}] | AC [steel_blue1]{c.ac}[/steel_blue1]"
             f"{slots_seg}{gold_seg} | {escape(_pc_status(c))}"
         )
+        abilities = _pc_abilities(c)
+        if abilities:
+            con.print(f"    Abilities: [steel_blue1]{escape(abilities)}[/steel_blue1]")
         def _fmt_item(item: str) -> str:
             if item.lower() in CONSUMABLES:
                 return f"[orange1]{escape(item)} (consumable)[/orange1]"

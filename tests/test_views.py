@@ -81,6 +81,26 @@ def test_print_state_plain_core_fields(capsys):
     assert ESC not in out
 
 
+def test_pc_abilities_signed_and_ordered():
+    c = Character(name="X", ability_modifiers={"str": 4, "dex": 0, "con": 3,
+                                               "int": -1, "wis": 1, "cha": 2})
+    assert views._pc_abilities(c) == "STR +4  DEX +0  CON +3  INT -1  WIS +1  CHA +2"
+    assert views._pc_abilities(Character(name="Y")) == ""  # no modifiers → omitted
+
+
+def test_print_state_shows_ability_modifiers(capsys):
+    views.set_plain(True)
+    gs = GameState(location="The Ember Chamber")
+    gs.party["aldric"] = Character(
+        name="Aldric", max_hp=24, hp=24,
+        ability_modifiers={"str": 3, "dex": 1, "con": 2, "int": 0, "wis": -1, "cha": 0},
+    )
+    views.print_state(gs)
+    out = capsys.readouterr().out
+    assert "Abilities: STR +3  DEX +1  CON +2  INT +0  WIS -1  CHA +0" in out
+    assert ESC not in out
+
+
 def test_print_state_shows_merchant_shop(capsys):
     views.set_plain(True)
     gs = GameState(location="Market")
