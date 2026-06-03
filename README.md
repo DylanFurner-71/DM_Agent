@@ -249,7 +249,12 @@ no-op where `readline` is unavailable, e.g. stock Windows).
 caching fully engaged and *not* the bottleneck) and that wall time was dominated by a
 ~3.3s fixed cost *per API call* — so **calls-per-turn**, not output size, is the lever
 the optimizations below pull. Every API call is instrumented per phase (`/cost` and
-the stats sidecar break out prompt-cache reads vs. writes).
+the stats sidecar break out prompt-cache reads vs. writes). `summarize_traces.py`
+rolls that sidecar up across runs: it scans the `demo*stats_trace.json` files a smoke
+run leaves behind, sums calls, wall time, tokens, and estimated cost per file (and per
+model, so the two-model split is visible rather than blended — each call priced by its
+own recorded model via `src.views`), and writes the report to the git-ignored
+`summaries/` directory. This is the tool the profiling figures above were driven off.
 
 *Caching & lean context.* The static system-prompt-plus-tools prefix is cached across
 every call (`cache_control` on both the system block and the tools array). Context is
@@ -389,6 +394,8 @@ data/
   ADVENTURES.md        # index of the full, play-through adventures
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
+summarize_traces.py    # aggregate per-call cost/wall time across demo*stats_trace.json
+summaries/             # git-ignored reports written by summarize_traces.py
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
 tests/                 # 731 tests total, all no-API
   test_rules.py        # 156 — enforcement core: dice, attack, spells, combat/turn guards
