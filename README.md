@@ -288,6 +288,15 @@ unified turn), so the decode-bound generation never runs longer than the prose n
 
 ## Roadmap
 
+The mechanics below are the concrete build queue — they deepen the *rules* the engine
+covers. For the orthogonal axis — deepening the project's **agency** rather than its
+ruleset (adversaries as agents with tactics, a validator→generator loop that lets the
+model author the world safely, durable memory, reflection, and a self-play eval
+harness) — see [`AGENTIC_EXTENSION_IDEAS.md`](AGENTIC_EXTENSION_IDEAS.md). It carries
+the agent-vs-chatbot framing this README opens with forward into where the project
+could go next, with the same throughline: don't weaken enforcement, expand the
+validated action space the agent operates in.
+
 ### In progress / specced
 
 **Performance & Latency.** *(Mostly done — see DECISIONS.md §5–6 and the Performance section
@@ -423,6 +432,7 @@ tests/                 # 731 tests total, all no-API
   test_input_history.py#   6 — readline input history
   _helpers.py          #   –  shared test fixtures (no tests)
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
+AGENTIC_EXTENSION_IDEAS.md  # menu of ways to deepen agency (tactical NPCs, generator loop, self-play eval)
 ```
 
 ## Run
@@ -487,7 +497,11 @@ the hard boundaries: slot economy, clamped/atomic damage, the full death-save an
 endgame logic, turn-order and surprise handling, social de-escalation, and
 answer-gate matching plus redaction. What unit tests can't reach by construction —
 whether the model drives the verified machinery correctly in live play — is the job
-of a real playthrough.
+of a real playthrough. Turning that caveat into instrumentation is idea #10 in
+[`AGENTIC_EXTENSION_IDEAS.md`](AGENTIC_EXTENSION_IDEAS.md): a self-play eval harness — a
+"player agent" that runs scripted goals against `DMAgent` — to measure the agency
+yardstick (autonomy horizon, self-initiated NPC actions per session,
+recovery-from-`ok=false` rate) that a hand-played session can only gesture at.
 
 **Smoke test — the demos, end to end.** `smoke_test.py` replays each demo's
 scripted inputs (`data/demos/scripts/<demo>.txt`, lifted from the DEMOS.md
