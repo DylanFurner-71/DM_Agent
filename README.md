@@ -405,6 +405,8 @@ data/
 smoke_test.py          # replay every demo end-to-end against the live model
 summarize_traces.py    # aggregate per-call cost/wall time across demo*stats_trace.json
 summaries/             # git-ignored reports written by summarize_traces.py
+saves/                 # git-ignored runtime state: per-turn autosave.json, smoke-test
+                       #   saves + demo*stats_trace.json, readline .input_history
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
 tests/                 # 731 tests total, all no-API
   test_rules.py        # 156 — enforcement core: dice, attack, spells, combat/turn guards
