@@ -130,7 +130,6 @@ Consumables apply through
 a party ally** — pouring a healing potion into a downed ally revives them and resets
 their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
 
-
 **Checks & saves.** `skill_check` resolves a *proactive* `d20 + ability modifier` vs
 a DC (perception, persuasion, athletics, stealth…) and, in combat, is the acting
 character's turn-guarded action. Naming a 5e **skill** (e.g. `stealth`, `persuasion`)
@@ -313,20 +312,24 @@ validated action space the agent operates in.
   the engine still enforces every number and the quality model still writes every line.
   A full run measured a ~29% cut in the tool-selection wall with zero enforcement
   regressions; `/cost` prices the mixed-model session per call. (Profiling was driven off
-  the per-call stats sidecar surfaced by `/cost`.) The remaining levers are captured in
-  the table below.
+  the per-call stats sidecar surfaced by `/cost`.) Across a wider sample — **59 demo
+  traces, 939 calls, ~$5.57 total** at list prices, summed by `summarize_traces.py` — the
+  routing sends **26% of calls to Haiku** yet they account for only **13% of cost** (and
+  15% of wall time), while Sonnet's narration carries **74% of calls but 87% of cost**.
+  That asymmetry is the point: the split is a **latency lever, not a cost lever** —
+  narration tokens dominate spend no matter how the mechanical tool-selection calls are
+  routed. The remaining levers are captured in the table below.
 
 **Remaining latency levers** — An early profile of a full run
-showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **35% tool-selection / 65% narration**. 
+showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **35% tool-selection / 65% narration**.
 
-Remaining items Ranked
-by payoff vs. risk:
+Remaining items, ranked by payoff vs. risk:
 
 | Lever | Payoff | Risk |
 |---|---|---|
 | **Prompt narration for more brevity** (the `max_tokens` budgets are already right-sized per phase; this is the prose-quality dial) | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
 
-## In progress / untested
+### In progress / untested
 
 **Gold.** A per-character coin purse (`Character.gold`), tracked as another engine-owned
 resource. `add_gold` credits loot and rewards; `spend_gold` debits purchases and bribes —
@@ -343,11 +346,11 @@ credit gold through the engine; the merchant is auto-selected when one shopkeepe
 or named otherwise. Prices and the purse stay engine-owned — the model never invents a price
 or sells an item off-catalogue. The catalogue shows in `/state` and the turn snapshot.
 
-## Need to implement
+### Need to implement
 
-*(Nothing queued) - wrapping up in preparation for demo.
+*(Nothing queued — wrapping up in preparation for demo.)*
 
-## Potential implementations
+### Potential implementations
 
 Future work, ranked roughly least → most difficult to implement.
 
@@ -374,7 +377,7 @@ Future work, ranked roughly least → most difficult to implement.
 - **XP & leveling:** track party experience, award it on encounter completion, and level up — growing `max_hp`, `proficiency_bonus`, and `spell_slots`/`max_spell_slots`, and unlocking **class features** by level via a `rules`-owned progression table. Depends on **classes & class features**.
 - **Character creation:** an interactive party builder at session start — pick **race**, **class**, abilities, and starting gear — instead of authored pre-gens. The front-end that ties together races, classes, the equipment table, and skill/ability setup.
 
-## The BIG swings - (largest scope, most ambitious):*
+### The BIG swings — (largest scope, most ambitious)
 
 - **Full 5e ruleset:** the complete SRD — every class, subclass, spell, monster, and rule interaction — rather than the simplified subset modeled today.
 - **Multiplayer:** multiple human players sharing one session (turn handoff, per-player input), instead of a single player driving the whole party.
@@ -431,7 +434,7 @@ tests/                 # 731 tests total, all no-API
   test_undo.py         #   9 — /undo per-turn rewind
   test_start_menu.py   #   9 — start menu: arrow-key adventure picker
   test_two_model_split.py #  6 — two-model split: tool-selection routing + cost
-  test_input_history.py#   6 — readline input history
+  test_input_history.py #   6 — readline input history
   _helpers.py          #   –  shared test fixtures (no tests)
 DECISIONS.md           # architecture decision log (the soft/hard boundaries, caching, …)
 AGENTIC_EXTENSION_IDEAS.md  # menu of ways to deepen agency (tactical NPCs, generator loop, self-play eval)
@@ -525,4 +528,4 @@ comparison.
 
 ## Mechanics note
 
-Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0). 
+Uses a simplified subset of the D&D 5e SRD (CC-BY-4.0).
