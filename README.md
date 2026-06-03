@@ -320,7 +320,7 @@ validated action space the agent operates in.
   narration tokens dominate spend no matter how the mechanical tool-selection calls are
   routed. The remaining levers are captured in the table below.
 
-**Remaining latency levers** — An early profile of a full run
+**Remaining latency levers** — An early profile of a full run with no caching or optimizaiton
 showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **35% tool-selection / 65% narration**.
 
 Remaining items, ranked by payoff vs. risk:
