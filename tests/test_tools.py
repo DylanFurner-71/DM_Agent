@@ -1073,3 +1073,48 @@ def test_dispatch_cast_spell_passes_disadvantage_and_tags_log():
     assert res["to_hit_roll"] == 2
     assert res["hit"] is False
     assert any("(disadvantage)" in e for e in gs.log)
+
+
+def test_dispatch_cast_spell_missing_spell_level_fails_gracefully():
+    # A malformed model tool call can omit the schema-required spell_level. The
+    # engine must refuse it (ok=false) rather than raise KeyError and crash the turn.
+    actor = Character(name="Wisp", level=1, spells=["chromatic_orb"], spell_slots={1: 1},
+                      spellcasting_ability="int", ability_modifiers={"int": 3})
+    gs = _combat_state("w", actor, npc=NPC(name="D", ac=10, hp=40, max_hp=40, hostile=True))
+    res = tools.dispatch("cast_spell", {"caster": "Wisp", "spell_name": "chromatic_orb",
+                                        "target": "D"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "invalid_spell_level"
+    assert gs.action_used is False  # turn not consumed by the bad call
+    assert actor.spell_slots[1] == 1  # no slot spent
+
+
+def test_dispatch_modify_hp_missing_amount_fails_gracefully():
+    # A malformed model tool call can omit the schema-required amount. Refuse it
+    # (ok=false) rather than raise KeyError and crash the turn.
+    gs = _make_state()
+    gs.party["Hero"].hp = 5
+    res = tools.dispatch("modify_hp", {"target": "Hero"}, gs)
+    assert res["ok"] is False
+    assert res["reason"] == "invalid_amount"
+    assert gs.party["Hero"].hp == 5  # HP untouched
+
+
+def test_dispatch_skill_check_missing_args_fail_gracefully():
+    gs = _make_state()
+    # missing ability
+    res = tools.dispatch("skill_check", {"character": "Hero", "dc": 10}, gs)
+    assert res["ok"] is False and res["reason"] == "missing_ability"
+    # missing dc
+    res = tools.dispatch("skill_check", {"character": "Hero", "ability": "dex"}, gs)
+    assert res["ok"] is False and res["reason"] == "invalid_dc"
+
+
+def test_dispatch_saving_throw_missing_args_fail_gracefully():
+    gs = _make_state()
+    # missing ability
+    res = tools.dispatch("saving_throw", {"character": "Hero", "dc": 12}, gs)
+    assert res["ok"] is False and res["reason"] == "missing_ability"
+    # missing dc
+    res = tools.dispatch("saving_throw", {"character": "Hero", "ability": "con"}, gs)
+    assert res["ok"] is False and res["reason"] == "invalid_dc"

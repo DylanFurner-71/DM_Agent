@@ -915,13 +915,21 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(caster.name, state) or _action_guard(state)
         if err:
             return err
+        # spell_level is schema-required, but a malformed model tool call can still
+        # omit it or send a non-integer. Refuse gracefully instead of crashing the turn.
+        try:
+            spell_level = int(args["spell_level"])
+        except (KeyError, TypeError, ValueError):
+            state.action_used = False  # invalid action — undo guard; character stays active
+            return {"ok": False, "reason": "invalid_spell_level",
+                    "error": "cast_spell requires an integer spell_level (0 for a cantrip)."}
         spell_name = args.get("spell_name", "").strip()
         if spell_name:
             target, err, auto_selected = _resolve_offensive_target(args.get("target", ""), state, exclude_name=caster.name)
             if err:
                 state.action_used = False
                 return err
-            res = rules.cast_damaging_spell(caster, target, spell_name, int(args["spell_level"]),
+            res = rules.cast_damaging_spell(caster, target, spell_name, spell_level,
                                             advantage=bool(args.get("advantage", False)),
                                             disadvantage=bool(args.get("disadvantage", False)))
             if res["ok"]:
@@ -933,9 +941,9 @@ def dispatch(name: str, args: dict, state) -> dict:
                 state.action_used = False  # invalid action — undo guard; character stays active
                 state.record(f"{caster.name} tried to cast {spell_name}: {res.get('reason', res.get('error'))}")
         else:
-            res = rules.cast_spell(caster, int(args["spell_level"]))
+            res = rules.cast_spell(caster, spell_level)
             if res["ok"]:
-                state.record(f"{caster.name} casts level-{args['spell_level']} spell: {res['reason']}")
+                state.record(f"{caster.name} casts level-{spell_level} spell: {res['reason']}")
             else:
                 state.action_used = False  # invalid action — undo guard; character stays active
         return res
@@ -944,7 +952,13 @@ def dispatch(name: str, args: dict, state) -> dict:
         target = state.find_actor(args["target"])
         if not target:
             return {"ok": False, "error": "Unknown target; call get_state."}
-        amount = int(args["amount"])
+        # amount is schema-required, but a malformed model tool call can omit it or
+        # send a non-integer. Refuse gracefully instead of crashing the turn.
+        try:
+            amount = int(args["amount"])
+        except (KeyError, TypeError, ValueError):
+            return {"ok": False, "reason": "invalid_amount",
+                    "error": "modify_hp requires an integer amount (positive heals, negative damages)."}
         # Bound the magnitude: a single flat effect may not exceed the target's
         # max HP. This caps the one place a model-supplied number reaches tracked
         # state — an arbitrary HP swing is refused, not silently applied.
@@ -1395,14 +1409,25 @@ def dispatch(name: str, args: dict, state) -> dict:
         err = _turn_guard(character.name, state)
         if err:
             return err
-        res = rules.skill_check(character, args["ability"], int(args["dc"]),
+        # ability and dc are schema-required, but a malformed model tool call can omit
+        # them or send a non-integer dc. Refuse gracefully instead of crashing the turn.
+        ability = args.get("ability")
+        if not ability:
+            return {"ok": False, "reason": "missing_ability",
+                    "error": "skill_check requires an ability (e.g. 'dex')."}
+        try:
+            dc = int(args["dc"])
+        except (KeyError, TypeError, ValueError):
+            return {"ok": False, "reason": "invalid_dc",
+                    "error": "skill_check requires an integer dc."}
+        res = rules.skill_check(character, ability, dc,
                                 bool(args.get("use_inspiration", False)),
                                 skill=args.get("skill"))
         if res["ok"]:
             insp = " (inspired)" if res.get("inspiration_used") else ""
             prof = " (expertise)" if res.get("expertise") else (" (proficient)" if res.get("proficient") else "")
-            label = res.get("skill", args["ability"])
-            state.record(f"{character.name} {label} check DC {args['dc']}{prof}{insp}: {'success' if res['success'] else 'failure'}")
+            label = res.get("skill", ability)
+            state.record(f"{character.name} {label} check DC {dc}{prof}{insp}: {'success' if res['success'] else 'failure'}")
         return res
 
     if name == "saving_throw":
@@ -1412,11 +1437,22 @@ def dispatch(name: str, args: dict, state) -> dict:
         # A saving throw is reactive — it resists an effect and is NOT the actor's
         # action. Deliberately no turn/action/combat_starting guard: any affected
         # character may save on anyone's turn (e.g. everyone saves vs a trap).
-        res = rules.saving_throw(character, args["ability"], int(args["dc"]), bool(args.get("use_inspiration", False)))
+        # ability and dc are schema-required, but a malformed model tool call can omit
+        # them or send a non-integer dc. Refuse gracefully instead of crashing the turn.
+        ability = args.get("ability")
+        if not ability:
+            return {"ok": False, "reason": "missing_ability",
+                    "error": "saving_throw requires an ability (e.g. 'dex')."}
+        try:
+            dc = int(args["dc"])
+        except (KeyError, TypeError, ValueError):
+            return {"ok": False, "reason": "invalid_dc",
+                    "error": "saving_throw requires an integer dc."}
+        res = rules.saving_throw(character, ability, dc, bool(args.get("use_inspiration", False)))
         if res["ok"]:
             insp = " (inspired)" if res.get("inspiration_used") else ""
             state.record(
-                f"{character.name} {args['ability']} save DC {args['dc']}{insp}: "
+                f"{character.name} {ability} save DC {dc}{insp}: "
                 f"{'success' if res['success'] else 'failure'}"
             )
         return res
