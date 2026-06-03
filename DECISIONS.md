@@ -24,28 +24,25 @@ in [Ranking of ADR significance](#ranking-of-adr-significance) (1 = most foundat
 
 | ADR | Decision | Status | Rank |
 | --- | --- | --- | --- |
-| ADR-01 | [Out-of-turn declared actions — discard and acknowledge](#1-out-of-turn-declared-actions--discard-and-acknowledge) | Accepted | 22 |
+| ADR-01 | [Out-of-turn declared actions — discard and acknowledge](#1-out-of-turn-declared-actions--discard-and-acknowledge) | Accepted | 19 |
 | ADR-02 | [Batch NPC turn narration into a single model call](#2-batch-npc-turn-narration-into-a-single-model-call) | Accepted | 5 |
 | ADR-03 | [Bound the per-turn model context](#3-bound-the-per-turn-model-context) | Accepted | 2 |
-| ADR-04 | [NPC weapons are engine-selected, not model-named](#4-npc-weapons-are-engine-selected-not-model-named) | Accepted | 21 |
-| ADR-05 | [Target agency is soft-enforced](#adr-target-agency-is-soft-enforced) | Accepted | 1 |
-| ADR-06 | [quest_flags hold narrative facts only (soft boundary)](#adr-quest_flags-hold-narrative-facts-only-soft-boundary) | Accepted | 3 |
-| ADR-07 | [Loot is author-placed and obvious-on-look](#adr-loot-is-author-placed-and-obvious-on-look) | Accepted | 8 |
-| ADR-08 | [Cross-scene resource economy — tight provisioning + loot, no rest](#adr-cross-scene-resource-economy--tight-provisioning--loot-no-rest) | Accepted | 12 |
-| ADR-09 | [Flag-gated transitions and endings](#adr-flag-gated-transitions-and-endings) | Accepted | 11 |
-| ADR-10 | [String-valued quest flags are redacted from model-facing channels](#adr-string-valued-quest-flags-are-redacted-from-model-facing-channels) | Accepted | 6 |
-| ADR-11 | [get_state hides the hidden NPC challenge DCs](#adr-get_state-hides-the-hidden-npc-challenge-dcs) | Accepted | 7 |
-| ADR-12 | [add_npc spawns only author-declared reinforcements, behind a trigger](#adr-add_npc-spawns-only-author-declared-reinforcements-behind-a-trigger) | Accepted | 9 |
-| ADR-13 | [Fold narration into the tool loop; one narration call per turn](#5-fold-narration-into-the-tool-loop-one-narration-call-per-turn) | Accepted | 4 |
-| ADR-14 | [Stream narration to the terminal, behind a leak gate](#6-stream-narration-to-the-terminal-behind-a-leak-gate) | Accepted | 18 |
-| ADR-15 | [Companions: recruiting a cross-scene ally](#7-companions-recruiting-a-cross-scene-ally) | Accepted | 14 |
-| ADR-16 | [Concluding an empty terminal scene (soft trigger, hard gate)](#adr-concluding-an-empty-terminal-scene-soft-trigger-hard-gate) | Accepted | 13 |
-| ADR-17 | [Hazards & traps are author-placed; the engine owns the numbers](#adr-hazards--traps-are-author-placed-the-engine-owns-the-numbers) | Accepted | 10 |
-| ADR-18 | [Underspecified social intent — ask, never default the actor/approach](#adr-underspecified-social-intent--ask-never-default-the-actorapproach) | Accepted | 17 |
-| ADR-19 | [Inspiration is an engine-owned reroll budget; the award is a safe soft boundary](#adr-inspiration-is-an-engine-owned-reroll-budget-the-award-is-a-safe-soft-boundary) | Accepted | 16 |
-| ADR-20 | [Cut two avoidable API hops per turn (latency)](#adr-cut-two-avoidable-api-hops-per-turn-latency) | Accepted | 19 |
-| ADR-21 | [Gold ledger and merchants (buy/sell)](#adr-gold-ledger-and-merchants-buysell) | Accepted | 15 |
-| ADR-22 | [Two-model split — tool-selection on a fast model (latency)](#adr-two-model-split--tool-selection-on-a-fast-model-latency) | Accepted | 20 |
+| ADR-04 | [Target agency is soft-enforced](#adr-target-agency-is-soft-enforced) | Accepted | 1 |
+| ADR-05 | [quest_flags hold narrative facts only (soft boundary)](#adr-quest_flags-hold-narrative-facts-only-soft-boundary) | Accepted | 3 |
+| ADR-06 | [Loot is author-placed and obvious-on-look](#adr-loot-is-author-placed-and-obvious-on-look) | Accepted | 6 |
+| ADR-07 | [Cross-scene resource economy — tight provisioning + loot, no rest](#adr-cross-scene-resource-economy--tight-provisioning--loot-no-rest) | Accepted | 10 |
+| ADR-08 | [Flag-gated transitions and endings](#adr-flag-gated-transitions-and-endings) | Accepted | 9 |
+| ADR-09 | [add_npc spawns only author-declared reinforcements, behind a trigger](#adr-add_npc-spawns-only-author-declared-reinforcements-behind-a-trigger) | Accepted | 7 |
+| ADR-10 | [Fold narration into the tool loop; one narration call per turn](#5-fold-narration-into-the-tool-loop-one-narration-call-per-turn) | Accepted | 4 |
+| ADR-11 | [Stream narration to the terminal, behind a leak gate](#6-stream-narration-to-the-terminal-behind-a-leak-gate) | Accepted | 16 |
+| ADR-12 | [Companions: recruiting a cross-scene ally](#7-companions-recruiting-a-cross-scene-ally) | Accepted | 12 |
+| ADR-13 | [Concluding an empty terminal scene (soft trigger, hard gate)](#adr-concluding-an-empty-terminal-scene-soft-trigger-hard-gate) | Accepted | 11 |
+| ADR-14 | [Hazards & traps are author-placed; the engine owns the numbers](#adr-hazards--traps-are-author-placed-the-engine-owns-the-numbers) | Accepted | 8 |
+| ADR-15 | [Underspecified social intent — ask, never default the actor/approach](#adr-underspecified-social-intent--ask-never-default-the-actorapproach) | Accepted | 15 |
+| ADR-16 | [Inspiration is an engine-owned reroll budget; the award is a safe soft boundary](#adr-inspiration-is-an-engine-owned-reroll-budget-the-award-is-a-safe-soft-boundary) | Accepted | 14 |
+| ADR-17 | [Cut two avoidable API hops per turn (latency)](#adr-cut-two-avoidable-api-hops-per-turn-latency) | Accepted | 17 |
+| ADR-18 | [Gold ledger and merchants (buy/sell)](#adr-gold-ledger-and-merchants-buysell) | Accepted | 13 |
+| ADR-19 | [Two-model split — tool-selection on a fast model (latency)](#adr-two-model-split--tool-selection-on-a-fast-model-latency) | Accepted | 18 |
 
 **Enforcement invariants & fix notes** (not architectural forks; excluded from the ranking):
 
@@ -53,6 +50,9 @@ in [Ranking of ADR significance](#ranking-of-adr-significance) (1 = most foundat
 | --- | --- | --- |
 | E-01 | [A leveled spell cannot be cast below its tabled base level](#invariant-a-leveled-spell-cannot-be-cast-below-its-tabled-base-level) | Invariant |
 | E-02 | [Strip model-written turn prompts that duplicate the engine's](#fix-note-strip-model-written-turn-prompts-that-duplicate-the-engines) | Fix note |
+| E-03 | [NPC weapons are engine-selected, not model-named](#enforcement-npc-weapons-are-engine-selected-not-model-named) | Enforcement boundary |
+| E-04 | [String-valued quest flags are redacted from model-facing channels](#enforcement-string-valued-quest-flags-are-redacted-from-model-facing-channels) | Enforcement boundary |
+| E-05 | [get_state hides the hidden NPC challenge DCs](#enforcement-get_state-hides-the-hidden-npc-challenge-dcs) | Enforcement boundary |
 
 ---
 
@@ -171,25 +171,6 @@ context stays bounded as history grows and always contains the latest snapshot.
 the window, revert to full history, or later add a running "adventure so far" summary
 for long-range callbacks (at the cost of one extra maintenance call). Low lock-in.
 
-## 4. NPC weapons are engine-selected, not model-named
-
-**Decision.** For NPC attacks, the engine picks the weapon from the NPC's statblock
-(the first weapon from the `WEAPONS` table in its inventory, melee or ranged); the
-model names only attacker and defender, never the weapon. PC attacks are unchanged —
-the player names the weapon, validated against inventory.
-
-**Why.** The model has strong D&D priors and will supply a plausible weapon whenever it's
-left to name one. A goblin whose defined inventory was shortsword/shortbow was attacked
-with a "scimitar" — the canonical 5e goblin weapon, pulled from the model's training,
-present in neither the statblock nor the WEAPONS table. Plausible and even rules-correct,
-but data the engine never authorized. Taking the naming away from the model closes the gap
-so the prior has nowhere to leak in.
-
-**Distinction.** Overriding the model's NPC-weapon guess is *not* a "no silent substitution"
-violation — that rule protects the player's stated intent. An NPC's weapon is engine-owned
-statblock data, not the player's choice, so the model has no standing to pick it; the
-entity whose choice matters still gets respected.
-
 ## ADR: Target agency is soft-enforced
 
 **Status:** Accepted
@@ -292,54 +273,6 @@ working capabilities. When a gate leads to a real scene (the iron door → iron_
 per-exit `requires` is the clean mechanism and the terminal `exit_requires` path goes unused;
 the terminal gate exists for endings with no scene beyond. Backward compatible: string exits
 and ungated terminals are unchanged.
-
-## ADR: String-valued quest flags are redacted from model-facing channels
-
-**Status:** Accepted
-
-- **What:** String-valued quest flags (including answer-gate passwords stored via 
-  `set_quest_flag`) are now redacted to `"<redacted>"` in both the `get_state` response 
-  and the `set_quest_flag` echo before they reach the model. The real value is stored in 
-  `state.quest_flags` and is used by the answer-gate engine logic in `move_scene`.
-- **Why:** The `get_state` snapshot is injected into the model's context every turn. A 
-  string-valued flag like `{"iron_door_password": "ashfall"}` was visible to the model, 
-  meaning it could supply the password itself rather than relaying the player's words — 
-  defeating the soft boundary documented in the README.
-- **What this hardens:** The `get_state` channel and the `set_quest_flag` echo channel. 
-  The `_exits_for_model` helper already redacted `requires_answer` from exits; this 
-  extends the same principle to quest flags.
-- **What it doesn't fix:** A scenario author who stores a password in a boolean flag (e.g. 
-  `"ashfall_known": true`) rather than a string flag still leaks the flag name. That's 
-  an author-convention problem, not addressable in code without a flag metadata schema.
-- **Classification:** Hard boundary (enforced in code), not soft boundary.
-
-## ADR: get_state hides the hidden NPC challenge DCs
-
-**Status:** Accepted
-
-**Context:** The per-turn injected snapshot (`dm_agent._state_snapshot`) deliberately omits an
-NPC's `alertness_dc` (surfacing only `surprised`) and never carries `disposition_dc` — the
-README promises "hidden stealth DCs" are redacted from "everything the model sees." But the
-`get_state` tool returned `state.to_dict()` with light redaction (quest flags, exits, history)
-and **left the NPC dicts raw**, so a model that explicitly called `get_state` received both
-`alertness_dc` and `disposition_dc` in full. The auto-snapshot was airtight; the on-demand
-channel was not — the same leak class the quest-flag ADR above closed for passwords.
-
-**Decision:** `get_state` runs its NPC map through `_npcs_for_model`, dropping
-`_HIDDEN_NPC_FIELDS` (`disposition_dc`, `alertness_dc`) before the result reaches the model.
-`alertness_dc` is the stealth DC the README names; `disposition_dc` is its one-shot social
-twin. The model is meant to learn an NPC's reachability by *attempting* — `influence_npc`
-returns `immovable` for a `None` disposition, `attempt_ambush` returns `cannot_ambush` or the
-`bar` — never by reading the number off the snapshot. The live `state.npcs` objects keep both
-(the engine owns and rolls against them); only the model-facing copy is stripped.
-
-**Consequences:** `get_state` now matches `_state_snapshot`'s NPC view for the two secret DCs,
-so the README's redaction claim holds on both channels. Other NPC fields (`hp`, `hostile`,
-`ac`, `attack_bonus`, `inventory`, `social_attempted`, `surprised`, `companion`) still surface
-— they are not secrets (AC/atk are revealed through combat and shown in `/state`). Hard
-boundary, enforced in code (`test_get_state_hides_hidden_npc_dcs`). Saves are unaffected:
-`to_dict`/`from_dict` still round-trip both DCs (the redaction is applied only in the
-`get_state` dispatch, not in serialization).
 
 ## ADR: add_npc spawns only author-declared reinforcements, behind a trigger
 
@@ -784,43 +717,37 @@ narrow correctness rules.
    promoted the leak screens from belt-and-suspenders to the *primary* defense.
 5. **#2 Batch NPC turn narration into a single model call** — established the one-call
    per-turn-exchange shape that #5 and the combat loop build on.
-6. **String-valued quest flags are redacted from model-facing channels** — keeps passwords
-   and other secrets out of model context; load-bearing for the entire answer-gate mechanic.
-7. **get_state hides the hidden NPC challenge DCs** — keeps stealth/social DCs out of the
-   model's hands so reachability is learned by *attempting*, not reading a number.
-8. **Loot is author-placed and obvious-on-look** — the model cannot fabricate treasure; first
+6. **Loot is author-placed and obvious-on-look** — the model cannot fabricate treasure; first
    pillar of the "author owns content, model only triggers" family.
-9. **add_npc spawns only author-declared reinforcements, behind a trigger** — the model cannot
+7. **add_npc spawns only author-declared reinforcements, behind a trigger** — the model cannot
    conjure monsters; the encounter roster is author-owned.
-10. **Hazards & traps are author-placed; the engine owns the numbers** — traps' save/DC/damage
-    never leave the engine; the author-placed twin of `saving_throw`.
-11. **Flag-gated transitions and endings** — the engine owns passage through the map and when
-    a gated ending opens; the model can't fabricate a route.
-12. **Cross-scene resource economy — tight provisioning + loot, no rest** — the design frame
+8. **Hazards & traps are author-placed; the engine owns the numbers** — traps' save/DC/damage
+   never leave the engine; the author-placed twin of `saving_throw`.
+9. **Flag-gated transitions and endings** — the engine owns passage through the map and when
+   a gated ending opens; the model can't fabricate a route.
+10. **Cross-scene resource economy — tight provisioning + loot, no rest** — the design frame
     that makes resources (slots, HP, items) actually matter across a run.
-13. **Concluding an empty terminal scene (soft trigger, hard gate)** — who decides the run is
+11. **Concluding an empty terminal scene (soft trigger, hard gate)** — who decides the run is
     over: a soft model trigger backed by a hard engine gate.
-14. **Companions: recruiting a cross-scene ally** — a whole cross-scene ally subsystem that
+12. **Companions: recruiting a cross-scene ally** — a whole cross-scene ally subsystem that
     fights engine-resolved on the party's side.
-15. **Gold ledger and merchants (buy/sell)** — the economy layer; engine-owned prices and
+13. **Gold ledger and merchants (buy/sell)** — the economy layer; engine-owned prices and
     purse, mirroring the loot/reinforcement authority model.
-16. **Inspiration is an engine-owned reroll budget; the award is a safe soft boundary** — a
+14. **Inspiration is an engine-owned reroll budget; the award is a safe soft boundary** — a
     capped reroll resource; the canonical "safe soft boundary" (the judgment is soft, the
     budget and dice are hard).
-17. **Underspecified social intent — ask, never default the actor/approach** — the
+15. **Underspecified social intent — ask, never default the actor/approach** — the
     clarify-don't-guess policy generalized from `ambiguous_target`.
-18. **#6 Stream narration to the terminal, behind a leak gate** — perceived-latency win plus
+16. **#6 Stream narration to the terminal, behind a leak gate** — perceived-latency win plus
     the streaming leak gate that keeps the screens honest under live output.
-19. **Cut two avoidable API hops per turn (latency)** — removed a redundant `get_state` and a
+17. **Cut two avoidable API hops per turn (latency)** — removed a redundant `get_state` and a
     wasted terminal combat hop; a measured call-count win.
-20. **Two-model split — tool-selection on a fast model (latency)** — routes mechanical
+18. **Two-model split — tool-selection on a fast model (latency)** — routes mechanical
     tool-selection to a fast model, a per-call latency win with no enforcement risk.
-21. **#4 NPC weapons are engine-selected, not model-named** — keeps weapon dice/numbers
-    engine-owned for NPC attacks.
-22. **#1 Out-of-turn declared actions — discard and acknowledge** — a turn-integrity rule for
+19. **#1 Out-of-turn declared actions — discard and acknowledge** — a turn-integrity rule for
     a player declaring an action when it isn't their turn.
 
-The two entries under *Enforcement invariants & fix notes* below — the leveled-spell base-level rule and the turn-prompt strip — are intentionally excluded from this ranking; they are durable invariants / regression fixes, not decisions between architectural alternatives.
+The entries under *Enforcement invariants & fix notes* below — three engine-enforcement boundaries (NPC-weapon selection, string-flag redaction, hidden-DC hiding), the leveled-spell base-level invariant, and the turn-prompt strip — are intentionally excluded from this ranking; they are enforcement boundaries, durable invariants, or regression fixes, not decisions between architectural alternatives.
 
 # Enforcement invariants & fix notes
 
@@ -898,3 +825,70 @@ on-screen duplicate is only mitigated *indirectly* (the loop stops teaching the 
 fully synchronous fix would require handling it in `_NarrationGate`. Hard boundary on the
 helper itself, unit-tested (`tests/test_agent.py::test_strip_turn_prompt_*`); engine numbers
 are untouched. Commits `dfed0c1` (original), `b297f08` (broadened).
+
+## Enforcement: NPC weapons are engine-selected, not model-named
+
+**Decision.** For NPC attacks, the engine picks the weapon from the NPC's statblock
+(the first weapon from the `WEAPONS` table in its inventory, melee or ranged); the
+model names only attacker and defender, never the weapon. PC attacks are unchanged —
+the player names the weapon, validated against inventory.
+
+**Why.** The model has strong D&D priors and will supply a plausible weapon whenever it's
+left to name one. A goblin whose defined inventory was shortsword/shortbow was attacked
+with a "scimitar" — the canonical 5e goblin weapon, pulled from the model's training,
+present in neither the statblock nor the WEAPONS table. Plausible and even rules-correct,
+but data the engine never authorized. Taking the naming away from the model closes the gap
+so the prior has nowhere to leak in.
+
+**Distinction.** Overriding the model's NPC-weapon guess is *not* a "no silent substitution"
+violation — that rule protects the player's stated intent. An NPC's weapon is engine-owned
+statblock data, not the player's choice, so the model has no standing to pick it; the
+entity whose choice matters still gets respected.
+
+## Enforcement: String-valued quest flags are redacted from model-facing channels
+
+**Status:** Accepted
+
+- **What:** String-valued quest flags (including answer-gate passwords stored via 
+  `set_quest_flag`) are now redacted to `"<redacted>"` in both the `get_state` response 
+  and the `set_quest_flag` echo before they reach the model. The real value is stored in 
+  `state.quest_flags` and is used by the answer-gate engine logic in `move_scene`.
+- **Why:** The `get_state` snapshot is injected into the model's context every turn. A 
+  string-valued flag like `{"iron_door_password": "ashfall"}` was visible to the model, 
+  meaning it could supply the password itself rather than relaying the player's words — 
+  defeating the soft boundary documented in the README.
+- **What this hardens:** The `get_state` channel and the `set_quest_flag` echo channel. 
+  The `_exits_for_model` helper already redacted `requires_answer` from exits; this 
+  extends the same principle to quest flags.
+- **What it doesn't fix:** A scenario author who stores a password in a boolean flag (e.g. 
+  `"ashfall_known": true`) rather than a string flag still leaks the flag name. That's 
+  an author-convention problem, not addressable in code without a flag metadata schema.
+- **Classification:** Hard boundary (enforced in code), not soft boundary.
+
+## Enforcement: get_state hides the hidden NPC challenge DCs
+
+**Status:** Accepted
+
+**Context:** The per-turn injected snapshot (`dm_agent._state_snapshot`) deliberately omits an
+NPC's `alertness_dc` (surfacing only `surprised`) and never carries `disposition_dc` — the
+README promises "hidden stealth DCs" are redacted from "everything the model sees." But the
+`get_state` tool returned `state.to_dict()` with light redaction (quest flags, exits, history)
+and **left the NPC dicts raw**, so a model that explicitly called `get_state` received both
+`alertness_dc` and `disposition_dc` in full. The auto-snapshot was airtight; the on-demand
+channel was not — the same leak class the quest-flag ADR above closed for passwords.
+
+**Decision:** `get_state` runs its NPC map through `_npcs_for_model`, dropping
+`_HIDDEN_NPC_FIELDS` (`disposition_dc`, `alertness_dc`) before the result reaches the model.
+`alertness_dc` is the stealth DC the README names; `disposition_dc` is its one-shot social
+twin. The model is meant to learn an NPC's reachability by *attempting* — `influence_npc`
+returns `immovable` for a `None` disposition, `attempt_ambush` returns `cannot_ambush` or the
+`bar` — never by reading the number off the snapshot. The live `state.npcs` objects keep both
+(the engine owns and rolls against them); only the model-facing copy is stripped.
+
+**Consequences:** `get_state` now matches `_state_snapshot`'s NPC view for the two secret DCs,
+so the README's redaction claim holds on both channels. Other NPC fields (`hp`, `hostile`,
+`ac`, `attack_bonus`, `inventory`, `social_attempted`, `surprised`, `companion`) still surface
+— they are not secrets (AC/atk are revealed through combat and shown in `/state`). Hard
+boundary, enforced in code (`test_get_state_hides_hidden_npc_dcs`). Saves are unaffected:
+`to_dict`/`from_dict` still round-trip both DCs (the redaction is applied only in the
+`get_state` dispatch, not in serialization).
