@@ -155,7 +155,7 @@ def _render(title: str, options: list[str], idx: int) -> "Group":
         if i == idx:
             lines.append(Text(f" ❯ {opt}", style="bold cyan"))
         else:
-            lines.append(Text(f"   {opt}", style="dim"))
+            lines.append(Text(f"   {opt}", style="orange1"))
     lines.append(Text(""))
     lines.append(Text("   ↑/↓ move · enter select · q quit", style="dim italic"))
     return Group(*lines)
