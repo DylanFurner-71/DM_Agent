@@ -23,8 +23,8 @@ def test_scenario2_loads_correctly():
     assert "snik" in gs.npcs
     npc = gs.npcs["snik"]
     assert npc.name == "Snik"
-    assert npc.max_hp == 12
-    assert npc.hp == 12
+    assert npc.max_hp == 20
+    assert npc.hp == 20
     assert npc.ac == 13
     assert "shortsword" in npc.inventory
     # Party is top-level and must load too

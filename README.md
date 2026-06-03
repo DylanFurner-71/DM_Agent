@@ -318,7 +318,7 @@ by payoff vs. risk:
 resource. `add_gold` credits loot and rewards; `spend_gold` debits purchases and bribes —
 and like the spell-slot economy it **refuses an overspend** (`insufficient_gold`, with
 nothing deducted), so the model narrates "you can't afford it" rather than conjuring coin
-the character doesn't have. **Unimplimented:** Each PC's balance round-trips through save/load and surfaces in `/state` and the HUD. The foundation **merchants** build on.
+the character doesn't have. **Untested:** Each PC's balance round-trips through save/load and surfaces in `/state` and the HUD. The foundation **merchants** build on.
 
 **Merchants.** A shopkeeper is just an NPC with a `shop` — a priced catalogue
 (`{item: gp}`). `buy_item` pays the catalogue price (refused `not_for_sale` for an item the
@@ -390,9 +390,9 @@ data/
   adventures/          # full multi-scene adventures (*.json)
 smoke_test.py          # replay every demo end-to-end against the live model
 .env.example           # copy to .env and add ANTHROPIC_API_KEY
-tests/                 # 727 tests total, all no-API
+tests/                 # 731 tests total, all no-API
   test_rules.py        # 156 — enforcement core: dice, attack, spells, combat/turn guards
-  test_tools.py        #  79 — dispatch, guards, target/redaction, get_state
+  test_tools.py        #  83 — dispatch, guards, target/redaction, get_state
   test_validate.py     #  63 — scenario linter checks
   test_agent.py        #  51 — agent loop: context, narration routing, closing prompts
   test_views.py        #  50 — rich/plain rendering: /state, /cost, /export
@@ -425,7 +425,7 @@ python3 -m venv .venv                     # create an isolated environment (.ven
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt           # installs into .venv, not your system Python
 cp .env.example .env && $EDITOR .env      # add your ANTHROPIC_API_KEY (auto-loaded from .env)
-python3 -m pytest -q                       # 727 enforcement tests, no API needed
+python3 -m pytest -q                       # 731 enforcement tests, no API needed
 python3 -m src.main                        # play
 python3 -m src.main data/scenario.json     # explicit scenario, or a savegame path to resume
 python3 -m src.main --seed 42              # fix the dice RNG for reproducible rolls (demos/bug reports)
@@ -474,7 +474,7 @@ the password from first to last.
 
 ## Testing
 
-Roughly 727 tests across `tests/`, all running with **no API**. They drive the
+Roughly 731 tests across `tests/`, all running with **no API**. They drive the
 rules engine, the tool dispatch, and the agent loop (with a mocked client) to prove
 the hard boundaries: slot economy, clamped/atomic damage, the full death-save and
 endgame logic, turn-order and surprise handling, social de-escalation, and
