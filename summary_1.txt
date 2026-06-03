@@ -1,0 +1,71 @@
+file                                       calls      tokens   time (s)   cost (USD)
+------------------------------------------------------------------------------------
+demo_combat_0_stats_trace.json                16     167,887      35.08      $0.1493
+demo_combat_1_stats_trace.json                16     167,931      37.60      $0.0740
+demo_combat_2_stats_trace.json                16     167,898      34.71      $0.0714
+demo_combat_3_stats_trace.json                16     167,710      37.92      $0.1067
+demo_combat_4_stats_trace.json                16     167,778      40.38      $0.0910
+demo_combat_5_stats_trace.json                16     168,837      45.44      $0.0785
+demo_death_saves_0_stats_trace.json           16     168,563      48.20      $0.0873
+demo_death_saves_1_stats_trace.json           16     168,253      51.18      $0.0809
+demo_death_saves_2_stats_trace.json           16     167,708      42.24      $0.0755
+demo_death_saves_3_stats_trace.json           16     167,424      42.84      $0.0798
+demo_death_saves_4_stats_trace.json           15     153,587      37.26      $0.0668
+demo_death_saves_5_stats_trace.json           16     167,077      37.29      $0.0719
+demo_flat_effects_0_stats_trace.json          11     140,079      39.18      $0.0837
+demo_flat_effects_1_stats_trace.json          11     139,548      30.39      $0.0789
+demo_flat_effects_2_stats_trace.json          12     156,686      40.35      $0.1008
+demo_flat_effects_3_stats_trace.json           8     106,946      22.81      $0.0583
+demo_flat_effects_4_stats_trace.json           9     113,524      31.39      $0.0661
+demo_flat_effects_5_stats_trace.json           9     113,112      27.80      $0.0626
+demo_gates_loot_0_stats_trace.json            15     199,818      40.33      $0.1145
+demo_gates_loot_1_stats_trace.json            14     186,541      40.84      $0.1053
+demo_gates_loot_2_stats_trace.json            17     220,845      55.34      $0.1324
+demo_gates_loot_3_stats_trace.json            16     214,285      43.40      $0.1269
+demo_gates_loot_4_stats_trace.json            17     220,121      53.61      $0.1304
+demo_gates_loot_5_stats_trace.json            16     214,819      44.76      $0.1239
+demo_reinforcements_0_stats_trace.json        12     127,504      31.32      $0.0588
+demo_reinforcements_1_stats_trace.json         6      66,819      16.92      $0.0349
+demo_reinforcements_2_stats_trace.json         6      66,714      17.30      $0.0289
+demo_reinforcements_3_stats_trace.json        13     143,579      40.87      $0.0682
+demo_reinforcements_4_stats_trace.json         6      66,938      18.21      $0.0306
+demo_reinforcements_5_stats_trace.json        12     128,247      31.37      $0.0612
+demo_saving_throws_0_stats_trace.json         14     188,070      42.51      $0.1104
+demo_saving_throws_1_stats_trace.json         14     187,562      41.61      $0.1077
+demo_saving_throws_2_stats_trace.json         16     216,362      47.37      $0.1254
+demo_saving_throws_3_stats_trace.json         15     202,886      48.41      $0.1225
+demo_saving_throws_4_stats_trace.json         14     187,917      46.53      $0.1092
+demo_saving_throws_5_stats_trace.json         15     201,714      46.08      $0.1135
+demo_skill_checks_1_stats_trace.json          22     261,829      60.36      $0.1346
+demo_skill_checks_2_stats_trace.json          22     262,021      52.79      $0.1297
+demo_skill_checks_3_stats_trace.json          22     261,529      59.47      $0.1336
+demo_skill_checks_4_stats_trace.json          22     260,837      52.41      $0.1303
+demo_skill_checks_5_stats_trace.json          22     262,196      57.57      $0.1310
+demo_social_companions_0_stats_trace.json     17     202,673      49.35      $0.1120
+demo_social_companions_1_stats_trace.json     17     202,396      49.67      $0.1109
+demo_social_companions_2_stats_trace.json     16     188,409      40.21      $0.0972
+demo_social_companions_3_stats_trace.json     17     203,900      56.06      $0.1154
+demo_social_companions_4_stats_trace.json     17     204,288      51.75      $0.1176
+demo_social_companions_5_stats_trace.json     17     203,151      48.44      $0.1086
+demo_spells_items_0_stats_trace.json          23     241,704      52.72      $0.1069
+demo_spells_items_1_stats_trace.json          22     228,775      54.03      $0.0964
+demo_spells_items_2_stats_trace.json          22     228,469      52.98      $0.0918
+demo_spells_items_3_stats_trace.json          23     243,243      57.15      $0.1033
+demo_spells_items_4_stats_trace.json          23     242,693      56.22      $0.1097
+demo_spells_items_5_stats_trace.json          23     242,982      56.86      $0.1062
+demo_stealth_0_stats_trace.json               17     180,625      39.03      $0.0809
+demo_stealth_1_stats_trace.json               17     178,737      34.44      $0.0691
+demo_stealth_2_stats_trace.json               17     180,750      42.49      $0.0732
+demo_stealth_3_stats_trace.json               17     179,212      36.50      $0.0672
+demo_stealth_4_stats_trace.json               17     180,005      41.33      $0.0788
+demo_stealth_5_stats_trace.json               18     192,971      41.01      $0.0746
+------------------------------------------------------------------------------------
+TOTAL (59 files)                             939  10,844,684    2531.68      $5.5672
+
+By model:
+model                      calls    %      tokens   time (s)    %   cost (USD)    %
+-----------------------------------------------------------------------------------
+claude-sonnet-4-6            693  74%   7,493,704    2156.68  85%      $4.8690  87%
+claude-haiku-4-5-20251001    246  26%   3,350,980     375.00  15%      $0.6982  13%
+
+Note: cost is an estimate from src.views.MODEL_PRICING (list prices), never a billed figure.

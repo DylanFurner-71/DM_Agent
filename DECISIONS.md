@@ -668,8 +668,7 @@ pricing or haggle mechanic), single-unit transactions. Commits `a4658ad` (ledger
 profiled run (`saves/ember_deep_run_1_stats_trace.json`, 48 turns) sat at **2.02 API
 calls/turn** — so the remaining lever is per-call speed, not call count. Tool-selection
 ("thinking") was **~35% of wall** (121.5s) doing mechanical, low-output (~83 tok) work — a
-fast/cheap model's job — while narration (65%) is decode-bound and quality-sensitive. This is
-the README roadmap's rank-#1 "two-model split."
+fast/cheap model's job — while narration (65%) is decode-bound and quality-sensitive.
 
 **Decision.** Two model constants in `src/dm_agent.py`: `MODEL` (quality, narration) and
 `FAST_MODEL` (Haiku, tool-selection). `_execute` picks the model **once per call** by its

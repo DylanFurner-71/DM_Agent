@@ -130,21 +130,6 @@ Consumables apply through
 a party ally** — pouring a healing potion into a downed ally revives them and resets
 their death saves, spending the giver's action. `lookup_rule` serves an SRD-lite reference.
 
-**Gold.** A per-character coin purse (`Character.gold`), tracked as another engine-owned
-resource. `add_gold` credits loot and rewards; `spend_gold` debits purchases and bribes —
-and like the spell-slot economy it **refuses an overspend** (`insufficient_gold`, with
-nothing deducted), so the model narrates "you can't afford it" rather than conjuring coin
-the character doesn't have. Each PC's balance round-trips through save/load and surfaces in
-`/state` and the HUD. The foundation **merchants** build on.
-
-**Merchants.** A shopkeeper is just an NPC with a `shop` — a priced catalogue
-(`{item: gp}`). `buy_item` pays the catalogue price (refused `not_for_sale` for an item the
-merchant doesn't stock, or `insufficient_gold` — nothing bought — when the buyer is short),
-and `sell_item` pays **half** the catalogue price, with the merchant buying back only what
-it stocks. Both move items through the same inventory plumbing as `take_item` and debit/
-credit gold through the engine; the merchant is auto-selected when one shopkeeper is present
-or named otherwise. Prices and the purse stay engine-owned — the model never invents a price
-or sells an item off-catalogue. The catalogue shows in `/state` and the turn snapshot.
 
 **Checks & saves.** `skill_check` resolves a *proactive* `d20 + ability modifier` vs
 a DC (perception, persuasion, athletics, stealth…) and, in combat, is the acting
@@ -318,15 +303,31 @@ unified turn), so the decode-bound generation never runs longer than the prose n
   the table below.
 
 **Remaining latency levers** — An early profile of a full run
-showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **40% tool-selection / 52% narration**. 
+showed a ~3.3s fixed cost *per API call* with wall time splitting roughly **35% tool-selection / 65% narration**. 
 
 Remaining items Ranked
 by payoff vs. risk:
 
 | Lever | Payoff | Risk |
 |---|---|---|
-| **Lean harder on parallel `tool_use`** to cut hops on multi-tool turns (e.g. two `take_item`s + a `move_scene` resolved in one response instead of three) | Low–medium | Low code, but prompt-level and unreliable |
 | **Prompt narration for more brevity** (the `max_tokens` budgets are already right-sized per phase; this is the prose-quality dial) | Medium — narration is ~half of wall time | Trades prose quality, which the project prioritizes |
+
+## In progress / untested
+
+**Gold.** A per-character coin purse (`Character.gold`), tracked as another engine-owned
+resource. `add_gold` credits loot and rewards; `spend_gold` debits purchases and bribes —
+and like the spell-slot economy it **refuses an overspend** (`insufficient_gold`, with
+nothing deducted), so the model narrates "you can't afford it" rather than conjuring coin
+the character doesn't have. **Unimplimented:** Each PC's balance round-trips through save/load and surfaces in `/state` and the HUD. The foundation **merchants** build on.
+
+**Merchants.** A shopkeeper is just an NPC with a `shop` — a priced catalogue
+(`{item: gp}`). `buy_item` pays the catalogue price (refused `not_for_sale` for an item the
+merchant doesn't stock, or `insufficient_gold` — nothing bought — when the buyer is short),
+and `sell_item` pays **half** the catalogue price, with the merchant buying back only what
+it stocks. Both move items through the same inventory plumbing as `take_item` and debit/
+credit gold through the engine; the merchant is auto-selected when one shopkeeper is present
+or named otherwise. Prices and the purse stay engine-owned — the model never invents a price
+or sells an item off-catalogue. The catalogue shows in `/state` and the turn snapshot.
 
 ## Need to implement
 

@@ -7,7 +7,7 @@
       "location": "Vael Manor — The Grand Landing",
       "scene": "Candlelight, string music, and a sea of feathered masks. Tonight crime-lord Dorian Vael throws his autumn masquerade, and somewhere in his private study sits the Ashford Ledger — proof that would hang him, and the reason you talked your way through the gate. A liveried doorman, Crispin, guards the way into the ballroom proper; he is bored, bribable, and waiting to hear tonight's passphrase. A narrow servants' stair drops away unwatched toward the kitchens. (Crispin will wave through anyone who gives the night's word — but he will not, of course, tell you what it is.)",
       "npcs": {
-        "crispin": { "template": "guard", "name": "Crispin", "hostile": false, "disposition_dc": 12, "alertness_dc": 14 }
+        "crispin": { "template": "guard", "name": "Crispin", "hostile": false, "disposition_dc": 1, "alertness_dc": 14 }
       },
       "loot": [],
       "exits": {

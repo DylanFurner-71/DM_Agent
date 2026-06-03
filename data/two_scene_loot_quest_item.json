@@ -12,7 +12,8 @@
           "name": "Snik",
           "hostile": true,
           "disposition_dc": 1,
-          "alertness_dc": 12
+          "alertness_dc": 12,
+          "max_hp": 20
         }      },
       "loot": ["healing_potion", "pearl_of_power"],
       "exits": {
@@ -65,7 +66,7 @@
       "hp": 16,
       "ac": 12,
       "attack_bonus": 4,
-      "spell_slots": {"1": 2, "2": 1},
+      "spell_slots": {"1": 1, "2": 0},
       "ability_modifiers": {"str": -1, "dex": 2, "con": 0, "int": 4, "wis": 1, "cha": 2},
       "inventory": ["dagger", "spellbook", "50ft rope"],
       "conditions": [],
