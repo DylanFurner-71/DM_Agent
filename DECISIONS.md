@@ -16,6 +16,46 @@ that matters mechanically depends on them.
 
 ---
 
+## ADR log
+
+A document-order index of every decision recorded below. All are **Accepted** —
+each reflects what the code currently does. The *Rank* column is the entry's place
+in [Ranking of ADR significance](#ranking-of-adr-significance) (1 = most foundational).
+
+| ADR | Decision | Status | Rank |
+| --- | --- | --- | --- |
+| ADR-01 | [Out-of-turn declared actions — discard and acknowledge](#1-out-of-turn-declared-actions--discard-and-acknowledge) | Accepted | 22 |
+| ADR-02 | [Batch NPC turn narration into a single model call](#2-batch-npc-turn-narration-into-a-single-model-call) | Accepted | 5 |
+| ADR-03 | [Bound the per-turn model context](#3-bound-the-per-turn-model-context) | Accepted | 2 |
+| ADR-04 | [NPC weapons are engine-selected, not model-named](#4-npc-weapons-are-engine-selected-not-model-named) | Accepted | 21 |
+| ADR-05 | [Target agency is soft-enforced](#adr-target-agency-is-soft-enforced) | Accepted | 1 |
+| ADR-06 | [quest_flags hold narrative facts only (soft boundary)](#adr-quest_flags-hold-narrative-facts-only-soft-boundary) | Accepted | 3 |
+| ADR-07 | [Loot is author-placed and obvious-on-look](#adr-loot-is-author-placed-and-obvious-on-look) | Accepted | 8 |
+| ADR-08 | [Cross-scene resource economy — tight provisioning + loot, no rest](#adr-cross-scene-resource-economy--tight-provisioning--loot-no-rest) | Accepted | 12 |
+| ADR-09 | [Flag-gated transitions and endings](#adr-flag-gated-transitions-and-endings) | Accepted | 11 |
+| ADR-10 | [String-valued quest flags are redacted from model-facing channels](#adr-string-valued-quest-flags-are-redacted-from-model-facing-channels) | Accepted | 6 |
+| ADR-11 | [get_state hides the hidden NPC challenge DCs](#adr-get_state-hides-the-hidden-npc-challenge-dcs) | Accepted | 7 |
+| ADR-12 | [add_npc spawns only author-declared reinforcements, behind a trigger](#adr-add_npc-spawns-only-author-declared-reinforcements-behind-a-trigger) | Accepted | 9 |
+| ADR-13 | [Fold narration into the tool loop; one narration call per turn](#5-fold-narration-into-the-tool-loop-one-narration-call-per-turn) | Accepted | 4 |
+| ADR-14 | [Stream narration to the terminal, behind a leak gate](#6-stream-narration-to-the-terminal-behind-a-leak-gate) | Accepted | 18 |
+| ADR-15 | [Companions: recruiting a cross-scene ally](#7-companions-recruiting-a-cross-scene-ally) | Accepted | 14 |
+| ADR-16 | [Concluding an empty terminal scene (soft trigger, hard gate)](#adr-concluding-an-empty-terminal-scene-soft-trigger-hard-gate) | Accepted | 13 |
+| ADR-17 | [Hazards & traps are author-placed; the engine owns the numbers](#adr-hazards--traps-are-author-placed-the-engine-owns-the-numbers) | Accepted | 10 |
+| ADR-18 | [Underspecified social intent — ask, never default the actor/approach](#adr-underspecified-social-intent--ask-never-default-the-actorapproach) | Accepted | 17 |
+| ADR-19 | [Inspiration is an engine-owned reroll budget; the award is a safe soft boundary](#adr-inspiration-is-an-engine-owned-reroll-budget-the-award-is-a-safe-soft-boundary) | Accepted | 16 |
+| ADR-20 | [Cut two avoidable API hops per turn (latency)](#adr-cut-two-avoidable-api-hops-per-turn-latency) | Accepted | 19 |
+| ADR-21 | [Gold ledger and merchants (buy/sell)](#adr-gold-ledger-and-merchants-buysell) | Accepted | 15 |
+| ADR-22 | [Two-model split — tool-selection on a fast model (latency)](#adr-two-model-split--tool-selection-on-a-fast-model-latency) | Accepted | 20 |
+
+**Enforcement invariants & fix notes** (not architectural forks; excluded from the ranking):
+
+| # | Entry | Type |
+| --- | --- | --- |
+| E-01 | [A leveled spell cannot be cast below its tabled base level](#invariant-a-leveled-spell-cannot-be-cast-below-its-tabled-base-level) | Invariant |
+| E-02 | [Strip model-written turn prompts that duplicate the engine's](#fix-note-strip-model-written-turn-prompts-that-duplicate-the-engines) | Fix note |
+
+---
+
 # Architectural decisions
 
 ## 1. Out-of-turn declared actions — discard and acknowledge
