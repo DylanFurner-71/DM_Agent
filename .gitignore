@@ -220,3 +220,6 @@ __marimo__/
 .env
 
 saves/
+
+# Generated trace summaries (summarize_traces.py)
+summaries/
