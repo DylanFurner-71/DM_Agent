@@ -24,18 +24,18 @@ in [Ranking of ADR significance](#ranking-of-adr-significance) (1 = most foundat
 
 | ADR | Decision | Status | Rank |
 | --- | --- | --- | --- |
-| ADR-01 | [Out-of-turn declared actions — discard and acknowledge](#1-out-of-turn-declared-actions--discard-and-acknowledge) | Accepted | 19 |
-| ADR-02 | [Batch NPC turn narration into a single model call](#2-batch-npc-turn-narration-into-a-single-model-call) | Accepted | 5 |
-| ADR-03 | [Bound the per-turn model context](#3-bound-the-per-turn-model-context) | Accepted | 2 |
+| ADR-01 | [Out-of-turn declared actions — discard and acknowledge](#adr-out-of-turn-declared-actions--discard-and-acknowledge) | Accepted | 19 |
+| ADR-02 | [Batch NPC turn narration into a single model call](#adr-batch-npc-turn-narration-into-a-single-model-call) | Accepted | 5 |
+| ADR-03 | [Bound the per-turn model context](#adr-bound-the-per-turn-model-context) | Accepted | 2 |
 | ADR-04 | [Target agency is soft-enforced](#adr-target-agency-is-soft-enforced) | Accepted | 1 |
 | ADR-05 | [quest_flags hold narrative facts only (soft boundary)](#adr-quest_flags-hold-narrative-facts-only-soft-boundary) | Accepted | 3 |
 | ADR-06 | [Loot is author-placed and obvious-on-look](#adr-loot-is-author-placed-and-obvious-on-look) | Accepted | 6 |
 | ADR-07 | [Cross-scene resource economy — tight provisioning + loot, no rest](#adr-cross-scene-resource-economy--tight-provisioning--loot-no-rest) | Accepted | 10 |
 | ADR-08 | [Flag-gated transitions and endings](#adr-flag-gated-transitions-and-endings) | Accepted | 9 |
 | ADR-09 | [add_npc spawns only author-declared reinforcements, behind a trigger](#adr-add_npc-spawns-only-author-declared-reinforcements-behind-a-trigger) | Accepted | 7 |
-| ADR-10 | [Fold narration into the tool loop; one narration call per turn](#5-fold-narration-into-the-tool-loop-one-narration-call-per-turn) | Accepted | 4 |
-| ADR-11 | [Stream narration to the terminal, behind a leak gate](#6-stream-narration-to-the-terminal-behind-a-leak-gate) | Accepted | 16 |
-| ADR-12 | [Companions: recruiting a cross-scene ally](#7-companions-recruiting-a-cross-scene-ally) | Accepted | 12 |
+| ADR-10 | [Fold narration into the tool loop; one narration call per turn](#adr-fold-narration-into-the-tool-loop-one-narration-call-per-turn) | Accepted | 4 |
+| ADR-11 | [Stream narration to the terminal, behind a leak gate](#adr-stream-narration-to-the-terminal-behind-a-leak-gate) | Accepted | 16 |
+| ADR-12 | [Companions: recruiting a cross-scene ally](#adr-companions-recruiting-a-cross-scene-ally) | Accepted | 12 |
 | ADR-13 | [Concluding an empty terminal scene (soft trigger, hard gate)](#adr-concluding-an-empty-terminal-scene-soft-trigger-hard-gate) | Accepted | 11 |
 | ADR-14 | [Hazards & traps are author-placed; the engine owns the numbers](#adr-hazards--traps-are-author-placed-the-engine-owns-the-numbers) | Accepted | 8 |
 | ADR-15 | [Underspecified social intent — ask, never default the actor/approach](#adr-underspecified-social-intent--ask-never-default-the-actorapproach) | Accepted | 15 |
@@ -58,7 +58,7 @@ in [Ranking of ADR significance](#ranking-of-adr-significance) (1 = most foundat
 
 # Architectural decisions
 
-## 1. Out-of-turn declared actions — discard and acknowledge
+## ADR: Out-of-turn declared actions — discard and acknowledge
 
 **Decision.** When a player declares an action for a character whose turn hasn't
 come up (e.g. "Wisp casts magic missile" while it's Aldric's turn, or as the
@@ -94,7 +94,7 @@ remains open without committing to full auto-fire.
 
 ---
 
-## 2. Batch NPC turn narration into a single model call
+## ADR: Batch NPC turn narration into a single model call
 
 **Decision.** Combat narration is split: the player's own action is narrated in its
 own dedicated call, while all auto-run NPC actions for the cycle are narrated
@@ -134,7 +134,7 @@ grows with batch size.
 
 ---
 
-## 3. Bound the per-turn model context
+## ADR: Bound the per-turn model context
 
 **Decision.** The agent builds a fresh, bounded context each turn — system prompt +
 a current-state snapshot from `get_state` + a rolling window of the last N narration
@@ -310,13 +310,9 @@ mid-combat initiative-insertion capability (sorted-slot placement, pointer-stabl
 preserved unchanged; only the source of *what* may enter was constrained. Backward note:
 the old free-form `template`/`name` arguments are gone from the schema.
 
-KNOWN ROUGH EDGE (leave for now): a de-escalated NPC stays in combat_order if other hostiles
-remain, so its turn still comes up — the system-prompt rule above handles it (narrate it standing
-aside). Cleanly removing it from the order is a later refinement; do not modify next_turn here.
-
 ---
 
-## 5. Fold narration into the tool loop; one narration call per turn
+## ADR: Fold narration into the tool loop; one narration call per turn
 
 **Decision.** Narration is no longer a dedicated second model call per action.
 Instead:
@@ -332,9 +328,9 @@ Instead:
   `_narrate_epilogue`): their prose is shaped differently and is only known after
   the action resolves.
 
-This supersedes the player-action half of **Decision 2**: the player beat is no
-longer on its own dedicated call. Decision 2's batching of NPC beats into one call
-stands — it is now the same call that carries the player beat.
+This supersedes the player-action half of *ADR: Batch NPC turn narration*: the player
+beat is no longer on its own dedicated call. That ADR's batching of NPC beats into one
+call stands — it is now the same call that carries the player beat.
 
 **Why.** Profiling a full run (see the per-call stats sidecar) showed the dedicated
 narration phase was ~25 calls / ~92s / ~28.6k uncached input across 26 turns, *on
@@ -354,7 +350,7 @@ directly player-facing. We accept this: the screens are unit-tested
 (`test_narration_leak_regression`, plus the `_extract`/`_sanitize` suites), the
 engine still owns every number regardless of prose, and the latency win is large.
 
-**Trade-off — NPC-beat coverage.** Same as Decision 2: folding beats into one call
+**Trade-off — NPC-beat coverage.** Same as *ADR: Batch NPC turn narration*: folding beats into one call
 means the model could drop or merge a beat. The enumerated, numbered beat list in
 `_narrate_turn` mitigates it; engine state stays authoritative, so the worst case is
 incomplete *prose*, never wrong *numbers*.
@@ -372,7 +368,7 @@ narration call is mechanical.
 
 ---
 
-## 6. Stream narration to the terminal, behind a leak gate
+## ADR: Stream narration to the terminal, behind a leak gate
 
 **Decision.** The DM agent exposes an optional `on_narration_delta` sink. When set
 (the terminal REPL sets it), the dedicated text-only narration calls — `_narrate_turn`,
@@ -382,7 +378,7 @@ returning the whole paragraph after a blocking `create`. When the sink is unset
 (library callers, the no-API test suite), the buffered `create` path runs unchanged,
 so behavior and mocks are identical to before.
 
-The out-of-combat captured narration (the tool loop's terminating turn, Decision 5)
+The out-of-combat captured narration (the tool loop's terminating turn, *ADR: Fold narration into the tool loop*)
 is **not** streamed: it is produced inside `_execute`, where a response isn't known
 to be the terminal (narration) turn until the stream completes — so there is nothing
 to safely stream live. It stays buffered + screened and is emitted to the sink as one
@@ -395,7 +391,7 @@ single contributor to per-turn wall time. Streaming doesn't reduce tokens or tot
 generation time, but it cuts *perceived* latency sharply: the player starts reading
 at the first token instead of waiting for the whole paragraph.
 
-**Trade-off — the leak gate.** Decision 5 already made the leak screens load-bearing.
+**Trade-off — the leak gate.** *ADR: Fold narration into the tool loop* already made the leak screens load-bearing.
 Streaming raw tokens would defeat them: a leaked `[Current state]…{…}` dump would hit
 the screen before any post-hoc screen could suppress it. So streamed deltas pass
 through a `_NarrationGate`: it holds the *opening* of the stream until it can rule out
@@ -433,7 +429,7 @@ narration with no other change. Localized to `dm_agent.py` (`_narration_call`,
 
 ---
 
-## 7. Companions: recruiting a cross-scene ally
+## ADR: Companions: recruiting a cross-scene ally
 
 **Decision.** A non-hostile NPC can be recruited with `recruit_npc` (between fights, not
 mid-combat); it sets a `companion` flag on the NPC, which then follows the party across
@@ -457,6 +453,11 @@ Revisit if companions become central rather than a bonus.
 
 **Scope — unaffected.** Enforcement, turn order, and redaction are untouched; the new
 `companion` field serializes through the existing `asdict`/`from_dict` path.
+
+KNOWN ROUGH EDGE (leave for now): a de-escalated NPC — turned non-hostile via `influence_npc`
+mid-combat — stays in `combat_order` if other hostiles remain, so its turn still comes up. A
+SOCIAL system-prompt rule handles it (narrate it standing aside). Cleanly removing it from the
+order is a later refinement; do not modify `next_turn` for this.
 
 ## ADR: Concluding an empty terminal scene (soft trigger, hard gate)
 
@@ -625,11 +626,11 @@ rejection (turn-guard, `ambiguous_target`, `combat_starting`, …) left `action_
 the loop spent one more terminal `create()` whose text is scrubbed in combat anyway. Now also
 breaks on a hard-stop `ok=false` in the same hop.
 
-**Consequences.** This supersedes Decision 5's call-count figures (which measured the
+**Consequences.** This supersedes *ADR: Fold narration into the tool loop*'s call-count figures (which measured the
 narration-folding win before this cut). Worst case is unchanged — the engine still owns every
 number; only redundant generations were removed. A test asserts a rejected combat action now
 yields exactly one thinking call (verified failing at two without the fix). Commit `3ad6b13`.
-(The separately-attempted parallel `tool_use` batching — `bf7cac0` and its "§8" ADR — was
+(The separately-attempted parallel `tool_use` batching — `bf7cac0` and its since-removed ADR — was
 reverted in `dce6695`/`9a4ff2b` and is intentionally not documented.)
 
 ## ADR: Gold ledger and merchants (buy/sell)
@@ -664,7 +665,7 @@ pricing or haggle mechanic), single-unit transactions. Commits `a4658ad` (ledger
 
 **Status:** Accepted
 
-**Context:** After the call-count cuts (Decisions 2/3/5/6 + *Cut two avoidable API hops*), a
+**Context:** After the call-count cuts (ADR-02, ADR-03, ADR-10, ADR-11, plus *Cut two avoidable API hops*), a
 profiled run (`saves/ember_deep_run_1_stats_trace.json`, 48 turns) sat at **2.02 API
 calls/turn** — so the remaining lever is per-call speed, not call count. Tool-selection
 ("thinking") was **~35% of wall** (121.5s) doing mechanical, low-output (~83 tok) work — a
@@ -675,7 +676,7 @@ fast/cheap model's job — while narration (65%) is decode-bound and quality-sen
 `capture_narration` flag: `capture_narration=False` (the combat player-action and batched
 NPC-fallback loops, whose terminating text is scrubbed) runs on `FAST_MODEL`; the folded
 out-of-combat loop (`capture_narration=True`, whose terminating turn *is* the narration —
-Decision 5) and every `_narration_call` stay on `MODEL`. This is the key constraint: the fold
+*ADR: Fold narration into the tool loop*) and every `_narration_call` stay on `MODEL`. This is the key constraint: the fold
 means out-of-combat thinking can't move to the fast model without re-introducing a separate
 narration call, so only the scrubbed-prose loops are routed. Each `api_stats` entry is tagged
 with the model that served it; `views.estimate_cost_mixed` prices a mixed-model session
@@ -706,16 +707,16 @@ narrow correctness rules.
 1. **Target agency is soft-enforced** — the clearest articulation of the hard-vs-soft
    boundary doctrine that defines the whole project; the template every other "soft boundary,
    documented as such" decision follows.
-2. **#3 Bound the per-turn model context** — the architectural keystone: a fresh, bounded
+2. **Bound the per-turn model context** — the architectural keystone: a fresh, bounded
    context each turn (not append-only) keeps per-turn cost flat and makes the loop tractable;
    nearly every later decision assumes it.
 3. **quest_flags hold narrative facts only** — guards the one general-purpose state-write the
    model has, with a hard reserved-key denylist so flags can't become a backdoor to
    mechanical state.
-4. **#5 Fold narration into the tool loop** — restructured how every turn produces prose and
+4. **Fold narration into the tool loop** — restructured how every turn produces prose and
    promoted the leak screens from belt-and-suspenders to the *primary* defense.
-5. **#2 Batch NPC turn narration into a single model call** — established the one-call
-   per-turn-exchange shape that #5 and the combat loop build on.
+5. **Batch NPC turn narration into a single model call** — established the one-call
+   per-turn-exchange shape that the narration-fold ADR and the combat loop build on.
 6. **Loot is author-placed and obvious-on-look** — the model cannot fabricate treasure; first
    pillar of the "author owns content, model only triggers" family.
 7. **add_npc spawns only author-declared reinforcements, behind a trigger** — the model cannot
@@ -737,13 +738,13 @@ narrow correctness rules.
     budget and dice are hard).
 15. **Underspecified social intent — ask, never default the actor/approach** — the
     clarify-don't-guess policy generalized from `ambiguous_target`.
-16. **#6 Stream narration to the terminal, behind a leak gate** — perceived-latency win plus
+16. **Stream narration to the terminal, behind a leak gate** — perceived-latency win plus
     the streaming leak gate that keeps the screens honest under live output.
 17. **Cut two avoidable API hops per turn (latency)** — removed a redundant `get_state` and a
     wasted terminal combat hop; a measured call-count win.
 18. **Two-model split — tool-selection on a fast model (latency)** — routes mechanical
     tool-selection to a fast model, a per-call latency win with no enforcement risk.
-19. **#1 Out-of-turn declared actions — discard and acknowledge** — a turn-integrity rule for
+19. **Out-of-turn declared actions — discard and acknowledge** — a turn-integrity rule for
     a player declaring an action when it isn't their turn.
 
 The entries under *Enforcement invariants & fix notes* below — three engine-enforcement boundaries (NPC-weapon selection, string-flag redaction, hidden-DC hiding), the leveled-spell base-level invariant, and the turn-prompt strip — are intentionally excluded from this ranking; they are enforcement boundaries, durable invariants, or regression fixes, not decisions between architectural alternatives.
@@ -794,7 +795,7 @@ the model frequently *also* ended its prose with one — e.g. `**Brom, what do y
 logged run (`saves/ember_deep_run_1.json`) showed this in **29 of 48** beats. Two harms: the
 player saw a duplicate (the model's bolded prompt immediately followed by the engine's
 trailer), and the contaminated narration was persisted to `narration_history` /
-`state.narrative`, which feed the bounded per-turn window (Decision 3) — so the model read
+`state.narrative`, which feed the bounded per-turn window (*ADR: Bound the per-turn model context*) — so the model read
 its own prompts back as in-context examples and imitated them, a self-reinforcing leak.
 
 **Decision.** `_strip_turn_prompt(text, names)` removes a trailing prompt addressed to a
@@ -818,7 +819,9 @@ shape left untouched to avoid dangling punctuation.
 
 **Consequences.** Cleans the stored/returned narration and breaks the feedback loop — the
 high-value effect, since the model stops being trained on its own prompts. This sits in the
-same leak-screen family as Decisions 5 & 6. **Accepted residual (mirrors Decision 6):** the
+same leak-screen family as the narration-fold and narration-stream ADRs (*ADR: Fold
+narration into the tool loop*, *ADR: Stream narration to the terminal*). **Accepted residual
+(mirrors the streaming ADR):** the
 streaming combat paths have already emitted live by the time the strip runs, so the same-turn
 on-screen duplicate is only mitigated *indirectly* (the loop stops teaching the pattern); a
 fully synchronous fix would require handling it in `_NarrationGate`. Hard boundary on the
